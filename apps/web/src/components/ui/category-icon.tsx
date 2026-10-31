@@ -1,0 +1,78 @@
+import {
+  Banknote,
+  Briefcase,
+  Car,
+  Coins,
+  CreditCard,
+  Flag,
+  Gamepad2,
+  GraduationCap,
+  HeartPulse,
+  House,
+  Landmark,
+  Laptop,
+  type LucideIcon,
+  PiggyBank,
+  Plane,
+  Repeat,
+  Shield,
+  ShoppingCart,
+  Tag,
+  TrendingUp,
+  Utensils,
+  Wallet,
+} from "lucide-react";
+import { cn } from "../../lib/cn";
+
+const ICONS: Record<string, LucideIcon> = {
+  banknote: Banknote,
+  briefcase: Briefcase,
+  car: Car,
+  coins: Coins,
+  "credit-card": CreditCard,
+  flag: Flag,
+  "gamepad-2": Gamepad2,
+  "graduation-cap": GraduationCap,
+  "heart-pulse": HeartPulse,
+  house: House,
+  landmark: Landmark,
+  laptop: Laptop,
+  "piggy-bank": PiggyBank,
+  plane: Plane,
+  repeat: Repeat,
+  shield: Shield,
+  "shopping-cart": ShoppingCart,
+  tag: Tag,
+  "trending-up": TrendingUp,
+  utensils: Utensils,
+  wallet: Wallet,
+};
+
+export function iconByName(name: string | null | undefined): LucideIcon {
+  return (name && ICONS[name]) || Tag;
+}
+
+/** Chip circular com o ícone da categoria tingido pela cor dela. */
+export function CategoryIcon({
+  icon,
+  color,
+  size = 36,
+  className,
+}: {
+  icon: string | null | undefined;
+  color: string | null | undefined;
+  size?: number;
+  className?: string;
+}) {
+  const Icon = iconByName(icon);
+  const tint = color ?? "#71717a";
+  return (
+    <span
+      className={cn("flex shrink-0 items-center justify-center rounded-full", className)}
+      style={{ width: size, height: size, backgroundColor: `${tint}1f`, color: tint }}
+      aria-hidden
+    >
+      <Icon size={Math.round(size * 0.5)} strokeWidth={2} />
+    </span>
+  );
+}

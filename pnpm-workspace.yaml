@@ -1,0 +1,12 @@
+packages:
+  - apps/*
+  - packages/*
+
+onlyBuiltDependencies:
+  - "@biomejs/biome"
+  - "@swc/core"
+  - "@prisma/client"
+  - "@prisma/engines"
+  - "@tailwindcss/oxide"
+  - esbuild
+  - prisma

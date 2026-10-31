@@ -1,0 +1,31 @@
+# dependencies
+node_modules/
+
+# builds
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+
+# environment — nunca versionar credenciais
+.env
+.env.*
+!.env.example
+
+# prisma generated client
+apps/api/src/generated/
+
+# tests
+coverage/
+playwright-report/
+test-results/
+blob-report/
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,45 @@
+{
+  "name": "@finflow/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FinFlow API — NestJS 12 + Prisma 7 + PostgreSQL",
+  "scripts": {
+    "build": "prisma generate && nest build",
+    "dev": "nest start --watch",
+    "start": "node dist/main.js",
+    "typecheck": "prisma generate && tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:integration": "tsx test/prepare-test-db.ts && vitest run -c vitest.integration.config.ts",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@finflow/contracts": "workspace:*",
+    "@nestjs/common": "12.2.0",
+    "@nestjs/core": "12.2.0",
+    "@nestjs/platform-express": "12.2.0",
+    "@nestjs/swagger": "12.0.5",
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
+    "dotenv": "^18.0.9",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "12.0.11",
+    "@nestjs/testing": "12.2.0",
+    "@swc/core": "^1.16.20",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.0",
+    "@types/supertest": "^6.0.2",
+    "prisma": "7.10.1",
+    "supertest": "^7.3.1",
+    "tsx": "^4.23.15",
+    "typescript": "6.0.3",
+    "unplugin-swc": "^2.0.0",
+    "vitest": "4.1.2"
+  }
+}
