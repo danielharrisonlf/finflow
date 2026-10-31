@@ -15,6 +15,7 @@ Atualizado em 2026-10-30.
 | Migration `init` + seed | aplicados no banco de desenvolvimento |
 | Smoke test da API | summary, contas, cartões, orçamentos, metas, vencimentos e exportação CSV responderam com dados coerentes |
 | Smoke test da CLI | `saldo`, `resumo` e `cartoes` funcionaram contra a API real |
+| GitHub Actions (run 41158389037) | os dois jobs passaram no Ubuntu 24.04: checks com integração em Postgres e Playwright no container v1.64.1 |
 | Smoke test do MCP | handshake stdio, `tools/list` (19 tools) e `get_summary` funcionaram contra a API real |
 
 ## Funcionalidades
@@ -36,7 +37,6 @@ Atualizado em 2026-10-30.
 ## Não verificado ou pendente
 
 - **Entrega real no Telegram**: depende de token de bot e URL pública. Só há cobertura com a Bot API simulada.
-- **CI no GitHub Actions**: o workflow foi escrito mas ainda não rodou. A imagem `mcr.microsoft.com/playwright:v1.64.1-noble` precisa ser confirmada na primeira execução.
 - **Autenticação**: o MVP é de uso pessoal e não tem login. Não exponha a API publicamente sem antes adicionar autenticação.
 - **Categorias pela interface**: a API tem CRUD completo, mas a web só lista as categorias; a criação acontece pelo seed ou pela API.
 - **Edição de transação na web**: a API suporta (`PATCH /transactions/:id`), mas a interface só cria, confirma e exclui.

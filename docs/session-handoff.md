@@ -15,7 +15,9 @@ O monorepo foi criado do zero. Tudo descrito em `docs/implementation-status.md` 
 
 ### Próximos passos sugeridos
 
-1. Acompanhar a primeira execução da CI e corrigir a imagem do Playwright se a tag não existir.
-2. Adicionar autenticação antes de qualquer deploy.
-3. Criar telas de gestão de categorias e de edição de transação.
-4. Validar o bot do Telegram com um token real.
+1. Adicionar autenticação antes de qualquer deploy.
+2. Criar telas de gestão de categorias e de edição de transação.
+3. Validar o bot do Telegram com um token real.
+
+A primeira execução da CI (run 41158389037) passou nos dois jobs.
+O repositório é `danielharrisonlf/finflow` (privado) e está registrado no Orca como "FinFlow - Finanças Pessoais".
