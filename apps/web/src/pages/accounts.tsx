@@ -46,9 +46,9 @@ const BRAND_LABEL: Record<CardBrand, string> = {
 };
 
 const INVOICE_STATUS = {
-  OPEN: { label: "Aberta", cls: "text-emerald-300 border-emerald-400/40" },
-  CLOSED: { label: "Fechada", cls: "text-amber-300 border-amber-400/40" },
-  PAID: { label: "Paga", cls: "text-zinc-400 border-zinc-600" },
+  OPEN: { label: "Aberta", cls: "text-income border-emerald-400/40" },
+  CLOSED: { label: "Fechada", cls: "text-warn border-amber-400/40" },
+  PAID: { label: "Paga", cls: "text-app-muted border-app-border" },
 } as const;
 
 export function AccountsPage() {
@@ -66,8 +66,8 @@ export function AccountsPage() {
         <header className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold tracking-tight">Contas</h1>
-            <p className="text-sm text-zinc-500">
-              Total: <span className="tnum font-medium text-zinc-200">{formatBRL(totalCents)}</span>
+            <p className="text-sm text-app-muted">
+              Total: <span className="tnum font-medium text-app-text">{formatBRL(totalCents)}</span>
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={() => setAccountSheet(true)}>
@@ -101,7 +101,7 @@ export function AccountsPage() {
         <header className="flex items-center justify-between">
           <div>
             <h2 className="text-xl font-semibold tracking-tight">Cartões de crédito</h2>
-            <p className="text-sm text-zinc-500">Limite, fatura atual e parcelas futuras</p>
+            <p className="text-sm text-app-muted">Limite, fatura atual e parcelas futuras</p>
           </div>
           <Button variant="outline" size="sm" onClick={() => setCardSheet(true)}>
             <Plus size={15} /> Novo cartão
@@ -150,9 +150,9 @@ function AccountTile({ account }: { account: Account }) {
           className="h-2.5 w-2.5 rounded-full"
           style={{ backgroundColor: account.color ?? "#71717a" }}
         />
-        <p className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-200">{account.name}</p>
+        <p className="min-w-0 flex-1 truncate text-sm font-medium text-app-text">{account.name}</p>
       </div>
-      <p className="mt-0.5 text-xs text-zinc-500">{ACCOUNT_TYPE_LABEL[account.type]}</p>
+      <p className="mt-0.5 text-xs text-app-muted">{ACCOUNT_TYPE_LABEL[account.type]}</p>
       <Money
         cents={account.balanceCents}
         neutral={account.balanceCents >= 0}
@@ -170,7 +170,7 @@ function CreditCardTile({ card, onOpen }: { card: CardModel; onOpen: () => void 
     <button
       type="button"
       onClick={onOpen}
-      className="cursor-pointer rounded-(--radius-card) border border-zinc-800/80 bg-zinc-900/60 p-5 text-left transition-colors hover:border-zinc-600"
+      className="cursor-pointer rounded-(--radius-card) border border-app-border/80 bg-app-surface/60 p-5 text-left transition-colors hover:border-app-border"
       data-testid={`card-${card.name}`}
     >
       <div
@@ -178,25 +178,25 @@ function CreditCardTile({ card, onOpen }: { card: CardModel; onOpen: () => void 
         style={{ background: `linear-gradient(135deg, ${tint}33, ${tint}0d 70%)` }}
       >
         <div className="flex items-start justify-between">
-          <p className="text-sm font-medium text-zinc-100">{card.name}</p>
-          <span className="text-xs font-semibold tracking-wide text-zinc-300">
+          <p className="text-sm font-medium text-app-text">{card.name}</p>
+          <span className="text-xs font-semibold tracking-wide text-app-text">
             {BRAND_LABEL[card.brand]}
           </span>
         </div>
-        <p className="tnum mt-5 text-lg font-semibold text-zinc-50">
+        <p className="tnum mt-5 text-lg font-semibold text-app-text">
           {invoice ? formatBRL(invoice.totalCents) : formatBRL(0)}
         </p>
-        <p className="text-xs text-zinc-400">
+        <p className="text-xs text-app-muted">
           {invoice
             ? `fatura ${INVOICE_STATUS[invoice.status].label.toLowerCase()} — vence ${formatDate(invoice.dueDate)}`
             : "sem fatura em aberto"}
         </p>
       </div>
       <div className="mt-4 space-y-1.5">
-        <div className="flex justify-between text-xs text-zinc-500">
+        <div className="flex justify-between text-xs text-app-muted">
           <span>
             Limite usado:{" "}
-            <span className="tnum text-zinc-300">{formatBRL(card.usedLimitCents)}</span>
+            <span className="tnum text-app-text">{formatBRL(card.usedLimitCents)}</span>
           </span>
           <span className="tnum">disponível {formatBRL(card.availableLimitCents)}</span>
         </div>
@@ -243,13 +243,13 @@ function InvoicesSheet({
             const status = INVOICE_STATUS[invoice.status];
             const payable = invoice.status !== "PAID" && invoice.totalCents > 0;
             return (
-              <li key={invoice.id} className="rounded-(--radius-card) border border-zinc-800 p-4">
+              <li key={invoice.id} className="rounded-(--radius-card) border border-app-border p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="tnum text-sm font-medium text-zinc-200">
+                    <p className="tnum text-sm font-medium text-app-text">
                       {String(invoice.month).padStart(2, "0")}/{invoice.year}
                     </p>
-                    <p className="text-xs text-zinc-500">vence {formatDate(invoice.dueDate)}</p>
+                    <p className="text-xs text-app-muted">vence {formatDate(invoice.dueDate)}</p>
                   </div>
                   <span className={cn("rounded-full border px-2.5 py-0.5 text-xs", status.cls)}>
                     {status.label}
@@ -357,7 +357,7 @@ function NewAccountSheet({
         <Field label="Cor">
           <Input type="color" className="h-11 p-1" {...form.register("color")} />
         </Field>
-        {create.error ? <p className="text-sm text-rose-400">{create.error.message}</p> : null}
+        {create.error ? <p className="text-sm text-expense">{create.error.message}</p> : null}
         <Button type="submit" disabled={create.isPending} className="h-12">
           {create.isPending ? "Criando…" : "Criar conta"}
         </Button>
@@ -444,7 +444,7 @@ function NewCardSheet({
             <Input type="color" className="h-11 p-1" {...form.register("color")} />
           </Field>
         </div>
-        {create.error ? <p className="text-sm text-rose-400">{create.error.message}</p> : null}
+        {create.error ? <p className="text-sm text-expense">{create.error.message}</p> : null}
         <Button type="submit" disabled={create.isPending} className="h-12">
           {create.isPending ? "Salvando…" : "Cadastrar cartão"}
         </Button>

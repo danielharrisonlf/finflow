@@ -42,3 +42,30 @@ test("exportação aponta para CSV e OFX com filtros aplicados", async ({ page }
   await expect(ofx).toHaveAttribute("href", /\/transactions\/export\?.*format=ofx/);
   await expect(csv).toHaveAttribute("href", /month=/);
 });
+
+test("edita uma transação existente pelo sheet", async ({ page }) => {
+  const captured = await mockApi(page);
+  await page.goto("/extrato");
+  await page.getByRole("button", { name: "Editar Almoço — rodízio japonês" }).click();
+
+  const form = page.getByTestId("form-edit-transaction");
+  await expect(form).toBeVisible();
+  await form.getByPlaceholder("0,00").fill("145,50");
+  await form.getByPlaceholder("Descrição do lançamento…").fill("Almoço executivo");
+  await form.getByRole("button", { name: "Salvar alterações" }).click();
+
+  await expect(form).not.toBeVisible();
+  await expect
+    .poll(() =>
+      captured.find((r) => r.method === "PATCH" && r.url.includes(`/transactions/${ids.txLunch}`)),
+    )
+    .toBeDefined();
+
+  const patchReq = captured.find(
+    (r) => r.method === "PATCH" && r.url.includes(`/transactions/${ids.txLunch}`),
+  );
+  expect(patchReq?.body).toMatchObject({
+    description: "Almoço executivo",
+    amountCents: 14_550,
+  });
+});

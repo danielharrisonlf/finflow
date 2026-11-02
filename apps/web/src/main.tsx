@@ -16,6 +16,10 @@ const AccountsPage = lazy(() =>
 );
 const BudgetsPage = lazy(() => import("./pages/budgets").then((m) => ({ default: m.BudgetsPage })));
 const GoalsPage = lazy(() => import("./pages/goals").then((m) => ({ default: m.GoalsPage })));
+const CategoriesPage = lazy(() =>
+  import("./pages/categories").then((m) => ({ default: m.CategoriesPage })),
+);
+const LandingPage = lazy(() => import("./pages/landing").then((m) => ({ default: m.LandingPage })));
 
 function page(element: React.ReactNode): React.ReactNode {
   return <Suspense fallback={null}>{element}</Suspense>;
@@ -28,6 +32,7 @@ const queryClient = new QueryClient({
 });
 
 const router = createBrowserRouter([
+  { path: "/inicio", element: page(<LandingPage />) },
   {
     element: <AppShell />,
     children: [
@@ -36,6 +41,7 @@ const router = createBrowserRouter([
       { path: "/contas", element: page(<AccountsPage />) },
       { path: "/orcamentos", element: page(<BudgetsPage />) },
       { path: "/metas", element: page(<GoalsPage />) },
+      { path: "/categorias", element: page(<CategoriesPage />) },
     ],
   },
 ]);

@@ -2,6 +2,7 @@ import { type TelegramStatus, type TelegramUpdate, telegramUpdateSchema } from "
 import { Body, Controller, ForbiddenException, Get, Headers, HttpCode, Post } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { ZodValidationPipe } from "../../common/zod-validation.pipe";
+import { Public } from "../auth/public.decorator";
 import { TelegramApiService } from "../notifications/telegram-api.service";
 import { TelegramService } from "./telegram.service";
 
@@ -13,6 +14,7 @@ export class TelegramController {
     private readonly telegramApi: TelegramApiService,
   ) {}
 
+  @Public()
   @Post("webhook")
   @HttpCode(200)
   @ApiOperation({ summary: "Webhook da Bot API do Telegram (protegido por secret token)" })

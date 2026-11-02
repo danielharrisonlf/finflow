@@ -1,4 +1,29 @@
 const BASE_URL = `${import.meta.env.VITE_API_URL ?? "http://localhost:3333"}/api`;
+const TOKEN_KEY = "finflow_token";
+
+export function getAuthToken(): string | null {
+  try {
+    return window.localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setAuthToken(token: string): void {
+  try {
+    window.localStorage.setItem(TOKEN_KEY, token);
+  } catch {
+    // storage indisponível
+  }
+}
+
+export function clearAuthToken(): void {
+  try {
+    window.localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    // storage indisponível
+  }
+}
 
 export class ApiError extends Error {
   constructor(
@@ -12,11 +37,21 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getAuthToken();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
   const response = await fetch(`${BASE_URL}${path}`, {
-    headers: { "Content-Type": "application/json" },
     ...init,
+    headers: { ...headers, ...(init?.headers as Record<string, string> | undefined) },
   });
   if (!response.ok) {
+    if (response.status === 401 && path !== "/auth/login") {
+      clearAuthToken();
+      window.dispatchEvent(new Event("finflow:unauthorized"));
+    }
     let message = `Erro ${response.status}`;
     let issues: { path: string; message: string }[] | undefined;
     try {
@@ -53,5 +88,7 @@ export const api = {
 export function exportUrl(format: "csv" | "ofx", params: URLSearchParams): string {
   const query = new URLSearchParams(params);
   query.set("format", format);
+  const token = getAuthToken();
+  if (token) query.set("token", token);
   return `${BASE_URL}/transactions/export?${query.toString()}`;
 }

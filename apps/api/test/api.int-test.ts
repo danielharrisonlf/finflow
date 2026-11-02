@@ -266,4 +266,73 @@ describe("FinFlow API (integração, banco *_test)", () => {
       }
     });
   });
+
+  it("cria e edita subcategoria e edita transação existente", async () => {
+    const sub = await http
+      .post("/api/categories")
+      .send({
+        name: "Restaurantes",
+        kind: "EXPENSE",
+        icon: "utensils",
+        color: "#f97316",
+        parentId: foodCategory,
+      })
+      .expect(201);
+    expect(sub.body.parentId).toBe(foodCategory);
+
+    const updatedSub = await http
+      .patch(`/api/categories/${sub.body.id}`)
+      .send({ name: "Restaurantes & Delivery" })
+      .expect(200);
+    expect(updatedSub.body.name).toBe("Restaurantes & Delivery");
+
+    const list = await http.get("/api/transactions?search=Mercado").expect(200);
+    const txId = list.body.items[0]?.id as string;
+    const editedTx = await http
+      .patch(`/api/transactions/${txId}`)
+      .send({
+        description: "Supermercado mensal",
+        amountCents: 28_000,
+        categoryId: sub.body.id,
+        notes: "compra ajustada",
+      })
+      .expect(200);
+    expect(editedTx.body.description).toBe("Supermercado mensal");
+    expect(editedTx.body.amountCents).toBe(-28_000);
+    expect(editedTx.body.categoryName).toBe("Restaurantes & Delivery");
+  });
+
+  describe("autenticação (FINFLOW_PASSWORD)", () => {
+    it("bloqueia rotas sem token e libera com Bearer token do login", async () => {
+      process.env.FINFLOW_PASSWORD = "senha-integração-123";
+      try {
+        const statusAnon = await http.get("/api/auth/status").expect(200);
+        expect(statusAnon.body).toEqual({ required: true, authenticated: false });
+
+        await http.get("/api/accounts").expect(401);
+        await http.post("/api/auth/login").send({ password: "errada" }).expect(401);
+
+        const login = await http
+          .post("/api/auth/login")
+          .send({ password: "senha-integração-123" })
+          .expect(200);
+        const token = login.body.token as string;
+        expect(token).toBeTruthy();
+
+        const statusAuth = await http
+          .get("/api/auth/status")
+          .set("Authorization", `Bearer ${token}`)
+          .expect(200);
+        expect(statusAuth.body).toEqual({ required: true, authenticated: true });
+
+        await http.get("/api/accounts").set("Authorization", `Bearer ${token}`).expect(200);
+
+        await http
+          .get(`/api/transactions/export?format=csv&token=${encodeURIComponent(token)}`)
+          .expect(200);
+      } finally {
+        delete process.env.FINFLOW_PASSWORD;
+      }
+    });
+  });
 });

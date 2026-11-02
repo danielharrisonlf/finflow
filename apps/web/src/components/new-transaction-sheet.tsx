@@ -13,6 +13,7 @@ import {
   useTransfer,
 } from "../lib/queries";
 import { Button } from "./ui/button";
+import { formatCategoryLabel } from "./ui/category-icon";
 import { Field, Input, Select } from "./ui/field";
 import { Sheet } from "./ui/sheet";
 
@@ -55,7 +56,7 @@ const transferSchema = z
 type TransferForm = z.infer<typeof transferSchema>;
 
 const tabCls =
-  "h-10 flex-1 rounded-(--radius-control) text-sm text-zinc-400 transition-colors data-[state=active]:bg-zinc-800 data-[state=active]:font-medium data-[state=active]:text-zinc-100";
+  "h-10 flex-1 rounded-(--radius-control) text-sm text-app-muted transition-colors data-[state=active]:bg-app-soft data-[state=active]:font-medium data-[state=active]:text-app-text";
 
 export function NewTransactionSheet({
   open,
@@ -68,7 +69,7 @@ export function NewTransactionSheet({
     <Sheet open={open} onOpenChange={onOpenChange} title="Novo lançamento">
       <Tabs.Root defaultValue="expense">
         <Tabs.List
-          className="mb-4 flex gap-1 rounded-(--radius-control) bg-zinc-950/70 p-1"
+          className="mb-4 flex gap-1 rounded-(--radius-control) bg-app-background/70 p-1"
           aria-label="Tipo de lançamento"
         >
           <Tabs.Trigger value="expense" className={tabCls}>
@@ -109,16 +110,16 @@ function AmountInput({
   return (
     <Field label="Valor" error={error}>
       <div className="relative">
-        <span className="absolute top-1/2 left-4 -translate-y-1/2 text-lg text-zinc-500">R$</span>
+        <span className="absolute top-1/2 left-4 -translate-y-1/2 text-lg text-app-muted">R$</span>
         <input
           inputMode="decimal"
           placeholder="0,00"
           autoComplete="off"
           className={cn(
-            "tnum h-14 w-full rounded-(--radius-control) border border-zinc-700/80 bg-zinc-950 pr-4 pl-12 text-2xl font-semibold placeholder:text-zinc-600 focus:border-emerald-500 focus:outline-none",
+            "tnum h-14 w-full rounded-(--radius-control) border border-app-border/80 bg-app-background pr-4 pl-12 text-2xl font-semibold placeholder:text-app-subtle focus:border-emerald-500 focus:outline-none",
             tone === "income" && "text-(--color-income)",
             tone === "expense" && "text-(--color-expense)",
-            tone === "neutral" && "text-zinc-100",
+            tone === "neutral" && "text-app-text",
           )}
           {...register}
         />
@@ -202,7 +203,7 @@ function SimpleTransactionForm({
             <option value="">Sem categoria</option>
             {categories.data?.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.name}
+                {formatCategoryLabel(c, categories.data)}
               </option>
             ))}
           </Select>
@@ -212,7 +213,7 @@ function SimpleTransactionForm({
         <Field label="Data">
           <Input type="date" {...form.register("date")} />
         </Field>
-        <label className="flex h-11 cursor-pointer items-center gap-2.5 rounded-(--radius-control) border border-zinc-700/80 px-3 text-sm text-zinc-300">
+        <label className="flex h-11 cursor-pointer items-center gap-2.5 rounded-(--radius-control) border border-app-border/80 px-3 text-sm text-app-text">
           <input
             type="checkbox"
             className="h-4 w-4 accent-amber-400"
@@ -300,7 +301,7 @@ function CardExpenseForm({ onDone }: { onDone: () => void }) {
             <option value="">Sem categoria</option>
             {categories.data?.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.name}
+                {formatCategoryLabel(c, categories.data)}
               </option>
             ))}
           </Select>
@@ -394,7 +395,7 @@ function TransferFormView({ onDone }: { onDone: () => void }) {
 function SubmitRow({ loading, error, label }: { loading: boolean; error?: string; label: string }) {
   return (
     <div className="flex flex-col gap-2">
-      {error ? <p className="text-sm text-rose-400">{error}</p> : null}
+      {error ? <p className="text-sm text-expense">{error}</p> : null}
       <Button type="submit" disabled={loading} className="h-12 text-[15px]">
         {loading ? "Salvando…" : label}
       </Button>

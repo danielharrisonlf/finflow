@@ -1,5 +1,6 @@
 import type {
   Account,
+  AuthStatus,
   Budget,
   Card,
   CashflowPoint,
@@ -9,20 +10,25 @@ import type {
   CreateAccountInput,
   CreateCardExpenseInput,
   CreateCardInput,
+  CreateCategoryInput,
   CreateGoalInput,
   CreateTransactionInput,
   DashboardSummary,
   Goal,
   Invoice,
+  LoginInput,
+  LoginResponse,
   Paginated,
   PayInvoiceInput,
   Transaction,
   TransferInput,
   UpcomingItem,
+  UpdateCategoryInput,
+  UpdateTransactionInput,
   UpsertBudgetInput,
 } from "@finflow/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "./api";
+import { api, setAuthToken } from "./api";
 
 export interface Period {
   month: number;
@@ -32,6 +38,12 @@ export interface Period {
 const periodQS = (p?: Period): string => (p ? `?month=${p.month}&year=${p.year}` : "");
 
 // ───────────────────────── queries ─────────────────────────
+
+export const useAuthStatus = () =>
+  useQuery({
+    queryKey: ["auth", "status"],
+    queryFn: () => api.get<AuthStatus>("/auth/status"),
+  });
 
 export const useSummary = (p?: Period) =>
   useQuery({
@@ -131,9 +143,25 @@ function useInvalidatingMutation<TInput, TOutput>(fn: (input: TInput) => Promise
   });
 }
 
+export const useLogin = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: LoginInput) => api.post<LoginResponse>("/auth/login", input),
+    onSuccess: (res) => {
+      setAuthToken(res.token);
+      queryClient.invalidateQueries();
+    },
+  });
+};
+
 export const useCreateTransaction = () =>
   useInvalidatingMutation((input: CreateTransactionInput) =>
     api.post<Transaction>("/transactions", input),
+  );
+
+export const useUpdateTransaction = () =>
+  useInvalidatingMutation(({ id, ...input }: UpdateTransactionInput & { id: string }) =>
+    api.patch<Transaction>(`/transactions/${id}`, input),
   );
 
 export const useTransfer = () =>
@@ -153,6 +181,17 @@ export const useDeleteTransaction = () =>
   useInvalidatingMutation(({ id, scope }: { id: string; scope?: "single" | "group" }) =>
     api.delete<void>(`/transactions/${id}${scope ? `?scope=${scope}` : ""}`),
   );
+
+export const useCreateCategory = () =>
+  useInvalidatingMutation((input: CreateCategoryInput) => api.post<Category>("/categories", input));
+
+export const useUpdateCategory = () =>
+  useInvalidatingMutation(({ id, ...input }: UpdateCategoryInput & { id: string }) =>
+    api.patch<Category>(`/categories/${id}`, input),
+  );
+
+export const useDeleteCategory = () =>
+  useInvalidatingMutation((id: string) => api.delete<void>(`/categories/${id}`));
 
 export const useCreateAccount = () =>
   useInvalidatingMutation((input: CreateAccountInput) => api.post<Account>("/accounts", input));

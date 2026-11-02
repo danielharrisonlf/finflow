@@ -24,7 +24,7 @@ export function GoalsPage() {
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Metas</h1>
-          <p className="text-sm text-zinc-500">Caixinhas para os seus objetivos</p>
+          <p className="text-sm text-app-muted">Caixinhas para os seus objetivos</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
           <Plus size={15} /> Nova meta
@@ -51,12 +51,12 @@ export function GoalsPage() {
               <div className="flex items-center gap-3">
                 <CategoryIcon icon={goal.icon} color={goal.color} size={40} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-zinc-100">{goal.name}</p>
-                  <p className="text-xs text-zinc-500">
+                  <p className="truncate text-sm font-medium text-app-text">{goal.name}</p>
+                  <p className="text-xs text-app-muted">
                     {goal.deadline ? `até ${formatDate(goal.deadline)}` : "sem prazo"}
                   </p>
                 </div>
-                <span className="tnum text-sm font-semibold text-zinc-200">{goal.percent}%</span>
+                <span className="tnum text-sm font-semibold text-app-text">{goal.percent}%</span>
               </div>
               <div>
                 <Progress
@@ -65,21 +65,21 @@ export function GoalsPage() {
                   className="h-2"
                 />
                 <div className="mt-2 flex items-baseline justify-between">
-                  <p className="tnum text-lg font-semibold text-zinc-50">
+                  <p className="tnum text-lg font-semibold text-app-text">
                     {formatBRL(goal.savedCents)}
                   </p>
-                  <p className="tnum text-xs text-zinc-500">de {formatBRL(goal.targetCents)}</p>
+                  <p className="tnum text-xs text-app-muted">de {formatBRL(goal.targetCents)}</p>
                 </div>
                 {goal.monthlyNeededCents !== null ? (
-                  <p className="mt-1 text-xs text-zinc-500">
+                  <p className="mt-1 text-xs text-app-muted">
                     guarde{" "}
-                    <span className="tnum font-medium text-emerald-300">
+                    <span className="tnum font-medium text-income">
                       {formatBRL(goal.monthlyNeededCents)}/mês
                     </span>{" "}
                     para chegar lá no prazo
                   </p>
                 ) : goal.percent >= 100 ? (
-                  <p className="mt-1 text-xs text-emerald-300">meta concluída 🎉</p>
+                  <p className="mt-1 text-xs text-income">meta concluída 🎉</p>
                 ) : null}
               </div>
               <Button variant="outline" size="sm" onClick={() => setContributing(goal)}>
@@ -140,7 +140,7 @@ function NewGoalSheet({
             <Input type="date" {...form.register("deadline")} />
           </Field>
         </div>
-        {create.error ? <p className="text-sm text-rose-400">{create.error.message}</p> : null}
+        {create.error ? <p className="text-sm text-expense">{create.error.message}</p> : null}
         <Button type="submit" disabled={create.isPending} className="h-12">
           {create.isPending ? "Criando…" : "Criar meta"}
         </Button>
@@ -173,18 +173,18 @@ function ContributeSheet({ goal, onClose }: { goal: Goal | null; onClose: () => 
       title={goal ? `${goal.name} — ${formatBRL(goal.savedCents)} guardados` : ""}
     >
       <div className="flex flex-col gap-4 pb-2">
-        <div className="flex gap-1 rounded-(--radius-control) bg-zinc-950/70 p-1">
+        <div className="flex gap-1 rounded-(--radius-control) bg-app-background/70 p-1">
           <button
             type="button"
             onClick={() => setDirection("in")}
-            className={`h-10 flex-1 cursor-pointer rounded-(--radius-control) text-sm transition-colors ${direction === "in" ? "bg-zinc-800 font-medium text-emerald-300" : "text-zinc-400"}`}
+            className={`h-10 flex-1 cursor-pointer rounded-(--radius-control) text-sm transition-colors ${direction === "in" ? "bg-app-soft font-medium text-income" : "text-app-muted"}`}
           >
             Guardar
           </button>
           <button
             type="button"
             onClick={() => setDirection("out")}
-            className={`h-10 flex-1 cursor-pointer rounded-(--radius-control) text-sm transition-colors ${direction === "out" ? "bg-zinc-800 font-medium text-rose-300" : "text-zinc-400"}`}
+            className={`h-10 flex-1 cursor-pointer rounded-(--radius-control) text-sm transition-colors ${direction === "out" ? "bg-app-soft font-medium text-expense" : "text-app-muted"}`}
           >
             Resgatar
           </button>
@@ -198,7 +198,7 @@ function ContributeSheet({ goal, onClose }: { goal: Goal | null; onClose: () => 
           />
         </Field>
         {contribute.error ? (
-          <p className="text-sm text-rose-400">{contribute.error.message}</p>
+          <p className="text-sm text-expense">{contribute.error.message}</p>
         ) : null}
         <Button
           disabled={contribute.isPending || parseBRLInput(amount) === null}

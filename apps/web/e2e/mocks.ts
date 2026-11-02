@@ -236,8 +236,12 @@ export interface CapturedRequest {
 }
 
 /** Intercepta a API inteira com fixtures determinísticas e captura escritas. */
-export async function mockApi(page: Page): Promise<CapturedRequest[]> {
+export async function mockApi(
+  page: Page,
+  options: { requireAuth?: boolean } = {},
+): Promise<CapturedRequest[]> {
   const captured: CapturedRequest[] = [];
+  let authenticated = !options.requireAuth;
 
   const json = (route: Route, body: unknown, status = 200) =>
     route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
@@ -253,6 +257,8 @@ export async function mockApi(page: Page): Promise<CapturedRequest[]> {
     }
 
     if (method === "GET") {
+      if (path === "/auth/status")
+        return json(route, { required: Boolean(options.requireAuth), authenticated });
       if (path === "/dashboard/summary") return json(route, fixtures.summary);
       if (path === "/dashboard/cashflow") return json(route, fixtures.cashflow);
       if (path === "/dashboard/categories") return json(route, fixtures.categorySlices);
@@ -273,6 +279,18 @@ export async function mockApi(page: Page): Promise<CapturedRequest[]> {
         return json(route, [fixtures.cards[0]!.currentInvoice]);
     }
 
+    if (method === "POST" && path === "/auth/login") {
+      const payload = request.postDataJSON() as { password?: string };
+      if (payload.password === "errada") {
+        return json(route, { message: "senha incorreta" }, 401);
+      }
+      authenticated = true;
+      return json(route, { token: "mock-jwt-token", expiresAt: "2027-01-01T00:00:00.000Z" }, 200);
+    }
+    if (method === "POST" && path === "/categories")
+      return json(route, { ...fixtures.categories[0], id: "cat-new" }, 201);
+    if (method === "PATCH" && /^\/categories\/[^/]+$/.test(path))
+      return json(route, fixtures.categories[0]);
     if (method === "POST" && path === "/transactions")
       return json(route, { ...fixtures.transactions.items[0], id: "created" }, 201);
     if (method === "POST" && path === "/transactions/transfer")
@@ -281,6 +299,8 @@ export async function mockApi(page: Page): Promise<CapturedRequest[]> {
       return json(route, { created: 1 }, 201);
     if (method === "PATCH" && /\/transactions\/.+\/confirm$/.test(path))
       return json(route, { ...fixtures.transactions.items[2], status: "CONFIRMED" });
+    if (method === "PATCH" && /^\/transactions\/[^/]+$/.test(path))
+      return json(route, fixtures.transactions.items[0]);
     if (method === "POST" && path === "/budgets") return json(route, fixtures.budgets[0], 201);
     if (method === "POST" && path === "/goals") return json(route, fixtures.goals[0], 201);
     if (method === "POST" && /\/goals\/.+\/contributions$/.test(path))

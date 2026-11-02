@@ -8,7 +8,7 @@ Controle financeiro pessoal: contas, cartões de crédito com faturas e parcelam
 | --- | --- |
 | Monorepo | pnpm 10 workspaces + Turborepo, Biome, TypeScript 6 |
 | API (`apps/api`) | NestJS 12, Prisma 7 (adapter `pg`), PostgreSQL 16, Zod 4, Swagger |
-| Web (`apps/web`) | React 19, Vite 8, Tailwind v4, Radix UI, TanStack Query, React Hook Form, Recharts |
+| Web (`apps/web`) | React 19, Vite 8, Tailwind v4, Radix UI, TanStack Query, React Hook Form |
 | CLI (`apps/cli`) | Commander, picocolors |
 | MCP (`apps/mcp`) | `@modelcontextprotocol/sdk` (stdio) |
 | Contratos (`packages/contracts`) | Schemas Zod compartilhados entre API, web, CLI e MCP |
@@ -39,9 +39,9 @@ pnpm dev                      # API em :3333 e web em :5273
 pnpm lint               # Biome (somente leitura)
 pnpm typecheck
 pnpm build
-pnpm test               # unidade: API (50) + CLI (3)
-pnpm test:integration   # API contra o banco finflow_test (11 cenários)
-pnpm test:e2e           # Playwright, 13 cenários × desktop e Pixel 7
+pnpm test               # unidade: API (53) + CLI (3)
+pnpm test:integration   # API contra o banco finflow_test (13 cenários)
+pnpm test:e2e           # Playwright, 16 cenários × desktop e Pixel 7
 ```
 
 O banco de integração precisa ter nome terminado em `_test`; o setup recusa qualquer outro. As migrations são aplicadas com `prisma migrate deploy`, que não apaga dados.
@@ -86,7 +86,16 @@ pnpm cli exportar --formato ofx --saida extrato.ofx
 pnpm cli status
 ```
 
-Contas, cartões, categorias e metas aceitam nome parcial sem diferenciar maiúsculas. Use `--api <url>` ou `FINFLOW_API_URL` para apontar para outra API.
+Contas, cartões, categorias e metas aceitam nome parcial sem diferenciar maiúsculas. Use `--api <url>` ou `FINFLOW_API_URL` para apontar para outra API, e `--token <token>` (ou `FINFLOW_TOKEN` / `FINFLOW_PASSWORD`) quando a autenticação estiver ativa.
+
+## Autenticação
+
+Por padrão, em desenvolvimento local sem `FINFLOW_PASSWORD`, a API roda em modo aberto para facilitar testes locais. Antes de expor a API na rede ou publicar em produção:
+
+1. Defina `FINFLOW_PASSWORD` no `.env` com uma senha forte (e opcionalmente `FINFLOW_AUTH_SECRET` e `FINFLOW_API_TOKEN`).
+2. Na interface web, uma tela de login passa a ser exigida automaticamente e armazena um token de sessão assinado (HMAC-SHA256, válido por 30 dias).
+3. Na CLI e no MCP, defina `FINFLOW_TOKEN` (ou `FINFLOW_PASSWORD`) no ambiente ou passe `--token` na CLI.
+4. O webhook do Telegram (`/api/telegram/webhook`) continua acessível ao Telegram mediante validação do cabeçalho `x-telegram-bot-api-secret-token`.
 
 ## Servidor MCP
 
@@ -128,9 +137,10 @@ Quando um gasto faz um orçamento passar de 70% ou de 90%, o bot avisa. O aviso 
 
 ```text
 apps/
-  api/        NestJS: módulos accounts, categories, cards, transactions, budgets,
-              goals, dashboard, notifications, telegram
-  web/        React: dashboard, extrato, contas e cartões, orçamentos, metas
+  api/        NestJS: módulos auth, accounts, categories, cards, transactions,
+              budgets, goals, dashboard, notifications, telegram
+  web/        React: login, dashboard, extrato, contas e cartões, orçamentos,
+              metas, categorias (com subcategorias)
   cli/        finflow (binário)
   mcp/        finflow-mcp (binário stdio)
 packages/

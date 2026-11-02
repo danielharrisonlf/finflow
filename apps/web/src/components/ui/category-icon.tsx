@@ -48,8 +48,19 @@ const ICONS: Record<string, LucideIcon> = {
   wallet: Wallet,
 };
 
+export const CATEGORY_ICON_NAMES = Object.keys(ICONS);
+
 export function iconByName(name: string | null | undefined): LucideIcon {
   return (name && ICONS[name]) || Tag;
+}
+
+export function formatCategoryLabel(
+  category: { name: string; parentId?: string | null },
+  all?: { id: string; name: string }[],
+): string {
+  if (!category.parentId || !all) return category.name;
+  const parent = all.find((c) => c.id === category.parentId);
+  return parent ? `${parent.name} › ${category.name}` : category.name;
 }
 
 /** Chip circular com o ícone da categoria tingido pela cor dela. */

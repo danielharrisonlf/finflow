@@ -1,5 +1,6 @@
 import type {
   Account,
+  AuthStatus,
   Budget,
   Card,
   CashflowPoint,
@@ -9,17 +10,21 @@ import type {
   CreateAccountInput,
   CreateCardExpenseInput,
   CreateCardInput,
+  CreateCategoryInput,
   CreateGoalInput,
   CreateTransactionInput,
   DashboardSummary,
   ExportFormat,
   Goal,
   Invoice,
+  LoginResponse,
   Paginated,
   TelegramStatus,
   Transaction,
   TransferInput,
   UpcomingItem,
+  UpdateCategoryInput,
+  UpdateTransactionInput,
   UpsertBudgetInput,
 } from "@finflow/contracts";
 
@@ -59,17 +64,28 @@ function toQuery(params: Record<string, string | number | undefined>): string {
 /** Client fino e tipado da API REST do FinFlow. */
 export class FinFlowClient {
   private readonly baseUrl: string;
+  private readonly token: string | undefined;
 
-  constructor(baseUrl = process.env.FINFLOW_API_URL ?? "http://localhost:3333") {
+  constructor(
+    baseUrl = process.env.FINFLOW_API_URL ?? "http://localhost:3333",
+    token = process.env.FINFLOW_TOKEN ??
+      process.env.FINFLOW_API_TOKEN ??
+      process.env.FINFLOW_PASSWORD,
+  ) {
     this.baseUrl = `${baseUrl.replace(/\/$/, "")}/api`;
+    this.token = token?.trim() || undefined;
   }
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
     let response: Response;
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (this.token) {
+      headers.Authorization = `Bearer ${this.token}`;
+    }
     try {
       response = await fetch(`${this.baseUrl}${path}`, {
-        headers: { "Content-Type": "application/json" },
         ...init,
+        headers: { ...headers, ...(init?.headers as Record<string, string> | undefined) },
       });
     } catch (error) {
       throw new FinFlowApiError(
@@ -123,9 +139,26 @@ export class FinFlowClient {
     return this.request("/accounts", { method: "POST", body: JSON.stringify(input) });
   }
 
+  // autenticação
+  authStatus(): Promise<AuthStatus> {
+    return this.request("/auth/status");
+  }
+  login(password: string): Promise<LoginResponse> {
+    return this.request("/auth/login", { method: "POST", body: JSON.stringify({ password }) });
+  }
+
   // categorias
   categories(kind?: Category["kind"]): Promise<Category[]> {
     return this.request(`/categories${toQuery({ kind })}`);
+  }
+  createCategory(input: CreateCategoryInput): Promise<Category> {
+    return this.request("/categories", { method: "POST", body: JSON.stringify(input) });
+  }
+  updateCategory(id: string, input: UpdateCategoryInput): Promise<Category> {
+    return this.request(`/categories/${id}`, { method: "PATCH", body: JSON.stringify(input) });
+  }
+  deleteCategory(id: string): Promise<void> {
+    return this.request(`/categories/${id}`, { method: "DELETE" });
   }
 
   // transações
@@ -134,6 +167,9 @@ export class FinFlowClient {
   }
   createTransaction(input: CreateTransactionInput): Promise<Transaction> {
     return this.request("/transactions", { method: "POST", body: JSON.stringify(input) });
+  }
+  updateTransaction(id: string, input: UpdateTransactionInput): Promise<Transaction> {
+    return this.request(`/transactions/${id}`, { method: "PATCH", body: JSON.stringify(input) });
   }
   confirmTransaction(id: string): Promise<Transaction> {
     return this.request(`/transactions/${id}/confirm`, { method: "PATCH" });

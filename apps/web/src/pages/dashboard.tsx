@@ -8,17 +8,6 @@ import {
   CreditCard,
 } from "lucide-react";
 import { useState } from "react";
-import {
-  Area,
-  AreaChart,
-  Cell,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { Card, CardHeader } from "../components/ui/card";
 import { CategoryIcon } from "../components/ui/category-icon";
 import { Empty, LoadingRows } from "../components/ui/empty";
@@ -60,26 +49,26 @@ export function DashboardPage() {
     <div className="space-y-5">
       <header className="rise flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight text-zinc-100">Visão geral</h1>
-          <p className="text-sm text-zinc-500">Suas finanças em um olhar</p>
+          <h1 className="text-xl font-semibold tracking-tight text-app-text">Visão geral</h1>
+          <p className="text-sm text-app-muted">Suas finanças em um olhar</p>
         </div>
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={() => shiftPeriod(-1)}
             aria-label="Mês anterior"
-            className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-(--radius-control) text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
+            className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-(--radius-control) text-app-muted hover:bg-app-surface hover:text-app-text"
           >
             <ChevronLeft size={18} />
           </button>
-          <span className="tnum min-w-32 text-center text-sm font-medium text-zinc-300">
+          <span className="tnum min-w-32 text-center text-sm font-medium text-app-text">
             {formatMonthYear(period.month, period.year)}
           </span>
           <button
             type="button"
             onClick={() => shiftPeriod(1)}
             aria-label="Próximo mês"
-            className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-(--radius-control) text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
+            className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-(--radius-control) text-app-muted hover:bg-app-surface hover:text-app-text"
           >
             <ChevronRight size={18} />
           </button>
@@ -89,7 +78,7 @@ export function DashboardPage() {
       <div className="grid grid-cols-12 gap-4">
         {/* herói: saldo consolidado */}
         <section
-          className="rise relative col-span-12 overflow-hidden rounded-(--radius-hero) border border-zinc-800/80 bg-zinc-900/60 p-6 lg:col-span-5"
+          className="rise relative col-span-12 overflow-hidden rounded-(--radius-hero) border border-app-border/80 bg-app-surface/60 p-6 lg:col-span-5"
           style={{ animationDelay: "60ms" }}
           data-testid="hero-balance"
         >
@@ -97,20 +86,20 @@ export function DashboardPage() {
             aria-hidden
             className="pointer-events-none absolute -top-24 -right-20 h-64 w-64 rounded-full bg-emerald-500/10 blur-3xl"
           />
-          <p className="text-sm text-zinc-400">Saldo geral</p>
-          <p className="tnum mt-2 text-[2.75rem] leading-none font-semibold tracking-tight text-zinc-50 md:text-5xl">
+          <p className="text-sm text-app-muted">Saldo geral</p>
+          <p className="tnum mt-2 text-[2.75rem] leading-none font-semibold tracking-tight text-app-text md:text-5xl">
             {s ? formatBRL(s.totalBalanceCents) : "—"}
           </p>
           <div className="mt-6 flex flex-wrap gap-x-8 gap-y-3">
             <div>
-              <p className="text-xs text-zinc-500">Faturas em aberto</p>
-              <p className="tnum mt-0.5 text-[15px] font-medium text-zinc-200">
+              <p className="text-xs text-app-muted">Faturas em aberto</p>
+              <p className="tnum mt-0.5 text-[15px] font-medium text-app-text">
                 {s ? formatBRL(s.openInvoicesCents) : "—"}
               </p>
             </div>
             <div>
-              <p className="text-xs text-zinc-500">Pendências</p>
-              <p className="tnum mt-0.5 text-[15px] font-medium text-zinc-200">
+              <p className="text-xs text-app-muted">Pendências</p>
+              <p className="tnum mt-0.5 text-[15px] font-medium text-app-text">
                 {s ? `${s.pendingCount} lançamento${s.pendingCount === 1 ? "" : "s"}` : "—"}
               </p>
             </div>
@@ -149,10 +138,10 @@ export function DashboardPage() {
               hint="Contas pendentes e faturas aparecem aqui quando estiverem perto do vencimento."
             />
           ) : (
-            <ul className="divide-y divide-zinc-800/60 px-5 pb-2">
+            <ul className="divide-y divide-app-border/60 px-5 pb-2">
               {upcoming.data?.map((item) => (
                 <li key={item.id} className="flex items-center gap-3 py-3">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-800/80 text-zinc-400">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-app-soft/80 text-app-muted">
                     {item.kind === "INVOICE" ? (
                       <CreditCard size={16} />
                     ) : (
@@ -160,8 +149,8 @@ export function DashboardPage() {
                     )}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm text-zinc-200">{item.description}</p>
-                    <p className="text-xs text-zinc-500">vence {formatDate(item.dueDate)}</p>
+                    <p className="truncate text-sm text-app-text">{item.description}</p>
+                    <p className="text-xs text-app-muted">vence {formatDate(item.dueDate)}</p>
                   </div>
                   <Money cents={item.amountCents} signed className="text-sm font-medium" />
                 </li>
@@ -222,10 +211,10 @@ function StatTile({
         ? "text-(--color-expense)"
         : cents !== undefined && cents < 0
           ? "text-(--color-expense)"
-          : "text-zinc-100";
+          : "text-app-text";
   return (
     <Card className="flex flex-col justify-center px-4 py-3.5 lg:px-5">
-      <p className="flex items-center gap-1.5 text-xs text-zinc-500 lg:text-sm">
+      <p className="flex items-center gap-1.5 text-xs text-app-muted lg:text-sm">
         {icon}
         {label}
       </p>
@@ -236,101 +225,194 @@ function StatTile({
   );
 }
 
-const tooltipStyle = {
-  backgroundColor: "#18181b",
-  border: "1px solid #3f3f46",
-  borderRadius: 10,
-  fontSize: 13,
-  color: "#e4e4e7",
-} as const;
+function buildSmoothPath(points: { x: number; y: number }[]): string {
+  if (points.length === 0) return "";
+  const first = points[0];
+  if (!first) return "";
+  if (points.length === 1) return `M ${first.x} ${first.y}`;
+  let d = `M ${first.x} ${first.y}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i]!;
+    const p1 = points[i + 1]!;
+    const midX = (p0.x + p1.x) / 2;
+    d += ` C ${midX} ${p0.y}, ${midX} ${p1.y}, ${p1.x} ${p1.y}`;
+  }
+  return d;
+}
 
 function CashflowChart({ data }: { data: CashflowPoint[] }) {
-  const chartData = data.map((p) => ({
-    day: p.date.slice(8, 10),
-    Entradas: p.incomeCents / 100,
-    Saídas: p.expenseCents / 100,
+  const width = 640;
+  const height = 220;
+  const padLeft = 48;
+  const padRight = 16;
+  const padTop = 16;
+  const padBottom = 28;
+  const plotW = width - padLeft - padRight;
+  const plotH = height - padTop - padBottom;
+  const baseline = padTop + plotH;
+
+  const maxCents = Math.max(10_000, ...data.map((p) => Math.max(p.incomeCents, p.expenseCents)));
+
+  const xAt = (i: number): number =>
+    data.length <= 1 ? padLeft + plotW / 2 : padLeft + (i / (data.length - 1)) * plotW;
+  const yAt = (cents: number): number => baseline - (cents / maxCents) * plotH;
+
+  const inPts = data.map((p, i) => ({ x: xAt(i), y: yAt(p.incomeCents) }));
+  const outPts = data.map((p, i) => ({ x: xAt(i), y: yAt(p.expenseCents) }));
+
+  const inLine = buildSmoothPath(inPts);
+  const outLine = buildSmoothPath(outPts);
+
+  const firstX = inPts[0]?.x ?? padLeft;
+  const lastX = inPts[inPts.length - 1]?.x ?? padLeft + plotW;
+  const inArea = inLine ? `${inLine} L ${lastX} ${baseline} L ${firstX} ${baseline} Z` : "";
+  const outArea = outLine ? `${outLine} L ${lastX} ${baseline} L ${firstX} ${baseline} Z` : "";
+
+  const yTicks = [0, 0.5, 1].map((t) => ({
+    y: baseline - t * plotH,
+    label: (() => {
+      const reais = Math.round((maxCents * t) / 100);
+      return reais >= 1000 ? `${Math.round(reais / 1000)}k` : String(reais);
+    })(),
   }));
+
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <AreaChart data={chartData} margin={{ top: 12, right: 12, bottom: 0, left: 0 }}>
+    <div className="relative h-full w-full">
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="h-full w-full overflow-visible"
+        role="img"
+        aria-label="Fluxo de caixa do mês"
+      >
         <defs>
           <linearGradient id="gIn" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#34d399" stopOpacity={0.25} />
-            <stop offset="100%" stopColor="#34d399" stopOpacity={0} />
+            <stop offset="0%" stopColor="var(--ff-income)" stopOpacity={0.28} />
+            <stop offset="100%" stopColor="var(--ff-income)" stopOpacity={0} />
           </linearGradient>
           <linearGradient id="gOut" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#fb7185" stopOpacity={0.22} />
-            <stop offset="100%" stopColor="#fb7185" stopOpacity={0} />
+            <stop offset="0%" stopColor="var(--ff-expense)" stopOpacity={0.24} />
+            <stop offset="100%" stopColor="var(--ff-expense)" stopOpacity={0} />
           </linearGradient>
         </defs>
-        <XAxis
-          dataKey="day"
-          tickLine={false}
-          axisLine={false}
-          tick={{ fill: "#71717a", fontSize: 11 }}
-          dy={6}
-        />
-        <YAxis
-          tickLine={false}
-          axisLine={false}
-          width={52}
-          tick={{ fill: "#71717a", fontSize: 11 }}
-          tickFormatter={(v: number) => (v >= 1000 ? `${Math.round(v / 1000)}k` : String(v))}
-        />
-        <Tooltip
-          contentStyle={tooltipStyle}
-          formatter={(value: number) => formatBRL(Math.round(value * 100))}
-          labelFormatter={(day) => `Dia ${day}`}
-        />
-        <Area
-          type="monotone"
-          dataKey="Entradas"
-          stroke="#34d399"
-          strokeWidth={2}
-          fill="url(#gIn)"
-        />
-        <Area type="monotone" dataKey="Saídas" stroke="#fb7185" strokeWidth={2} fill="url(#gOut)" />
-      </AreaChart>
-    </ResponsiveContainer>
+
+        {yTicks.map((tick) => (
+          <g key={tick.y}>
+            <line
+              x1={padLeft}
+              y1={tick.y}
+              x2={width - padRight}
+              y2={tick.y}
+              stroke="var(--ff-border)"
+              strokeDasharray="3 3"
+            />
+            <text
+              x={padLeft - 8}
+              y={tick.y + 4}
+              textAnchor="end"
+              fill="var(--ff-subtle)"
+              fontSize={11}
+            >
+              {tick.label}
+            </text>
+          </g>
+        ))}
+
+        {inArea ? <path d={inArea} fill="url(#gIn)" /> : null}
+        {outArea ? <path d={outArea} fill="url(#gOut)" /> : null}
+        {inLine ? (
+          <path
+            d={inLine}
+            fill="none"
+            stroke="var(--ff-income)"
+            strokeWidth={2}
+            strokeLinecap="round"
+          />
+        ) : null}
+        {outLine ? (
+          <path
+            d={outLine}
+            fill="none"
+            stroke="var(--ff-expense)"
+            strokeWidth={2}
+            strokeLinecap="round"
+          />
+        ) : null}
+
+        {data.map((point, i) => {
+          const x = xAt(i);
+          return (
+            <g key={point.date}>
+              <text x={x} y={height - 6} textAnchor="middle" fill="var(--ff-subtle)" fontSize={11}>
+                {point.date.slice(8, 10)}
+              </text>
+              <circle cx={x} cy={yAt(point.incomeCents)} r={3} fill="var(--ff-income)" />
+              <circle cx={x} cy={yAt(point.expenseCents)} r={3} fill="var(--ff-expense)" />
+            </g>
+          );
+        })}
+      </svg>
+    </div>
   );
 }
 
 function CategoryDonut({ data }: { data: CategorySlice[] }) {
   const top = data.slice(0, 6);
   const total = data.reduce((acc, s) => acc + s.totalCents, 0);
+  const radius = 70;
+  const circumference = 2 * Math.PI * radius;
+
+  let accumulated = 0;
+  const segments = top.map((slice) => {
+    const fraction = total > 0 ? slice.totalCents / total : 0;
+    const dash = Math.max(0, fraction * circumference - 3);
+    const offset = -accumulated * circumference;
+    accumulated += fraction;
+    return { slice, dash, offset };
+  });
+
   return (
     <div className="flex flex-col gap-1 px-5 pb-5">
       <div className="relative mx-auto h-44 w-44" data-testid="category-donut">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={top}
-              dataKey="totalCents"
-              nameKey="name"
-              innerRadius={58}
-              outerRadius={82}
-              paddingAngle={3}
-              strokeWidth={0}
-            >
-              {top.map((slice) => (
-                <Cell key={slice.name} fill={slice.color ?? "#71717a"} />
-              ))}
-            </Pie>
-            <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => formatBRL(value)} />
-          </PieChart>
-        </ResponsiveContainer>
+        <svg
+          viewBox="0 0 180 180"
+          className="h-full w-full -rotate-90"
+          role="img"
+          aria-label="Gastos por categoria"
+        >
+          <circle
+            cx="90"
+            cy="90"
+            r={radius}
+            fill="none"
+            stroke="var(--ff-border)"
+            strokeWidth="22"
+          />
+          {segments.map(({ slice, dash, offset }) => (
+            <circle
+              key={slice.name}
+              cx="90"
+              cy="90"
+              r={radius}
+              fill="none"
+              stroke={slice.color ?? "var(--ff-subtle)"}
+              strokeWidth="22"
+              strokeDasharray={`${dash} ${circumference}`}
+              strokeDashoffset={offset}
+            />
+          ))}
+        </svg>
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-[11px] text-zinc-500">Total</span>
-          <span className="tnum text-sm font-semibold text-zinc-100">{formatBRL(total)}</span>
+          <span className="text-[11px] text-app-muted">Total</span>
+          <span className="tnum text-sm font-semibold text-app-text">{formatBRL(total)}</span>
         </div>
       </div>
       <ul className="mt-2 space-y-2.5">
         {top.map((slice) => (
           <li key={slice.name} className="flex items-center gap-2.5">
             <CategoryIcon icon={slice.icon} color={slice.color} size={28} />
-            <span className="min-w-0 flex-1 truncate text-sm text-zinc-300">{slice.name}</span>
-            <span className="tnum text-xs text-zinc-500">{slice.percent}%</span>
-            <span className="tnum w-24 text-right text-sm font-medium text-zinc-200">
+            <span className="min-w-0 flex-1 truncate text-sm text-app-text">{slice.name}</span>
+            <span className="tnum text-xs text-app-muted">{slice.percent}%</span>
+            <span className="tnum w-24 text-right text-sm font-medium text-app-text">
               {formatBRL(slice.totalCents)}
             </span>
           </li>

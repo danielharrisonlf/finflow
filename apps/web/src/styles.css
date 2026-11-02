@@ -1,14 +1,27 @@
 @import "tailwindcss";
+@import "./components/landing/theme.css";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --color-app-background: var(--ff-bg);
+  --color-app-surface: var(--ff-surface);
+  --color-app-soft: var(--ff-soft);
+  --color-app-raised: var(--ff-raised);
+  --color-app-text: var(--ff-text);
+  --color-app-muted: var(--ff-muted);
+  --color-app-subtle: var(--ff-subtle);
+  --color-app-border: var(--ff-border);
+  --color-income: var(--ff-income);
+  --color-income-dim: var(--ff-income);
+  --color-expense: var(--ff-expense);
+  --color-expense-dim: var(--ff-expense);
+  --color-warn: var(--ff-warning);
+}
 
 @theme {
   --font-sans: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
 
   /* paleta de significado: verde = entrada, rosa = saída, âmbar = atenção */
-  --color-income: #34d399;
-  --color-income-dim: #10b981;
-  --color-expense: #fb7185;
-  --color-expense-dim: #f43f5e;
-  --color-warn: #fbbf24;
 
   --radius-hero: 1.5rem;
   --radius-card: 1rem;
@@ -16,12 +29,13 @@
 }
 
 html {
-  background-color: var(--color-zinc-950);
-  color-scheme: dark;
+  background-color: var(--ff-bg);
+  color: var(--ff-text);
+  scroll-behavior: smooth;
 }
 
 body {
-  @apply bg-zinc-950 text-zinc-100 font-sans antialiased;
+  @apply bg-app-background text-app-text font-sans antialiased;
   padding-bottom: env(safe-area-inset-bottom);
 }
 
@@ -33,12 +47,13 @@ body {
 
 /* foco visível sem poluir o mouse-flow */
 :focus-visible {
-  outline: 2px solid var(--color-emerald-400);
+  outline: 2px solid var(--ff-accent);
   outline-offset: 2px;
   border-radius: 4px;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
   *,
   *::before,
   *::after {
@@ -99,9 +114,9 @@ body {
     height: 10px;
   }
   ::-webkit-scrollbar-thumb {
-    background: var(--color-zinc-800);
+    background: var(--ff-raised);
     border-radius: 8px;
-    border: 2px solid var(--color-zinc-950);
+    border: 2px solid var(--ff-bg);
   }
   ::-webkit-scrollbar-track {
     background: transparent;

@@ -19,10 +19,12 @@ program
   .name("finflow")
   .description("FinFlow — controle financeiro pessoal no terminal")
   .version("0.1.0")
-  .option("--api <url>", "URL da API (padrão: FINFLOW_API_URL ou http://localhost:3333)");
+  .option("--api <url>", "URL da API (padrão: FINFLOW_API_URL ou http://localhost:3333)")
+  .option("--token <token>", "Token ou senha da API (padrão: FINFLOW_TOKEN ou FINFLOW_PASSWORD)");
 
 function client(): FinFlowClient {
-  return new FinFlowClient(program.opts<{ api?: string }>().api);
+  const opts = program.opts<{ api?: string; token?: string }>();
+  return new FinFlowClient(opts.api, opts.token);
 }
 
 function fail(message: string): never {
@@ -450,12 +452,19 @@ program
 
 program
   .command("status")
-  .description("Verifica a API e a integração com o Telegram")
+  .description("Verifica a API, a autenticação e a integração com o Telegram")
   .action(async () => {
     const c = client();
-    const [summary, telegram] = await Promise.all([c.dashboardSummary(), c.telegramStatus()]);
+    const [summary, telegram, auth] = await Promise.all([
+      c.dashboardSummary(),
+      c.telegramStatus(),
+      c.authStatus(),
+    ]);
     console.log(pc.green("✔ API respondendo"));
     console.log(`  Saldo consolidado: ${money(summary.totalBalanceCents)}`);
+    console.log(
+      `  Autenticação: ${auth.required ? pc.green("protegida por senha") : pc.dim("modo aberto (defina FINFLOW_PASSWORD para proteger)")}`,
+    );
     console.log(
       `  Telegram: ${telegram.configured ? pc.green("bot configurado") : pc.dim("bot não configurado")}${telegram.chatLinked ? pc.green(" + chat vinculado") : ""}`,
     );

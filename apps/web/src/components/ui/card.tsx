@@ -5,7 +5,7 @@ export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn(
-        "rounded-(--radius-card) border border-zinc-800/80 bg-zinc-900/60 backdrop-blur-sm",
+        "rounded-(--radius-card) border border-app-border/80 bg-app-surface/60 backdrop-blur-sm",
         className,
       )}
       {...props}
@@ -24,7 +24,7 @@ export function CardHeader({
 }) {
   return (
     <div className={cn("flex items-center justify-between px-5 pt-4 pb-1", className)}>
-      <h2 className="text-sm font-medium text-zinc-400">{title}</h2>
+      <h2 className="text-sm font-medium text-app-muted">{title}</h2>
       {action}
     </div>
   );

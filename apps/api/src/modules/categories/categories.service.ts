@@ -4,7 +4,12 @@ import type {
   CreateCategoryInput,
   UpdateCategoryInput,
 } from "@finflow/contracts";
-import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import type { Category as DbCategory } from "../../generated/prisma/client";
 import { CategoriesRepository } from "./categories.repository";
 
@@ -38,6 +43,9 @@ export class CategoriesService {
     if (duplicate) {
       throw new ConflictException(`categoria "${input.name}" (${input.kind}) já existe`);
     }
+    if (input.parentId) {
+      await this.validateParent(input.parentId, input.kind);
+    }
     const created = await this.repository.create({
       name: input.name,
       kind: input.kind,
@@ -49,7 +57,14 @@ export class CategoriesService {
   }
 
   async update(id: string, input: UpdateCategoryInput): Promise<Category> {
-    await this.ensureExists(id);
+    const existing = await this.ensureExists(id);
+    if (input.parentId === id) {
+      throw new BadRequestException("uma categoria não pode ser subcategoria dela mesma");
+    }
+    const targetKind = input.kind ?? existing.kind;
+    if (input.parentId) {
+      await this.validateParent(input.parentId, targetKind);
+    }
     const updated = await this.repository.update(id, {
       name: input.name,
       kind: input.kind,
@@ -65,8 +80,19 @@ export class CategoriesService {
     await this.repository.delete(id);
   }
 
-  private async ensureExists(id: string): Promise<void> {
+  private async ensureExists(id: string): Promise<DbCategory> {
     const found = await this.repository.findById(id);
     if (!found) throw new NotFoundException("categoria não encontrada");
+    return found;
+  }
+
+  private async validateParent(parentId: string, kind: CategoryKind): Promise<void> {
+    const parent = await this.repository.findById(parentId);
+    if (!parent) throw new NotFoundException("categoria pai não encontrada");
+    if (parent.kind !== kind) {
+      throw new BadRequestException(
+        "subcategoria deve ter o mesmo tipo (receita/despesa) da categoria pai",
+      );
+    }
   }
 }

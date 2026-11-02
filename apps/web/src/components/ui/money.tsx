@@ -14,7 +14,7 @@ export function Money({
   className?: string;
 }) {
   const tone = neutral
-    ? "text-zinc-100"
+    ? "text-app-text"
     : cents >= 0
       ? "text-(--color-income)"
       : "text-(--color-expense)";

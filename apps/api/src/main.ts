@@ -18,6 +18,7 @@ async function bootstrap(): Promise<void> {
     .setTitle("FinFlow API")
     .setDescription("API de controle financeiro pessoal — contas, cartões, orçamentos e metas")
     .setVersion("0.1.0")
+    .addBearerAuth()
     .build();
   SwaggerModule.setup("docs", app, SwaggerModule.createDocument(app, swaggerConfig));
 

@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
-import { CategoryIcon } from "../components/ui/category-icon";
+import { CategoryIcon, formatCategoryLabel } from "../components/ui/category-icon";
 import { Empty, LoadingRows } from "../components/ui/empty";
 import { Field, Input, Select } from "../components/ui/field";
 import { Progress } from "../components/ui/progress";
@@ -15,9 +15,9 @@ import { formatBRL, parseBRLInput } from "../lib/format";
 import { useBudgets, useCategories, useDeleteBudget, useUpsertBudget } from "../lib/queries";
 
 const STATUS_HINT = {
-  OK: { label: "dentro do planejado", cls: "text-emerald-300" },
-  WARNING: { label: "atenção ao ritmo", cls: "text-amber-300" },
-  DANGER: { label: "quase estourado", cls: "text-rose-300" },
+  OK: { label: "dentro do planejado", cls: "text-income" },
+  WARNING: { label: "atenção ao ritmo", cls: "text-warn" },
+  DANGER: { label: "quase estourado", cls: "text-expense" },
 } as const;
 
 export function BudgetsPage() {
@@ -39,11 +39,11 @@ export function BudgetsPage() {
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Orçamentos</h1>
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm text-app-muted">
             {budgets.data && budgets.data.length > 0 ? (
               <>
-                <span className="tnum text-zinc-300">{formatBRL(totalSpent)}</span> gastos de{" "}
-                <span className="tnum text-zinc-300">{formatBRL(totalBudget)}</span> planejados
+                <span className="tnum text-app-text">{formatBRL(totalSpent)}</span> gastos de{" "}
+                <span className="tnum text-app-text">{formatBRL(totalBudget)}</span> planejados
               </>
             ) : (
               "Tetos mensais por categoria"
@@ -77,13 +77,13 @@ export function BudgetsPage() {
                 <div className="flex items-center gap-3">
                   <CategoryIcon icon={budget.categoryIcon} color={budget.categoryColor} />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-zinc-200">
+                    <p className="truncate text-sm font-medium text-app-text">
                       {budget.categoryName}
                     </p>
                     <p className={`text-xs ${hint.cls}`}>{hint.label}</p>
                   </div>
-                  <p className="tnum text-sm text-zinc-400">
-                    <span className="font-semibold text-zinc-100">
+                  <p className="tnum text-sm text-app-muted">
+                    <span className="font-semibold text-app-text">
                       {formatBRL(budget.spentCents)}
                     </span>{" "}
                     / {formatBRL(budget.amountCents)}
@@ -92,14 +92,14 @@ export function BudgetsPage() {
                     type="button"
                     onClick={() => onDelete(budget)}
                     aria-label={`Remover orçamento de ${budget.categoryName}`}
-                    className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-zinc-600 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-rose-500/10 hover:text-rose-400 focus-visible:opacity-100 max-md:opacity-100"
+                    className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-app-subtle opacity-0 transition-opacity group-hover:opacity-100 hover:bg-rose-500/10 hover:text-expense focus-visible:opacity-100 max-md:opacity-100"
                   >
                     <Trash2 size={15} />
                   </button>
                 </div>
                 <div className="mt-3 flex items-center gap-3">
                   <Progress percent={budget.percent} tone={budget.status} className="flex-1" />
-                  <span className="tnum w-12 text-right text-xs text-zinc-400">
+                  <span className="tnum w-12 text-right text-xs text-app-muted">
                     {budget.percent}%
                   </span>
                 </div>
@@ -152,7 +152,7 @@ function BudgetSheet({
             </option>
             {categories.data?.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.name}
+                {formatCategoryLabel(c, categories.data)}
               </option>
             ))}
           </Select>
@@ -160,7 +160,7 @@ function BudgetSheet({
         <Field label="Teto mensal" error={form.formState.errors.amount?.message}>
           <Input inputMode="decimal" placeholder="1.500,00" {...form.register("amount")} />
         </Field>
-        {upsert.error ? <p className="text-sm text-rose-400">{upsert.error.message}</p> : null}
+        {upsert.error ? <p className="text-sm text-expense">{upsert.error.message}</p> : null}
         <Button type="submit" disabled={upsert.isPending} className="h-12">
           {upsert.isPending ? "Salvando…" : "Salvar orçamento"}
         </Button>
