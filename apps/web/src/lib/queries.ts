@@ -1,31 +1,54 @@
 import type {
   Account,
+  ApplyRulesInput,
+  ApplyRulesResult,
   AuthStatus,
   Budget,
   Card,
   CashflowPoint,
   Category,
+  CategoryRule,
   CategorySlice,
+  Commitments,
   ContributeGoalInput,
   CreateAccountInput,
   CreateCardExpenseInput,
   CreateCardInput,
   CreateCategoryInput,
+  CreateCategoryRuleInput,
   CreateGoalInput,
+  CreateRecurringInput,
   CreateTransactionInput,
+  CreateWishItemInput,
   DashboardSummary,
   Goal,
+  ImportCommitInput,
+  ImportCommitResult,
+  ImportMapping,
+  ImportPreview,
+  InsightsOverview,
   Invoice,
   LoginInput,
   LoginResponse,
   Paginated,
   PayInvoiceInput,
+  PostRecurringInput,
+  Projection,
+  Recurring,
+  Settings,
   Transaction,
   TransferInput,
   UpcomingItem,
   UpdateCategoryInput,
+  UpdateCategoryRuleInput,
+  UpdateGoalInput,
+  UpdateRecurringInput,
+  UpdateSettingsInput,
   UpdateTransactionInput,
+  UpdateWishItemInput,
   UpsertBudgetInput,
+  WishItem,
+  YearOverview,
 } from "@finflow/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, setAuthToken } from "./api";
@@ -131,6 +154,44 @@ export const useBudgets = (p?: Period) =>
 export const useGoals = () =>
   useQuery({ queryKey: ["goals"], queryFn: () => api.get<Goal[]>("/goals") });
 
+export const useRecurring = () =>
+  useQuery({ queryKey: ["recurring"], queryFn: () => api.get<Recurring[]>("/recurring") });
+
+export const useSettings = () =>
+  useQuery({ queryKey: ["settings"], queryFn: () => api.get<Settings>("/settings") });
+
+export const useRules = () =>
+  useQuery({ queryKey: ["rules"], queryFn: () => api.get<CategoryRule[]>("/rules") });
+
+export const useWishlist = () =>
+  useQuery({ queryKey: ["wishlist"], queryFn: () => api.get<WishItem[]>("/wishlist") });
+
+// insights: tudo sob a chave "insights" para invalidar junto após qualquer escrita
+
+export const useInsightsOverview = (p?: Period) =>
+  useQuery({
+    queryKey: ["insights", "overview", p],
+    queryFn: () => api.get<InsightsOverview>(`/insights/overview${periodQS(p)}`),
+  });
+
+export const useProjection = (days = 90) =>
+  useQuery({
+    queryKey: ["insights", "projection", days],
+    queryFn: () => api.get<Projection>(`/insights/projection?days=${days}`),
+  });
+
+export const useYearOverview = (year: number) =>
+  useQuery({
+    queryKey: ["insights", "year", year],
+    queryFn: () => api.get<YearOverview>(`/insights/year?year=${year}`),
+  });
+
+export const useCommitments = (p?: Period) =>
+  useQuery({
+    queryKey: ["insights", "commitments", p],
+    queryFn: () => api.get<Commitments>(`/insights/commitments${periodQS(p)}`),
+  });
+
 // ───────────────────────── mutations ─────────────────────────
 // Finanças são interligadas (saldo ↔ extrato ↔ dashboard ↔ orçamento):
 // invalidar tudo após cada escrita é correto e barato nesta escala.
@@ -217,4 +278,98 @@ export const useCreateGoal = () =>
 export const useContributeGoal = () =>
   useInvalidatingMutation(({ id, ...input }: ContributeGoalInput & { id: string }) =>
     api.post<Goal>(`/goals/${id}/contributions`, input),
+  );
+
+export const useUpdateGoal = () =>
+  useInvalidatingMutation(({ id, ...input }: UpdateGoalInput & { id: string }) =>
+    api.patch<Goal>(`/goals/${id}`, input),
+  );
+
+export const useCreateRecurring = () =>
+  useInvalidatingMutation((input: CreateRecurringInput) =>
+    api.post<Recurring>("/recurring", input),
+  );
+
+export const useUpdateRecurring = () =>
+  useInvalidatingMutation(({ id, ...input }: UpdateRecurringInput & { id: string }) =>
+    api.patch<Recurring>(`/recurring/${id}`, input),
+  );
+
+export const useDeleteRecurring = () =>
+  useInvalidatingMutation((id: string) => api.delete<void>(`/recurring/${id}`));
+
+/** Lança a ocorrência como transação: mexe em saldo, extrato, dashboard e insights. */
+export const usePostRecurring = () =>
+  useInvalidatingMutation(({ id, ...input }: PostRecurringInput & { id: string }) =>
+    api.post<Transaction>(`/recurring/${id}/post`, input),
+  );
+
+export const useUpdateSettings = () =>
+  useInvalidatingMutation((input: UpdateSettingsInput) => api.patch<Settings>("/settings", input));
+
+export const useCreateRule = () =>
+  useInvalidatingMutation((input: CreateCategoryRuleInput) =>
+    api.post<CategoryRule>("/rules", input),
+  );
+
+export const useUpdateRule = () =>
+  useInvalidatingMutation(({ id, ...input }: UpdateCategoryRuleInput & { id: string }) =>
+    api.patch<CategoryRule>(`/rules/${id}`, input),
+  );
+
+export const useDeleteRule = () =>
+  useInvalidatingMutation((id: string) => api.delete<void>(`/rules/${id}`));
+
+export const useApplyRules = () =>
+  useInvalidatingMutation((input: ApplyRulesInput) =>
+    api.post<ApplyRulesResult>("/rules/apply", input),
+  );
+
+export const useCreateWish = () =>
+  useInvalidatingMutation((input: CreateWishItemInput) => api.post<WishItem>("/wishlist", input));
+
+export const useUpdateWish = () =>
+  useInvalidatingMutation(({ id, ...input }: UpdateWishItemInput & { id: string }) =>
+    api.patch<WishItem>(`/wishlist/${id}`, input),
+  );
+
+export const useDeleteWish = () =>
+  useInvalidatingMutation((id: string) => api.delete<void>(`/wishlist/${id}`));
+
+/**
+ * Reordena desejos: recebe a lista já na nova ordem e renumera `priority` (0..n-1),
+ * enviando PATCH só para quem mudou. Robusto a prioridades repetidas.
+ */
+export const useReorderWishes = () =>
+  useInvalidatingMutation(async (ordered: WishItem[]) => {
+    for (const [index, item] of ordered.entries()) {
+      if (item.priority !== index) {
+        await api.patch<WishItem>(`/wishlist/${item.id}`, { priority: index });
+      }
+    }
+  });
+
+export interface ImportPreviewInput {
+  file: File;
+  mapping?: ImportMapping;
+  sheet?: string | null;
+  accountId?: string;
+}
+
+/** Só lê o arquivo — nada é gravado, então não invalida cache. */
+export const useImportPreview = () =>
+  useMutation({
+    mutationFn: ({ file, mapping, sheet, accountId }: ImportPreviewInput) => {
+      const form = new FormData();
+      form.append("file", file);
+      if (mapping) form.append("mapping", JSON.stringify(mapping));
+      if (sheet) form.append("sheet", sheet);
+      if (accountId) form.append("accountId", accountId);
+      return api.upload<ImportPreview>("/import/preview", form);
+    },
+  });
+
+export const useCommitImport = () =>
+  useInvalidatingMutation((input: ImportCommitInput) =>
+    api.post<ImportCommitResult>("/import/commit", input),
   );

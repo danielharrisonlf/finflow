@@ -70,7 +70,7 @@ export const listTransactionsQuerySchema = paginationQuerySchema.extend({
 });
 export type ListTransactionsQuery = z.infer<typeof listTransactionsQuerySchema>;
 
-export const exportFormatSchema = z.enum(["csv", "ofx"]);
+export const exportFormatSchema = z.enum(["csv", "ofx", "xlsx"]);
 export type ExportFormat = z.infer<typeof exportFormatSchema>;
 
 export const exportTransactionsQuerySchema = listTransactionsQuerySchema
@@ -97,6 +97,8 @@ export const transactionSchema = z.object({
   installmentNumber: z.number().int().nullable(),
   installmentTotal: z.number().int().nullable(),
   invoiceId: idSchema.nullable(),
+  /** Recorrência (conta fixa / receita recorrente) que originou o lançamento. */
+  recurringId: idSchema.nullable(),
   notes: z.string().nullable(),
 });
 export type Transaction = z.infer<typeof transactionSchema>;

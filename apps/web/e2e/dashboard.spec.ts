@@ -13,10 +13,12 @@ test("dashboard mostra saldo, métricas do mês e faturas", async ({ page }) => 
   await expect(hero).toContainText("733,80"); // faturas em aberto
   await expect(hero).toContainText("2 lançamentos"); // pendências
 
-  await expect(page.getByText("Receitas")).toBeVisible();
-  await expect(page.getByText("9.850,00")).toBeVisible();
-  await expect(page.getByText("-R$ 4.312,50")).toBeVisible();
-  await expect(page.getByText("5.537,50")).toBeVisible();
+  // os mesmos valores reaparecem no card de performance: escopo no trio do mês
+  const stats = page.getByTestId("month-stats");
+  await expect(stats.getByText("Receitas")).toBeVisible();
+  await expect(stats.getByText("9.850,00")).toBeVisible();
+  await expect(stats.getByText("-R$ 4.312,50")).toBeVisible();
+  await expect(stats.getByText("5.537,50")).toBeVisible();
 });
 
 test("gráficos e distribuição por categoria renderizam", async ({ page }) => {

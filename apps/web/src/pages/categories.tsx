@@ -1,22 +1,50 @@
-import type { Category, CategoryKind } from "@finflow/contracts";
+import type { Category, CategoryKind, CategoryRule, SpendType } from "@finflow/contracts";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Pencil, Plus, Tags, Trash2 } from "lucide-react";
+import * as Tabs from "@radix-ui/react-tabs";
+import { Pencil, Plus, Tags, Trash2, Wand2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "../components/ui/button";
 import { Card, CardHeader } from "../components/ui/card";
-import { CATEGORY_ICON_NAMES, CategoryIcon, iconByName } from "../components/ui/category-icon";
+import {
+  CATEGORY_ICON_NAMES,
+  CategoryIcon,
+  formatCategoryLabel,
+  iconByName,
+} from "../components/ui/category-icon";
 import { Empty, LoadingRows } from "../components/ui/empty";
 import { Field, Input, Select } from "../components/ui/field";
+import { Badge } from "../components/ui/segmented";
 import { Sheet } from "../components/ui/sheet";
+import { SPEND_TYPE_META, SPEND_TYPE_ORDER } from "../lib/bands";
 import { cn } from "../lib/cn";
 import {
+  useApplyRules,
   useCategories,
   useCreateCategory,
+  useCreateRule,
   useDeleteCategory,
+  useDeleteRule,
+  useRules,
   useUpdateCategory,
+  useUpdateRule,
 } from "../lib/queries";
+
+const tabCls =
+  "min-h-10 flex-1 cursor-pointer rounded-(--radius-control) px-4 text-sm text-app-muted transition-colors data-[state=active]:bg-app-soft data-[state=active]:font-medium data-[state=active]:text-app-text sm:flex-none";
+
+/** Tipo de gasto efetivo: o próprio ou, em subcategoria sem valor, o do pai. */
+function effectiveSpendType(
+  cat: Category,
+  all: Category[],
+): { type: SpendType; inherited: boolean } | null {
+  if (cat.kind !== "EXPENSE") return null;
+  if (cat.spendType) return { type: cat.spendType, inherited: false };
+  const parent = cat.parentId ? all.find((p) => p.id === cat.parentId) : null;
+  if (parent?.spendType) return { type: parent.spendType, inherited: true };
+  return { type: "VARIABLE", inherited: Boolean(parent) };
+}
 
 const PRESET_COLORS = [
   "#10b981",
@@ -38,6 +66,11 @@ export function CategoriesPage() {
   const remove = useDeleteCategory();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<Category | null>(null);
+  const [tab, setTab] = useState("categories");
+  const [ruleSheet, setRuleSheet] = useState<{ open: boolean; editing: CategoryRule | null }>({
+    open: false,
+    editing: null,
+  });
 
   const all = categories.data ?? [];
   const expenseCategories = all.filter((c) => c.kind === "EXPENSE");
@@ -74,42 +107,82 @@ export function CategoriesPage() {
               : "Organize receitas, despesas e subcategorias"}
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={openCreate}>
-          <Plus size={15} /> Nova categoria
-        </Button>
+        {tab === "categories" ? (
+          <Button variant="outline" size="sm" onClick={openCreate}>
+            <Plus size={15} /> Nova categoria
+          </Button>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setRuleSheet({ open: true, editing: null })}
+          >
+            <Plus size={15} /> Nova regra
+          </Button>
+        )}
       </header>
 
-      {categories.isLoading ? (
-        <Card>
-          <LoadingRows rows={6} />
-        </Card>
-      ) : all.length === 0 ? (
-        <Card>
-          <Empty
-            icon={Tags}
-            title="Nenhuma categoria cadastrada"
-            hint="Crie categorias de despesa e receita para classificar lançamentos e definir orçamentos."
-            action={<Button onClick={openCreate}>Criar primeira categoria</Button>}
+      <Tabs.Root value={tab} onValueChange={setTab}>
+        <Tabs.List
+          className="flex gap-1 rounded-(--radius-control) bg-app-background/70 p-1 sm:inline-flex"
+          aria-label="Seções"
+        >
+          <Tabs.Trigger value="categories" className={tabCls}>
+            Categorias
+          </Tabs.Trigger>
+          <Tabs.Trigger value="rules" className={tabCls}>
+            Automações
+          </Tabs.Trigger>
+        </Tabs.List>
+
+        <Tabs.Content value="categories" className="mt-4 outline-none">
+          {categories.isLoading ? (
+            <Card>
+              <LoadingRows rows={6} />
+            </Card>
+          ) : all.length === 0 ? (
+            <Card>
+              <Empty
+                icon={Tags}
+                title="Nenhuma categoria cadastrada"
+                hint="Crie categorias de despesa e receita para classificar lançamentos e definir orçamentos."
+                action={<Button onClick={openCreate}>Criar primeira categoria</Button>}
+              />
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2" data-testid="categories-grid">
+              <CategorySection
+                title="Despesas"
+                items={expenseCategories}
+                all={all}
+                onEdit={openEdit}
+                onDelete={onDelete}
+              />
+              <CategorySection
+                title="Receitas"
+                items={incomeCategories}
+                all={all}
+                onEdit={openEdit}
+                onDelete={onDelete}
+              />
+            </div>
+          )}
+        </Tabs.Content>
+
+        <Tabs.Content value="rules" className="mt-4 outline-none">
+          <RulesPanel
+            onCreate={() => setRuleSheet({ open: true, editing: null })}
+            onEdit={(rule) => setRuleSheet({ open: true, editing: rule })}
           />
-        </Card>
-      ) : (
-        <div className="grid gap-4 lg:grid-cols-2" data-testid="categories-grid">
-          <CategorySection
-            title="Despesas"
-            items={expenseCategories}
-            all={all}
-            onEdit={openEdit}
-            onDelete={onDelete}
-          />
-          <CategorySection
-            title="Receitas"
-            items={incomeCategories}
-            all={all}
-            onEdit={openEdit}
-            onDelete={onDelete}
-          />
-        </div>
-      )}
+        </Tabs.Content>
+      </Tabs.Root>
+
+      <RuleSheet
+        open={ruleSheet.open}
+        editing={ruleSheet.editing}
+        categories={all}
+        onOpenChange={(open) => setRuleSheet((s) => ({ open, editing: open ? s.editing : null }))}
+      />
 
       <CategorySheet
         open={sheetOpen}
@@ -149,6 +222,7 @@ function CategorySection({
         <ul className="divide-y divide-app-border/60">
           {items.map((cat) => {
             const parent = cat.parentId ? all.find((p) => p.id === cat.parentId) : null;
+            const spend = effectiveSpendType(cat, all);
             return (
               <li key={cat.id} className="group flex items-center gap-3 px-4 py-3 md:px-5">
                 <CategoryIcon icon={cat.icon} color={cat.color} />
@@ -158,11 +232,29 @@ function CategorySection({
                     <p className="truncate text-xs text-app-muted">Subcategoria de {parent.name}</p>
                   ) : null}
                 </div>
+                {spend ? (
+                  <Badge
+                    title={
+                      spend.inherited
+                        ? `${SPEND_TYPE_META[spend.type].label} (herdado da categoria principal)`
+                        : SPEND_TYPE_META[spend.type].hint
+                    }
+                    data-testid="spend-type-badge"
+                  >
+                    <span
+                      className="h-1.5 w-1.5 rounded-full"
+                      style={{ backgroundColor: SPEND_TYPE_META[spend.type].color }}
+                      aria-hidden
+                    />
+                    {SPEND_TYPE_META[spend.type].label}
+                    {spend.inherited ? <span className="font-normal">· herdado</span> : null}
+                  </Badge>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => onEdit(cat)}
                   aria-label={`Editar ${cat.name}`}
-                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-app-muted opacity-0 transition-opacity group-hover:opacity-100 hover:bg-app-soft hover:text-app-text focus-visible:opacity-100 max-md:opacity-100"
+                  className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-app-muted opacity-0 md:h-8 md:w-8 transition-opacity group-hover:opacity-100 hover:bg-app-soft hover:text-app-text focus-visible:opacity-100 max-md:opacity-100"
                 >
                   <Pencil size={14} />
                 </button>
@@ -170,7 +262,7 @@ function CategorySection({
                   type="button"
                   onClick={() => onDelete(cat)}
                   aria-label={`Excluir ${cat.name}`}
-                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-app-subtle opacity-0 transition-opacity group-hover:opacity-100 hover:bg-rose-500/10 hover:text-expense focus-visible:opacity-100 max-md:opacity-100"
+                  className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-app-subtle opacity-0 md:h-8 md:w-8 transition-opacity group-hover:opacity-100 hover:bg-rose-500/10 hover:text-expense focus-visible:opacity-100 max-md:opacity-100"
                 >
                   <Trash2 size={15} />
                 </button>
@@ -189,6 +281,7 @@ const categoryFormSchema = z.object({
   icon: z.string().min(1),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "cor hexadecimal inválida"),
   parentId: z.string(),
+  spendType: z.string(),
 });
 type CategoryFormValues = z.infer<typeof categoryFormSchema>;
 
@@ -214,6 +307,7 @@ function CategorySheet({
       icon: "tag",
       color: "#fb923c",
       parentId: "",
+      spendType: "VARIABLE",
     },
   });
 
@@ -225,6 +319,7 @@ function CategorySheet({
         icon: editing.icon,
         color: editing.color,
         parentId: editing.parentId ?? "",
+        spendType: editing.spendType ?? (editing.parentId ? "" : "VARIABLE"),
       });
     } else if (open) {
       form.reset({
@@ -233,6 +328,7 @@ function CategorySheet({
         icon: "tag",
         color: "#fb923c",
         parentId: "",
+        spendType: "VARIABLE",
       });
     }
   }, [editing, open, form]);
@@ -240,6 +336,8 @@ function CategorySheet({
   const selectedKind = form.watch("kind") as CategoryKind;
   const selectedIcon = form.watch("icon");
   const selectedColor = form.watch("color");
+  const selectedParent = form.watch("parentId");
+  const selectedSpend = form.watch("spendType");
 
   const parentCandidates = allCategories.filter(
     (c) => c.kind === selectedKind && !c.parentId && c.id !== editing?.id,
@@ -252,6 +350,11 @@ function CategorySheet({
       icon: values.icon,
       color: values.color,
       parentId: values.parentId || null,
+      // subcategoria com "herdar" envia null; principal sem valor cai no padrão Variável
+      spendType:
+        values.kind === "INCOME"
+          ? null
+          : ((values.spendType || (values.parentId ? null : "VARIABLE")) as SpendType | null),
     };
     if (editing) {
       await update.mutateAsync({ id: editing.id, ...payload });
@@ -297,6 +400,25 @@ function CategorySheet({
             </Select>
           </Field>
         </div>
+
+        {selectedKind === "EXPENSE" ? (
+          <Field label="Tipo de gasto">
+            <Select {...form.register("spendType")}>
+              {selectedParent ? <option value="">Herdar da categoria principal</option> : null}
+              {SPEND_TYPE_ORDER.map((t) => (
+                <option key={t} value={t}>
+                  {SPEND_TYPE_META[t].label}
+                </option>
+              ))}
+            </Select>
+            <span className="text-xs text-app-muted">
+              {selectedSpend
+                ? SPEND_TYPE_META[selectedSpend as SpendType]?.hint
+                : "Usa o mesmo tipo da categoria principal."}{" "}
+              Fixo e Cortável entram nas Saídas; Variável, no Diário.
+            </span>
+          </Field>
+        ) : null}
 
         <Field label="Ícone">
           <div className="grid grid-cols-7 gap-1.5 rounded-(--radius-control) border border-app-border bg-app-background p-2">
@@ -350,6 +472,205 @@ function CategorySheet({
         {error ? <p className="text-sm text-expense">{error}</p> : null}
         <Button type="submit" disabled={isPending} className="h-12">
           {isPending ? "Salvando…" : editing ? "Salvar alterações" : "Criar categoria"}
+        </Button>
+      </form>
+    </Sheet>
+  );
+}
+
+// ───────────────────────── automações ─────────────────────────
+
+function RulesPanel({
+  onCreate,
+  onEdit,
+}: {
+  onCreate: () => void;
+  onEdit: (rule: CategoryRule) => void;
+}) {
+  const rules = useRules();
+  const remove = useDeleteRule();
+  const apply = useApplyRules();
+  const sorted = [...(rules.data ?? [])].sort(
+    (a, b) => b.priority - a.priority || b.pattern.length - a.pattern.length,
+  );
+
+  const onDelete = (rule: CategoryRule): void => {
+    if (window.confirm(`Excluir a regra "${rule.pattern}"?`)) remove.mutate(rule.id);
+  };
+
+  return (
+    <div className="space-y-3">
+      <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-app-muted">
+          Quando a descrição contém o texto da regra, a transação recebe a categoria
+          automaticamente: em lançamentos novos, compras no cartão, Telegram e importações.
+          Maiúsculas e acentos não importam.
+        </p>
+        <Button
+          variant="outline"
+          className="shrink-0"
+          disabled={apply.isPending || sorted.length === 0}
+          onClick={() => apply.mutate({ onlyUncategorized: true })}
+        >
+          <Wand2 size={15} aria-hidden />
+          {apply.isPending ? "Aplicando…" : "Aplicar às transações sem categoria"}
+        </Button>
+      </Card>
+      <p role="status" className="text-sm" data-testid="rules-apply-result">
+        {apply.data ? (
+          <span className="text-income">
+            {apply.data.updated === 0
+              ? "Nenhuma transação sem categoria combinou com as regras."
+              : `${apply.data.updated} ${apply.data.updated === 1 ? "transação categorizada" : "transações categorizadas"}.`}
+          </span>
+        ) : apply.error ? (
+          <span className="text-expense">{apply.error.message}</span>
+        ) : null}
+      </p>
+
+      <Card>
+        {rules.isLoading ? (
+          <LoadingRows rows={3} />
+        ) : sorted.length === 0 ? (
+          <Empty
+            icon={Wand2}
+            title="Nenhuma regra ainda"
+            hint="Exemplo: descrição contém “ifood” → Delivery. Crie uma vez e nunca mais categorize à mão."
+            action={<Button onClick={onCreate}>Criar primeira regra</Button>}
+          />
+        ) : (
+          <ul className="divide-y divide-app-border/60" data-testid="rules-list">
+            {sorted.map((rule) => (
+              <li key={rule.id} className="flex items-center gap-3 px-4 py-3 md:px-5">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm text-app-text">
+                    contém <span className="font-semibold">“{rule.pattern}”</span>
+                  </p>
+                  <p className="truncate text-xs text-app-muted">
+                    → {rule.categoryName}
+                    {rule.priority !== 0 ? ` · prioridade ${rule.priority}` : ""}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onEdit(rule)}
+                  aria-label={`Editar regra ${rule.pattern}`}
+                  className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-app-muted hover:bg-app-soft hover:text-app-text md:h-9 md:w-9"
+                >
+                  <Pencil size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDelete(rule)}
+                  aria-label={`Excluir regra ${rule.pattern}`}
+                  className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-app-subtle hover:bg-rose-500/10 hover:text-expense md:h-9 md:w-9"
+                >
+                  <Trash2 size={15} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+const ruleFormSchema = z.object({
+  pattern: z.string().trim().min(1, "informe o texto a procurar").max(120),
+  categoryId: z.string().min(1, "escolha a categoria"),
+  priority: z
+    .string()
+    .refine((v) => v.trim() === "" || Number.isInteger(Number(v)), "número inteiro"),
+});
+type RuleFormValues = z.infer<typeof ruleFormSchema>;
+
+function RuleSheet({
+  open,
+  editing,
+  categories,
+  onOpenChange,
+}: {
+  open: boolean;
+  editing: CategoryRule | null;
+  categories: Category[];
+  onOpenChange: (open: boolean) => void;
+}) {
+  const create = useCreateRule();
+  const update = useUpdateRule();
+  const form = useForm<RuleFormValues>({
+    resolver: zodResolver(ruleFormSchema),
+    defaultValues: { pattern: "", categoryId: "", priority: "" },
+  });
+
+  useEffect(() => {
+    if (!open) return;
+    form.reset(
+      editing
+        ? {
+            pattern: editing.pattern,
+            categoryId: editing.categoryId,
+            priority: String(editing.priority),
+          }
+        : { pattern: "", categoryId: "", priority: "" },
+    );
+  }, [open, editing, form]);
+
+  const submit = form.handleSubmit(async (v) => {
+    const payload = {
+      pattern: v.pattern.trim(),
+      categoryId: v.categoryId,
+      priority: v.priority.trim() === "" ? undefined : Number(v.priority),
+    };
+    if (editing) await update.mutateAsync({ id: editing.id, ...payload });
+    else await create.mutateAsync(payload);
+    onOpenChange(false);
+  });
+
+  const errors = form.formState.errors;
+  const error = create.error?.message ?? update.error?.message;
+  const pending = create.isPending || update.isPending;
+  const groups = [
+    { label: "Despesas", items: categories.filter((c) => c.kind === "EXPENSE") },
+    { label: "Receitas", items: categories.filter((c) => c.kind === "INCOME") },
+  ];
+
+  return (
+    <Sheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title={editing ? "Editar regra" : "Nova regra de categorização"}
+    >
+      <form onSubmit={submit} className="flex flex-col gap-4 pb-2" data-testid="form-rule">
+        <Field label="Quando a descrição contém" error={errors.pattern?.message}>
+          <Input placeholder="ifood, uber, netflix…" {...form.register("pattern")} />
+        </Field>
+        <Field label="Usar a categoria" error={errors.categoryId?.message}>
+          <Select {...form.register("categoryId")}>
+            <option value="" disabled>
+              Escolher…
+            </option>
+            {groups.map((g) => (
+              <optgroup key={g.label} label={g.label}>
+                {g.items.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {formatCategoryLabel(c, categories)}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Prioridade (opcional)" error={errors.priority?.message}>
+          <Input inputMode="numeric" placeholder="0" {...form.register("priority")} />
+        </Field>
+        <p className="text-xs text-app-muted">
+          Se duas regras combinarem, vence a de maior prioridade; no empate, o texto mais longo. A
+          regra só vale para transações do mesmo tipo da categoria (receita ou despesa).
+        </p>
+        {error ? <p className="text-sm text-expense">{error}</p> : null}
+        <Button type="submit" disabled={pending} className="h-12">
+          {pending ? "Salvando…" : editing ? "Salvar regra" : "Criar regra"}
         </Button>
       </form>
     </Sheet>

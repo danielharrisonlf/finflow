@@ -28,6 +28,29 @@
   --radius-control: 0.625rem;
 }
 
+/* faixas do saldo projetado e tipos de gasto (gráficos: contraste >= 3:1 no fundo) */
+:root,
+html.light {
+  --band-dark-green: #166534;
+  --band-light-green: #2f9e5b;
+  --band-yellow: #b58100;
+  --band-light-red: #dc5a75;
+  --band-red: #a8172f;
+  --spend-fixed: #236e8b;
+  --spend-cuttable: #b06d00;
+  --spend-variable: #7559c2;
+}
+html.dark {
+  --band-dark-green: #2fbf71;
+  --band-light-green: #a6e9c0;
+  --band-yellow: #f2c76b;
+  --band-light-red: #ffa3b4;
+  --band-red: #f0475e;
+  --spend-fixed: #91d2e8;
+  --spend-cuttable: #f2c76b;
+  --spend-variable: #c4b0ff;
+}
+
 html {
   background-color: var(--ff-bg);
   color: var(--ff-text);

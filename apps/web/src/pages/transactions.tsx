@@ -98,7 +98,7 @@ export function TransactionsPage() {
             {query.data ? `${query.data.total} lançamentos no período` : "Carregando…"}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <a
             href={exportUrl("csv", exportParams)}
             download
@@ -112,6 +112,13 @@ export function TransactionsPage() {
             className="flex h-10 items-center gap-2 rounded-(--radius-control) border border-app-border px-3 text-sm text-app-text hover:border-app-muted"
           >
             <Download size={15} /> OFX
+          </a>
+          <a
+            href={exportUrl("xlsx", exportParams)}
+            download
+            className="flex h-10 items-center gap-2 rounded-(--radius-control) border border-app-border px-3 text-sm text-app-text hover:border-app-muted"
+          >
+            <Download size={15} /> <span className="hidden sm:inline">Exportar </span>Excel (.xlsx)
           </a>
         </div>
       </header>
@@ -238,7 +245,7 @@ export function TransactionsPage() {
                     className="flex h-8 cursor-pointer items-center gap-1.5 rounded-full border border-amber-400/40 px-2.5 text-xs text-warn hover:bg-amber-400/10"
                     title="Marcar como paga/recebida"
                   >
-                    <Check size={13} /> confirmar
+                    <Check size={13} /> <span className="max-sm:sr-only">confirmar</span>
                   </button>
                 ) : null}
                 <Money cents={t.amountCents} signed className="text-sm font-medium" />
