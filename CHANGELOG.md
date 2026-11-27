@@ -2,9 +2,11 @@
 
 Todas as mudanças relevantes do FinFlow. O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e as versões seguem o [SemVer](https://semver.org/lang/pt-BR/). Os pacotes de cada versão ficam em [Releases](https://github.com/danielharrisonlf/finflow/releases).
 
-## [Não lançado] — v0.3.0
+## [Não lançado]
 
-Recursos de planejamento da v3, descritos em [docs/product-v3-contract.md](docs/product-v3-contract.md). Em implementação.
+## [0.3.0] — 2026-11-27
+
+Recursos de planejamento da v3, descritos em [docs/product-v3-contract.md](docs/product-v3-contract.md) e [docs/product-v3-spaces-contract.md](docs/product-v3-spaces-contract.md).
 
 ### Adicionado
 
@@ -24,7 +26,8 @@ Recursos de planejamento da v3, descritos em [docs/product-v3-contract.md](docs/
 - **No celular pela rede de casa**: `finflow serve --lan` (ou `FINFLOW_LAN=1`, exige `FINFLOW_PASSWORD`), QR code nas configurações e app instalável (PWA) que guarda só a interface.
 - **Assistente “Pergunte ao FinFlow”** com a chave do próprio usuário para a API do Claude (`ANTHROPIC_API_KEY` ou Configurações): respostas sobre a projeção, leitura de foto ou PDF de comprovante, e escritas sempre como proposta confirmada pelo usuário.
 - **MCP via HTTP** em `POST /api/mcp` (Bearer), dez novas tools MCP, `GET /api/system/info` e a página **API e IA** em Configurações.
-- CLI: `assinaturas`, `alertas`, `posso`, `investimentos`, `dividas`, `patrimonio`.
+- **Espaços**: Pessoal, Casa e Empresa, cada um num banco SQLite separado, com seletor no topo, visão unificada e categorias padrão por tipo. No espaço **Casa**, membros, "quem pagou" e divisão de despesas (igual ou por %), saldos de quem deve a quem e acertos. No espaço **Empresa**, MRR, ARR, churn, queima de caixa, runway e DRE anual, com grupo do DRE editável nas categorias. Com PostgreSQL, só o espaço Pessoal.
+- CLI: `assinaturas`, `alertas`, `posso`, `investimentos`, `dividas`, `patrimonio`, `espacos`, `divisao`, `empresa` e a flag global `--espaco` (ou `FINFLOW_SPACE`); `seed --espaco casa|empresa` cria espaços de demonstração.
 - Landing: seção “Pergunte ao FinFlow” com conversa de exemplo local, seção de patrimônio com estratégia de quitação e as 11 calculadoras, card “quanto dá para gastar hoje”, recursos atualizados, acesso pelo celular e novas perguntas frequentes.
 
 ### Alterado
@@ -50,5 +53,6 @@ Primeira versão distribuída como binário único, gratuito e de código aberto
 
 - API NestJS, CLI Node e servidor MCP em Node substituídos pelo binário Go.
 
-[Não lançado]: https://github.com/danielharrisonlf/finflow/compare/v0.2.0...HEAD
+[Não lançado]: https://github.com/danielharrisonlf/finflow/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/danielharrisonlf/finflow/releases/tag/v0.3.0
 [0.2.0]: https://github.com/danielharrisonlf/finflow/releases/tag/v0.2.0

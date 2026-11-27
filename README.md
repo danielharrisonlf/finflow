@@ -230,6 +230,11 @@ Além de contas, cartões, faturas, transações, categorias, orçamentos e meta
 | Patrimônio | `GET /api/insights/net-worth?months=12` |
 | Assistente | `GET /api/ai/status`, `PUT /api/ai/key`, `POST /api/ai/chat` (SSE), `POST /api/ai/receipt` |
 | MCP e sistema | `POST /api/mcp`, `GET /api/system/info` |
+| Espaços | `GET/POST /api/spaces`, `PATCH /api/spaces/{slug}`, `DELETE /api/spaces/{slug}?confirm=<slug>`, `GET /api/spaces/overview` |
+| Casa (divisão) | `GET/POST /api/members`, `PATCH/DELETE /api/members/{id}`, `GET /api/members/balances?month&year`, `POST /api/members/settle` |
+| Empresa | `GET /api/business/metrics?month&year`, `GET /api/business/dre?year` |
+
+**Espaços** ([docs/product-v3-spaces-contract.md](docs/product-v3-spaces-contract.md)): cada espaço é um SQLite separado em `<pasta do banco>/spaces/<slug>.db`, listado em `<pasta do banco>/spaces.json`; o banco atual é o espaço `pessoal`. O cabeçalho `X-FinFlow-Space: <slug>` escolhe o espaço em qualquer rota `/api/*` (ausente = `pessoal`, inexistente = 404; em links com `?token=` vale `?space=<slug>`). Apagar um espaço move o arquivo para `spaces/trash/`. Com PostgreSQL (`DATABASE_URL`) há só o espaço `pessoal` e criar outro responde 501.
 
 - **CSV**: separador `;`, vírgula decimal e BOM UTF-8, para abrir direto no Excel em português.
 - **OFX 1.02**: aceito por planilhas e apps financeiros.
@@ -271,7 +276,17 @@ finflow dividas                            # dívidas e estratégia de quitaçã
 finflow patrimonio                         # evolução do patrimônio mês a mês
 finflow serve --lan                        # acesso pela rede local (exige FINFLOW_PASSWORD)
 finflow status
+finflow espacos                            # espaços (pessoal, casa, empresa)
+finflow espacos criar Casa --tipo casa     # novo espaço (casa, empresa ou pessoal)
+finflow espacos visao                      # visão unificada de todos os espaços
+finflow seed --espaco casa                 # demo da casa (cria o espaço "casa" se faltar); --espaco empresa idem
+finflow --espaco casa divisao              # quem pagou, a parte de cada um e acertos sugeridos
+finflow --espaco casa divisao acertar Ana Bruno 120,00 [--de-conta X --para-conta Y]
+finflow --espaco empresa empresa           # MRR, ARR, churn, queima e runway
+finflow --espaco empresa empresa dre       # DRE anual
 ```
+
+A flag global `--espaco <slug>` (ou `FINFLOW_SPACE`) vale para todos os comandos, inclusive `finflow mcp`.
 
 Contas, cartões, categorias e metas aceitam nome parcial sem diferenciar maiúsculas.
 
@@ -301,7 +316,7 @@ O servidor MCP roda como subcomando do mesmo binário (`finflow mcp`) e funciona
 
 No Windows, algo como `"C:/Users/<você>/AppData/Local/FinFlow/finflow.exe"` (destino do `install.ps1`); no macOS/Linux, `~/.local/bin/finflow` expandido para o caminho absoluto.
 
-Tools de leitura: `get_summary`, `get_cashflow`, `get_category_spending`, `get_upcoming_bills`, `list_accounts`, `list_cards`, `list_card_invoices`, `list_transactions`, `list_categories`, `list_budgets`, `list_goals`, `get_insights`, `get_projection`, `get_year_overview`, `list_recurring`, `list_tags`, `get_subscriptions`, `get_alerts`, `can_afford`, `get_cashflow_basis`, `list_investments`, `get_investment_summary`, `list_loans`, `get_debt_strategy`, `get_net_worth_history`. Escrita: `create_expense`, `create_income`, `create_card_expense`, `transfer`, `pay_invoice`, `set_budget`, `contribute_goal`, `create_recurring`, `export_transactions`. Os valores são em centavos.
+Tools de leitura: `get_summary`, `get_cashflow`, `get_category_spending`, `get_upcoming_bills`, `list_accounts`, `list_cards`, `list_card_invoices`, `list_transactions`, `list_categories`, `list_budgets`, `list_goals`, `get_insights`, `get_projection`, `get_year_overview`, `list_recurring`, `list_tags`, `get_subscriptions`, `get_alerts`, `can_afford`, `get_cashflow_basis`, `list_investments`, `get_investment_summary`, `list_loans`, `get_debt_strategy`, `get_net_worth_history`, `list_members`, `get_member_balances`, `get_business_metrics`, `get_business_dre`. Escrita: `create_expense`, `create_income`, `create_card_expense`, `transfer`, `pay_invoice`, `set_budget`, `contribute_goal`, `create_recurring`, `export_transactions`. Os valores são em centavos.
 
 #### MCP via HTTP
 
@@ -311,7 +326,7 @@ Com o `serve` rodando, as mesmas tools ficam em `POST /api/mcp` (Streamable HTTP
 claude mcp add --transport http finflow http://localhost:3333/api/mcp --header "Authorization: Bearer <token>"
 ```
 
-Outros clientes MCP com transporte HTTP usam a mesma URL e cabeçalho. **Configurações → API e IA** mostra os trechos prontos (stdio e HTTP) e a URL da API. O mesmo token dá acesso à **API pessoal** (`/api/*`, resumo abaixo) para scripts e automações.
+Para outro espaço, acrescente `--header "X-FinFlow-Space: <slug>"` (no stdio, `"args": ["mcp", "--espaco", "<slug>"]`). Outros clientes MCP com transporte HTTP usam a mesma URL e cabeçalho. **Configurações → API e IA** mostra os trechos prontos (stdio e HTTP) e a URL da API. O mesmo token dá acesso à **API pessoal** (`/api/*`, resumo abaixo) para scripts e automações.
 
 ### Bot do Telegram
 
