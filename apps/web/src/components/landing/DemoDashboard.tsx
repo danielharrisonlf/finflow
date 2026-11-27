@@ -1,75 +1,63 @@
-import {
+﻿import {
   ArrowDownLeft,
-  ArrowLeftRight,
   ArrowUpRight,
-  AudioLines,
   BriefcaseBusiness,
   ChevronDown,
-  CreditCard,
   Download,
-  LayoutDashboard,
   Plus,
-  Settings,
   ShoppingBag,
-  Target,
-  TrendingUp,
   Undo2,
   Wallet,
 } from "lucide-react";
 import { useState } from "react";
+import { FinanceChart, type FinancePoint } from "./FinanceChart";
 import { money } from "./money";
 
-const initialTransactions = [
-  {
-    name: "Salário do mês",
-    category: "Receita · Trabalho",
-    amount: 850000,
-    icon: BriefcaseBusiness,
-    color: "green",
+const periods = {
+  Novembro: {
+    opening: 2180300,
+    income: [650000, 0, 200000, 0],
+    expenses: [128400, 96050, 148700, 198500],
+    salary: 650000,
   },
-  {
-    name: "Mercado da semana",
-    category: "Despesa · Alimentação",
-    amount: -28690,
-    icon: Wallet,
-    color: "rose",
+  Outubro: {
+    opening: 1892000,
+    income: [620000, 0, 100000, 0],
+    expenses: [104000, 82900, 121800, 123000],
+    salary: 620000,
   },
-  {
-    name: "Streaming e música",
-    category: "Despesa · Lazer",
-    amount: -8990,
-    icon: ShoppingBag,
-    color: "violet",
-  },
-];
-
-const shortCategory = (category: string) => category.split(" · ")[1] ?? category;
+};
 
 export function DemoDashboard() {
-  const [period, setPeriod] = useState("Novembro");
+  const [period, setPeriod] = useState<keyof typeof periods>("Novembro");
   const [added, setAdded] = useState(false);
-
-  const transactions = added
-    ? [
-        {
-          name: "Café com a equipe",
-          category: "Despesa · Alimentação",
-          amount: -2450,
-          icon: Wallet,
-          color: "amber",
-        },
-        ...initialTransactions,
-      ]
-    : initialTransactions;
-
-  const october = period === "Outubro";
-  const balance = (october ? 2180300 : 2458650) - (added ? 2450 : 0);
-  const income = october ? 1080000 : 1250000;
-  const expenses = (october ? 612000 : 471350) + (added ? 2450 : 0);
+  const data = periods[period];
+  const income = data.income.reduce((sum, value) => sum + value, 0);
+  const expenses = data.expenses.reduce((sum, value) => sum + value, 0) + (added ? 2450 : 0);
+  const balance = data.opening + income - expenses;
+  let runningBalance = data.opening;
+  const points: FinancePoint[] = data.income.map((value, i) => {
+    const expense = (data.expenses[i] ?? 0) + (added && i === 3 ? 2450 : 0);
+    runningBalance += value - expense;
+    return {
+      day: ["07", "14", "21", "30"][i] ?? "30",
+      income: value,
+      expense,
+      balance: runningBalance,
+    };
+  });
+  const transactions = [
+    ...(added
+      ? [{ name: "Café com a equipe", category: "Alimentação", amount: -2450, icon: Wallet }]
+      : []),
+    { name: "Salário do mês", category: "Trabalho", amount: data.salary, icon: BriefcaseBusiness },
+    { name: "Mercado da semana", category: "Alimentação", amount: -28690, icon: ShoppingBag },
+    { name: "Streaming e música", category: "Lazer", amount: -8990, icon: Wallet },
+  ];
   const budgets = [
-    { name: "Alimentação", value: added ? 72 : 70, tone: "warning" },
-    { name: "Lazer", value: 82, tone: "warning" },
-    { name: "Transporte", value: 35, tone: "income" },
+    { name: "Alimentação", value: added ? 72 : 70, tone: "warning", text: "Acompanhe o ritmo" },
+    { name: "Lazer", value: 82, tone: "warning", text: "Pede atenção" },
+    { name: "Transporte", value: 35, tone: "income", text: "Dentro do planejado" },
   ];
 
   function exportCsv() {
@@ -79,235 +67,122 @@ export function DemoDashboard() {
         .map((t) => `${t.name};${t.category};${(t.amount / 100).toFixed(2).replace(".", ",")}`)
         .join("\n");
     const url = URL.createObjectURL(new Blob([content], { type: "text/csv;charset=utf-8" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "finflow-demonstracao.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `finflow-exemplo-${period.toLowerCase()}.csv`;
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   return (
     <div className="dashboard-bezel" id="demonstracao">
       <div className="dashboard">
-        <div className="app-rail" aria-hidden="true">
-          <span className="app-rail-logo">
-            <AudioLines size={16} strokeWidth={2.4} />
-          </span>
-          <span className="active">
-            <LayoutDashboard size={16} />
-          </span>
-          <span>
-            <ArrowLeftRight size={16} />
-          </span>
-          <span>
-            <CreditCard size={16} />
-          </span>
-          <span>
-            <Target size={16} />
-          </span>
-          <span className="app-rail-bottom">
-            <Settings size={16} />
-          </span>
+        <div className="app-topbar">
+          <div className="app-title">
+            <h2>Visão geral</h2>
+          </div>
+          <label className="period-select">
+            <span className="sr-only">Período do dashboard</span>
+            <select
+              value={period}
+              onChange={(e) => setPeriod(e.target.value as keyof typeof periods)}
+            >
+              <option>Novembro</option>
+              <option>Outubro</option>
+            </select>
+            <ChevronDown size={15} aria-hidden="true" />
+          </label>
         </div>
-
-        <div className="app-main">
-          <div className="app-topbar">
-            <div className="app-title">
-              <span>Minhas finanças</span>
-              <strong>Visão geral</strong>
+        <div className="app-summary">
+          <div className="balance">
+            <span className="app-label">Saldo nas contas</span>
+            <strong>{money(balance)}</strong>
+          </div>
+          <div className="flows">
+            <div>
+              <span className="app-label">
+                <ArrowDownLeft size={15} aria-hidden="true" />
+                Entradas do mês
+              </span>
+              <strong className="ff-income">{money(income)}</strong>
             </div>
-            <div className="app-actions">
-              <label className="period-select">
-                <span className="sr-only">Período do dashboard</span>
-                <select value={period} onChange={(e) => setPeriod(e.target.value)}>
-                  <option>Novembro</option>
-                  <option>Outubro</option>
-                </select>
-                <ChevronDown size={14} />
-              </label>
-              <button type="button" className="demo-add" onClick={() => setAdded(!added)}>
-                {added ? <Undo2 size={14} /> : <Plus size={14} />}
-                {added ? "Desfazer despesa" : "Simular uma despesa"}
-              </button>
+            <div>
+              <span className="app-label">
+                <ArrowUpRight size={15} aria-hidden="true" />
+                Saídas do mês
+              </span>
+              <strong className="ff-expense">{money(expenses)}</strong>
             </div>
           </div>
-
-          <div className="app-content">
-            <div className="app-summary">
-              <div className="balance">
-                <span className="app-label">Saldo disponível</span>
-                <strong>{money(balance)}</strong>
-                <span className="delta">
-                  <TrendingUp size={13} />
-                  {october ? "+8,2%" : "+12,8%"}
-                  <span>em relação ao mês anterior</span>
-                </span>
-              </div>
-              <div className="flows">
-                <div>
-                  <span className="app-label">
-                    <ArrowDownLeft size={13} />
-                    Entradas
-                  </span>
-                  <strong className="ff-income">{money(income)}</strong>
-                </div>
-                <div>
-                  <span className="app-label">
-                    <ArrowUpRight size={13} />
-                    Saídas
-                  </span>
-                  <strong className="ff-expense">{money(expenses)}</strong>
-                </div>
-              </div>
-            </div>
-
-            <div className="dashboard-middle">
-              <div className="cashflow">
-                <div className="panel-heading">
-                  <h4>Fluxo de caixa</h4>
-                  <span>
-                    <i className="legend-dot" />
-                    Entradas
-                    <i className="legend-dot expense" />
-                    Saídas
-                  </span>
-                </div>
-                <div className="chart">
-                  <svg
-                    viewBox="0 0 600 155"
-                    preserveAspectRatio="none"
-                    role="img"
-                    aria-label={`Gráfico ilustrativo de fluxo de caixa de ${period}`}
+        </div>
+        <FinanceChart points={points} period={period}>
+          <details className="budget-panel">
+            <summary>
+              Como estão meus limites?<span>{period}</span>
+            </summary>
+            <div className="budget-list">
+              {budgets.map((budget) => (
+                <div className="budget" key={budget.name}>
+                  <div className="budget-row">
+                    <strong>{budget.name}</strong>
+                    <span>{budget.value}% usado</span>
+                  </div>
+                  <meter
+                    className="ff-budget-meter"
+                    aria-label={`Limite de ${budget.name} usado`}
+                    value={budget.value}
+                    min={0}
+                    max={100}
+                    low={70}
+                    high={90}
+                    optimum={0}
                   >
-                    <defs>
-                      <linearGradient id="chart-fill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="var(--ff-income)" stopOpacity=".28" />
-                        <stop offset="100%" stopColor="var(--ff-income)" stopOpacity="0" />
-                      </linearGradient>
-                    </defs>
-                    {[40, 95, 150].map((y) => (
-                      <line
-                        key={y}
-                        x1="0"
-                        x2="600"
-                        y1={y}
-                        y2={y}
-                        stroke="var(--ff-border)"
-                        strokeDasharray="2 6"
-                        vectorEffect="non-scaling-stroke"
-                      />
-                    ))}
-                    <path
-                      d={
-                        october
-                          ? "M0 130 C60 130 75 100 130 106 S220 75 270 85 S350 30 400 44 S510 20 600 10 L600 155 L0 155Z"
-                          : "M0 125 C40 125 50 112 80 115 S120 75 160 82 S200 58 240 65 S280 99 320 77 S360 83 400 43 S440 60 480 34 S550 45 600 10 L600 155 L0 155Z"
-                      }
-                      fill="url(#chart-fill)"
-                    />
-                    <path
-                      d={
-                        october
-                          ? "M0 130 C60 130 75 100 130 106 S220 75 270 85 S350 30 400 44 S510 20 600 10"
-                          : "M0 125 C40 125 50 112 80 115 S120 75 160 82 S200 58 240 65 S280 99 320 77 S360 83 400 43 S440 60 480 34 S550 45 600 10"
-                      }
-                      fill="none"
-                      stroke="var(--ff-income)"
-                      strokeWidth="2.25"
-                      strokeLinecap="round"
-                      vectorEffect="non-scaling-stroke"
-                    />
-                    <path
-                      d="M0 139 C45 140 55 127 95 133 S160 108 210 117 S280 100 330 109 S410 85 460 96 S550 74 600 80"
-                      fill="none"
-                      stroke="var(--ff-expense)"
-                      strokeWidth="1.75"
-                      strokeDasharray="5 5"
-                      strokeLinecap="round"
-                      vectorEffect="non-scaling-stroke"
-                    />
-                  </svg>
-                  <div className="chart-months" aria-hidden="true">
-                    {["01", "08", "15", "22", "30"].map((d) => (
-                      <span key={d}>
-                        {d} {october ? "out" : "nov"}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="budget-panel">
-                <div className="panel-heading">
-                  <h4>Orçamentos</h4>
-                  <span>{period}</span>
-                </div>
-                {budgets.map((b) => (
-                  <div className="budget" key={b.name}>
-                    <div className="budget-row">
-                      <span>{b.name}</span>
-                      <strong>{b.value}%</strong>
-                    </div>
-                    <div className="progress">
-                      <span className={`ff-${b.tone}-bg`} style={{ width: `${b.value}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="transactions">
-              <div className="panel-heading">
-                <h4>Últimas transações</h4>
-                <button type="button" className="export-button" onClick={exportCsv}>
-                  <Download size={13} />
-                  Exportar CSV
-                </button>
-              </div>
-              {transactions.slice(0, 3).map((t) => (
-                <div className="transaction" key={t.name}>
-                  <span className={`transaction-icon ${t.color}`}>
-                    <t.icon size={14} />
-                  </span>
-                  <div className="transaction-name">
-                    <strong>{t.name}</strong>
-                    <small>{shortCategory(t.category)}</small>
-                  </div>
-                  <span className="transaction-date">{october ? "28 out" : "02 nov"}</span>
-                  <strong className={`transaction-amount ${t.amount > 0 ? "ff-income" : ""}`}>
-                    {t.amount > 0 ? "+ " : "− "}
-                    {money(Math.abs(t.amount))}
-                  </strong>
+                    {budget.value}%
+                  </meter>
+                  <small className={`ff-${budget.tone}`}>{budget.text}</small>
                 </div>
               ))}
             </div>
-          </div>
-
-          <div className="app-tabbar" aria-hidden="true">
-            <span className="active">
-              <LayoutDashboard size={18} />
-              Início
-            </span>
-            <span>
-              <ArrowLeftRight size={18} />
-              Extrato
-            </span>
-            <span className="app-tabbar-fab">
-              <Plus size={20} />
-            </span>
-            <span>
-              <CreditCard size={18} />
-              Cartões
-            </span>
-            <span>
-              <Target size={18} />
-              Metas
-            </span>
-          </div>
-        </div>
+          </details>
+          <section className="transactions" aria-label="Exemplos de lançamentos">
+            <div className="panel-heading">
+              <h3>Últimos lançamentos</h3>
+              <button type="button" className="export-button" onClick={exportCsv}>
+                <Download size={15} aria-hidden="true" />
+                Baixar exemplo CSV
+              </button>
+            </div>
+            {transactions.slice(0, 3).map((t) => (
+              <div className="transaction" key={t.name}>
+                <span className={`transaction-icon ${t.amount > 0 ? "income" : ""}`}>
+                  <t.icon size={17} aria-hidden="true" />
+                </span>
+                <div className="transaction-name">
+                  <strong>{t.name}</strong>
+                  <small>{t.category}</small>
+                </div>
+                <strong className={`transaction-amount ${t.amount > 0 ? "ff-income" : ""}`}>
+                  {t.amount > 0 ? "+ " : "− "}
+                  {money(Math.abs(t.amount))}
+                </strong>
+              </div>
+            ))}
+          </section>
+          <button
+            type="button"
+            className="demo-add"
+            aria-label={added ? "Desfazer despesa" : "Simular uma despesa"}
+            onClick={() => setAdded(!added)}
+          >
+            {added ? <Undo2 size={17} aria-hidden="true" /> : <Plus size={17} aria-hidden="true" />}
+            {added ? "Desfazer despesa" : "Simular uma despesa"}
+          </button>
+        </FinanceChart>
       </div>
       <span className="sr-only" role="status">
-        {added ? "Despesa de R$ 24,50 adicionada à demonstração." : "Demonstração pronta."}
+        {added
+          ? "Gasto de exemplo de R$ 24,50 adicionado. Saldo e gráfico atualizados."
+          : "Prévia com dados ilustrativos. Nenhum valor é salvo."}
       </span>
     </div>
   );

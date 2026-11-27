@@ -11,6 +11,7 @@ export function GoalCalculator() {
   return (
     <section className="ff-section ff-goals ff-container" id="metas">
       <div className="ff-goal-story">
+        <span className="ff-eyebrow">O futuro começa com um passo</span>
         <h2>
           Seus planos merecem
           <br />
@@ -20,20 +21,12 @@ export function GoalCalculator() {
           A reserva para dormir melhor. A viagem em família. Escolha seu objetivo e descubra um
           passo possível para cada mês.
         </p>
-        <div className="ff-goal-photo">
-          <img
-            src="https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&w=900&q=80"
-            alt="Lago tranquilo entre montanhas, um destino para a próxima viagem"
-            width="900"
-            height="500"
-            loading="lazy"
-          />
-          <span>
-            <Target size={17} />
-            Um pouco a cada mês.
-            <br />
-            <strong>Um novo horizonte pela frente.</strong>
-          </span>
+        <div className="ff-goal-reminder">
+          <Target size={23} aria-hidden="true" />
+          <div>
+            <strong>Não precisa ser tudo de uma vez.</strong>
+            <p>Use a calculadora para encontrar um valor mensal que caiba na sua realidade.</p>
+          </div>
         </div>
       </div>
       <div className="ff-calculator">
@@ -43,7 +36,7 @@ export function GoalCalculator() {
           </span>
           <div>
             <h3>Sua reserva de emergência</h3>
-            <p>Vamos encontrar o seu próximo passo.</p>
+            <p>Uma conta simples para tirar os planos do papel.</p>
           </div>
         </div>
         <label className="ff-range-label" htmlFor="goal-value">
@@ -108,7 +101,7 @@ export function GoalCalculator() {
           </div>
         </div>
         <a className="ff-text-link" href="#demonstracao">
-          Conhecer o FinFlow
+          Conheça o FinFlow
           <ArrowUpRight size={16} />
         </a>
         <p className="ff-fineprint">

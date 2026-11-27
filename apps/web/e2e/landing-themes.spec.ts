@@ -73,9 +73,14 @@ async function saveScreenshot(page: Page, name: string) {
 async function audit(page: Page, state: string) {
   // This workspace tests the standalone canonical landing and its exact monorepo copy.
   // Reuse the canonical repo's axe-core install without adding app dependencies/config.
-  const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
-  const axeScript = await readFile(axePath, "utf8");
-  await page.addScriptTag({ content: axeScript });
+  const axeLoaded = await page.evaluate(() =>
+    Boolean((window as unknown as { axe?: AxeRunner }).axe),
+  );
+  if (!axeLoaded) {
+    const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
+    const axeScript = await readFile(axePath, "utf8");
+    await page.addScriptTag({ content: axeScript });
+  }
   await page.waitForFunction(
     () =>
       document
@@ -129,10 +134,29 @@ test("/inicio is public, isolated from APIs, and links into the existing auth ga
   await page.goto("/inicio");
 
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    "O controle total do seu dinheiro, com a simplicidade que você sempre quis.",
+    "Seu dinheiro em ordem. Mais espaço para viver.",
   );
+  await expect(page.getByText(/disponível em breve/i).first()).toBeVisible();
+  await expect(page.locator(".ff-hero-copy > p")).toHaveText(
+    "Contas, cartões e metas em um só lugar. Entenda seu mês, cuide do que importa e planeje o que vem depois.",
+  );
+  const heroActions = page.locator(".ff-hero-actions");
+  await expect(heroActions.getByRole("link", { name: "Conheça o FinFlow" })).toHaveAttribute(
+    "href",
+    "#recursos",
+  );
+  await expect(heroActions.getByRole("link")).toHaveCount(2);
+  await expect(heroActions.locator('a[href="#como-funciona"]')).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Conecte seu agente de IA via CLI ou MCP" }),
+    page.getByRole("link", { name: /demo|demonstração|grátis|criar conta|cadastro|cadastre-se/i }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", {
+      name: /demo|demonstração|grátis|criar conta|cadastro|cadastre-se/i,
+    }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Às vezes, você só quer perguntar." }),
   ).toBeVisible();
   expect(apiRequests, "/inicio should not contact the authenticated app API").toEqual([]);
 
@@ -218,14 +242,13 @@ test("theme remains usable when storage is denied and bootstraps before React", 
 
 test("/inicio stays within mobile, tablet, and desktop widths in light and dark themes", async ({
   page,
-}) => {
+}, testInfo) => {
   const jsErrors: string[] = [];
   page.on("pageerror", (error) => jsErrors.push(error.message));
   await page.emulateMedia({ colorScheme: "light" });
   await clearThemeForFirstDocument(page);
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 320, height: 844 });
   await page.goto("/inicio");
-  await scrollFullPage(page);
   await page.evaluate(() => {
     for (const image of document.images) image.loading = "eager";
   });
@@ -234,16 +257,22 @@ test("/inicio stays within mobile, tablet, and desktop widths in light and dark 
     null,
     { timeout: 15_000 },
   );
+  await scrollFullPage(page);
+  await page.evaluate(() => window.scrollTo(0, 0));
 
   for (const theme of ["light", "dark"] as const) {
     if (theme === "dark") await setTheme(page, "dark");
     for (const viewport of [
+      { name: "mobile-320", width: 320, height: 844 },
       { name: "mobile-375", width: 375, height: 812 },
       { name: "mobile-390", width: 390, height: 844 },
+      { name: "mobile-430", width: 430, height: 900 },
       { name: "tablet-768", width: 768, height: 1024 },
+      { name: "laptop-1024", width: 1024, height: 768 },
       { name: "desktop-1440", width: 1440, height: 900 },
     ]) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await page.evaluate(() => window.scrollTo(0, 0));
       const layout = await page.evaluate(() => ({
         viewport: window.innerWidth,
         document: document.documentElement.scrollWidth,
@@ -255,7 +284,7 @@ test("/inicio stays within mobile, tablet, and desktop widths in light and dark 
       expect(layout.body, `${theme} ${viewport.name} body width`).toBeLessThanOrEqual(
         viewport.width,
       );
-      if (viewport.width === 390 || viewport.width === 1440) {
+      if (testInfo.project.name === "desktop") {
         await saveScreenshot(page, `${theme}-${viewport.name}`);
       }
     }
@@ -271,7 +300,79 @@ test("/inicio stays within mobile, tablet, and desktop widths in light and dark 
   expect(jsErrors, "the landing has no uncaught JavaScript errors").toEqual([]);
 });
 
-test("landing demo interactions and app theme styling work across /inicio and /", async ({
+test("compact landing preview fits the intended desktop fold", async ({ page }, testInfo) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  await clearThemeForFirstDocument(page);
+
+  for (const viewport of [
+    { name: "1366x768", width: 1366, height: 768 },
+    { name: "1536x864", width: 1536, height: 864 },
+    { name: "1920x900", width: 1920, height: 900 },
+    { name: "1536x718", width: 1536, height: 718 },
+  ]) {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto("/inicio");
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(page.locator(".dashboard")).toBeVisible();
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+    });
+    await page.evaluate(() => window.scrollTo(0, 0));
+
+    const panelBox = await page.locator(".dashboard").boundingBox();
+    const primaryBox = await page.locator(".ff-hero-actions .ff-button").boundingBox();
+    const secondaryBox = await page
+      .locator('.ff-hero-actions a[href="#como-funciona"]')
+      .boundingBox();
+    const noteBox = await page.locator(".ff-preview-note").boundingBox();
+    if (!panelBox || !primaryBox || !secondaryBox || !noteBox) {
+      throw new Error(
+        `${viewport.name}: hero, preview panel, and note must render before measuring`,
+      );
+    }
+    const headingLines = await page.locator(".ff-hero h1").evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      const fontSize = Number.parseFloat(style.fontSize);
+      const lineHeightValue = Number.parseFloat(style.lineHeight);
+      const lineHeight = Number.isFinite(lineHeightValue) ? lineHeightValue : fontSize * 1.15;
+      return Math.ceil(rect.height / lineHeight - 0.05);
+    });
+    const viewportHeight = await page.evaluate(() => window.innerHeight);
+
+    const dashboard = page.locator("#demonstracao");
+    await expect(dashboard.locator(".ff-preview-details")).not.toHaveAttribute("open", "");
+    await expect(dashboard.getByRole("button", { name: "Entradas e saídas" })).toHaveCount(0);
+    await expect(dashboard.getByRole("button", { name: "Simular uma despesa" })).toHaveCount(0);
+    expect(headingLines, `${viewport.name} hero heading line count`).toBeLessThanOrEqual(3);
+    expect(panelBox.height, `${viewport.name} default preview height`).toBeGreaterThanOrEqual(480);
+    expect(panelBox.height, `${viewport.name} default preview height`).toBeLessThanOrEqual(540);
+    expect(
+      primaryBox.y + primaryBox.height,
+      `${viewport.name} primary CTA fits`,
+    ).toBeLessThanOrEqual(viewportHeight);
+    expect(
+      secondaryBox.y + secondaryBox.height,
+      `${viewport.name} secondary CTA fits`,
+    ).toBeLessThanOrEqual(viewportHeight);
+    expect(panelBox.y + panelBox.height, `${viewport.name} default panel fits`).toBeLessThanOrEqual(
+      viewportHeight,
+    );
+    expect(noteBox.y + noteBox.height, `${viewport.name} preview note fits`).toBeLessThanOrEqual(
+      viewportHeight,
+    );
+
+    if (testInfo.project.name === "desktop") {
+      await mkdir(screenshotsDir, { recursive: true });
+      await page.screenshot({
+        path: join(screenshotsDir, `fold-${viewport.name}.png`),
+        animations: "disabled",
+      });
+    }
+  }
+});
+
+test("landing preview interactions and app theme styling work across /inicio and /", async ({
   page,
 }) => {
   await mockApi(page);
@@ -287,14 +388,134 @@ test("landing demo interactions and app theme styling work across /inicio and /"
     await expect(button).toHaveAttribute("aria-pressed", "true");
   }
 
+  const mobilePreview = page.locator("#mobile");
+  const phoneSteps = mobilePreview.getByRole("group", { name: "Telas do aplicativo" });
+  await expect(phoneSteps.getByRole("button")).toHaveCount(3);
+  const addExpenseStep = phoneSteps.getByRole("button", {
+    name: /O pequeno gasto também conta/,
+  });
+  await addExpenseStep.click();
+  await expect(addExpenseStep).toHaveAttribute("aria-pressed", "true");
+  await expect(mobilePreview.locator(".ff-phone-view")).toContainText("Nova despesa");
+  await mobilePreview.getByRole("button", { name: "Registrar despesa", exact: true }).click();
+  await expect(mobilePreview.locator(".ff-phone-toast")).toContainText(
+    "Despesa de R$ 32,00 registrada",
+  );
+  await mobilePreview.getByRole("button", { name: "Registrada. Toque para desfazer" }).click();
+  await phoneSteps.getByRole("button", { name: /Seu mês num relance/ }).click();
+  await expect(mobilePreview.locator(".ff-phone-balance strong")).toHaveText("R$ 6.420,00");
+  const phoneTabs = mobilePreview.getByRole("group", { name: "Navegação do aplicativo" });
+  const statementTab = phoneTabs.getByRole("button", { name: "Extrato" });
+  await statementTab.click();
+  await expect(statementTab).toHaveAttribute("aria-pressed", "true");
+  await expect(mobilePreview.locator(".ff-phone-view")).toContainText("Extrato");
+  const goalsTab = phoneTabs.getByRole("button", { name: "Metas" });
+  await goalsTab.click();
+  await expect(goalsTab).toHaveAttribute("aria-pressed", "true");
+  await expect(mobilePreview.locator(".ff-phone-view")).toContainText("Minhas metas");
+
+  const telegramPreview = mobilePreview.locator(".ff-telegram");
+  await telegramPreview.getByRole("button", { name: "Ver exemplo de consulta" }).click();
+  await expect(telegramPreview.getByRole("status")).toContainText(/R\$\s+24\.586,50/);
+  await telegramPreview.getByRole("button", { name: "Reiniciar exemplo" }).click();
+  await expect(telegramPreview.getByRole("status")).toHaveCount(0);
+
   const dashboard = page.locator("#demonstracao");
-  await expect(dashboard.getByText("R$ 24.586,50")).toBeVisible();
+  const previewDetails = dashboard.locator(".ff-preview-details");
+  const previewSummary = dashboard.locator(".ff-preview-details > summary");
+  await expect(dashboard.getByRole("heading", { name: "Visão geral" })).toBeVisible();
+  await expect(previewDetails).not.toHaveAttribute("open", "");
+  const balance = dashboard.locator(".balance strong");
+  await expect(balance).toHaveText("R$ 24.586,50");
+  await expect(dashboard.locator(".flows .ff-income")).toHaveText("R$ 8.500,00");
+  await expect(dashboard.locator(".flows .ff-expense")).toHaveText("R$ 5.716,50");
+  const chart = dashboard.getByRole("img");
+  await expect(chart).toHaveAttribute("aria-label", /Evolução do saldo de Novembro/i);
+  await expect(chart).toHaveAttribute("aria-label", /Dia 30: saldo R\$\s+24\.586,50/);
+  await expect(dashboard.locator(".ff-chart-axis")).toBeVisible();
+  await expect(dashboard.locator(".ff-chart-plot polyline[points]")).toHaveAttribute(
+    "points",
+    /.+/,
+  );
+  const staticDates = dashboard.locator(".ff-chart-dates");
+  await expect(staticDates).toContainText("07 nov");
+  await expect(staticDates).toContainText("30 nov");
+  await expect(dashboard.getByRole("button", { name: "Entradas e saídas" })).toHaveCount(0);
+  await expect(dashboard.getByRole("button", { name: "Simular uma despesa" })).toHaveCount(0);
+
+  await previewSummary.click();
+  await expect(previewDetails).toHaveAttribute("open", "");
+  await expect(previewSummary).toHaveText("Explorar exemplo+");
+  await expect(dashboard.locator(".ff-chart-readout")).toContainText(/R\$\s+24\.586,50/);
+  const chartDates = dashboard.locator(".chart-months button");
+  await expect(chartDates).toHaveCount(4);
+  await expect(chartDates.first()).toHaveAccessibleName("07 nov");
+  await chartDates.first().click();
+  await expect(dashboard.locator(".ff-chart-readout")).toContainText("Saldo em 07 nov");
+  await expect(dashboard.locator(".ff-chart-readout")).toContainText(/R\$\s+27\.019,00/);
+  await chartDates.last().click();
+  await expect(dashboard.locator(".ff-chart-readout")).toContainText(/R\$\s+24\.586,50/);
+
+  const chartViews = dashboard.getByRole("group", { name: "Visualização do gráfico" });
+  await chartViews.getByRole("button", { name: "Entradas e saídas" }).click();
+  await expect(chart).toHaveAttribute("aria-label", /Entradas e saídas de Novembro/i);
+  await expect(dashboard.locator(".ff-chart-readout")).toContainText("Entradas");
+  await expect(dashboard.locator(".ff-chart-readout")).toContainText("Saídas");
+  await chartViews.getByRole("button", { name: "Saldo ao longo do mês" }).click();
+  await expect(chart).toHaveAttribute("aria-label", /Evolução do saldo de Novembro/i);
+
+  const novemberLabels = await dashboard.locator(".chart-months").innerText();
+  expect(novemberLabels).toMatch(/07[\s\S]*14[\s\S]*21[\s\S]*30/i);
+  expect(novemberLabels).toMatch(/nov/i);
+  const novemberSeries = await chart
+    .locator("polyline[points]")
+    .evaluateAll((lines) => lines.map((line) => line.getAttribute("points")));
+  expect(novemberSeries.length, "cashflow chart exposes plotted series").toBeGreaterThan(0);
+
+  const periodControl = dashboard.getByRole("combobox", { name: "Período do dashboard" });
+  await periodControl.selectOption("Outubro");
+  await expect(balance).toHaveText("R$ 21.803,00");
+  await expect(chart).toHaveAttribute("aria-label", /Evolução do saldo de Outubro/i);
+  await expect(chart).toHaveAttribute("aria-label", /Dia 30: saldo R\$\s+21\.803,00/);
+  await expect(dashboard.locator(".ff-chart-readout")).toContainText(/R\$\s+21\.803,00/);
+  const octoberLabels = await dashboard.locator(".chart-months").innerText();
+  expect(octoberLabels).toMatch(/07[\s\S]*14[\s\S]*21[\s\S]*30/i);
+  expect(octoberLabels).toMatch(/out/i);
+  expect(octoberLabels).not.toBe(novemberLabels);
+  const octoberSeries = await chart
+    .locator("polyline[points]")
+    .evaluateAll((lines) => lines.map((line) => line.getAttribute("points")));
+  expect(octoberSeries, "changing period updates the plotted cashflow").not.toEqual(novemberSeries);
+
+  await periodControl.selectOption("Novembro");
+  const beforeExpenseSeries = await chart
+    .locator("polyline[points]")
+    .evaluateAll((lines) => lines.map((line) => line.getAttribute("points")));
   await dashboard.getByRole("button", { name: "Simular uma despesa" }).click();
-  await expect(dashboard.getByText("R$ 24.562,00")).toBeVisible();
+  await expect(balance).toHaveText("R$ 24.562,00");
+  await expect(chart).toHaveAttribute("aria-label", /Dia 30: saldo R\$\s+24\.562,00/);
+  await expect(dashboard.locator(".ff-chart-readout")).toContainText(/R\$\s+24\.562,00/);
+  await expect(dashboard.getByText("Café com a equipe")).toBeVisible();
+  await expect(dashboard.locator(".flows .ff-expense")).toHaveText("R$ 5.741,00");
+  const afterExpenseSeries = await chart
+    .locator("polyline[points]")
+    .evaluateAll((lines) => lines.map((line) => line.getAttribute("points")));
+  expect(afterExpenseSeries, "the chart reflects the added expense").not.toEqual(
+    beforeExpenseSeries,
+  );
+
+  const downloadPromise = page.waitForEvent("download");
+  await dashboard.getByRole("button", { name: "Baixar exemplo CSV" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("finflow-exemplo-novembro.csv");
+  const csvPath = await download.path();
+  expect(csvPath).not.toBeNull();
+  if (!csvPath) throw new Error("CSV download did not produce a local file");
+  const csv = await readFile(csvPath, "utf8");
+  expect(csv).toContain("24,50");
+
   await dashboard.getByRole("button", { name: "Desfazer despesa" }).click();
-  await expect(dashboard.getByText("R$ 24.586,50")).toBeVisible();
-  await dashboard.getByRole("combobox", { name: "Período do dashboard" }).selectOption("Outubro");
-  await expect(dashboard.getByText("R$ 21.803,00")).toBeVisible();
+  await expect(balance).toHaveText("R$ 24.586,50");
 
   const calculator = page.locator(".ff-calculator");
   await calculator.getByLabel("Em quanto tempo?").selectOption("18");
@@ -303,6 +524,7 @@ test("landing demo interactions and app theme styling work across /inicio and /"
   await faq.locator("summary").click();
   await expect(faq).toHaveAttribute("open", "");
 
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.getByRole("button", { name: "Ativar tema escuro" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   const landingBg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
@@ -333,81 +555,89 @@ test("axe WCAG AA passes on /inicio in both themes with dashboard, AI, calculato
   await page.goto("/inicio");
   await page.locator("#duvidas details").first().locator("summary").click();
 
+  const dashboard = page.locator("#demonstracao");
+  await dashboard.locator(".ff-preview-details > summary").click();
+  await dashboard.locator(".ff-chart-data summary").click();
+  await dashboard.locator(".budget-panel summary").click();
+  const chartViews = page.getByRole("group", { name: "Visualização do gráfico" });
   for (const theme of ["light", "dark"] as const) {
     if (theme === "dark") await setTheme(page, "dark");
-    await audit(page, `${theme} /inicio, dashboard, AI, goal calculator, and expanded FAQ`);
+    await audit(page, `${theme} /inicio, balance chart, dashboard, AI, calculator, and FAQ`);
+    await chartViews.getByRole("button", { name: "Entradas e saídas" }).click();
+    await audit(page, `${theme} /inicio, comparison chart, dashboard, AI, calculator, and FAQ`);
+    await chartViews.getByRole("button", { name: "Saldo ao longo do mês" }).click();
   }
 });
 
-test("notebook above-the-fold fit, mobile drawer interactions, and touch target sizes", async ({
+test("dashboard data and budgets expand cleanly at 320px", async ({ page }, testInfo) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  await clearThemeForFirstDocument(page);
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.goto("/inicio");
+
+  const dashboard = page.locator("#demonstracao");
+  await dashboard.locator(".ff-preview-details > summary").click();
+  const chartData = dashboard.locator(".ff-chart-data");
+  await chartData.locator("summary").click();
+  await expect(chartData).toHaveAttribute("open", "");
+  await expect(chartData.getByRole("row")).toHaveCount(5);
+
+  const budgets = dashboard.locator(".budget-panel");
+  await budgets.locator("summary").click();
+  await expect(budgets).toHaveAttribute("open", "");
+  await expect(budgets.getByRole("meter")).toHaveCount(3);
+
+  const layout = await page.evaluate(() => ({
+    document: document.documentElement.scrollWidth,
+    body: document.body.scrollWidth,
+  }));
+  expect(layout.document, "expanded dashboard document width at 320px").toBeLessThanOrEqual(320);
+  expect(layout.body, "expanded dashboard body width at 320px").toBeLessThanOrEqual(320);
+
+  const targets = await dashboard.evaluate((root) =>
+    Array.from(root.querySelectorAll<HTMLElement>("button, select, summary"))
+      .filter((element) => element.getClientRects().length > 0)
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          label:
+            element.textContent?.trim() || element.getAttribute("aria-label") || element.tagName,
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+        };
+      }),
+  );
+  for (const target of targets) {
+    expect(target.width, `${target.label} width at 320px`).toBeGreaterThanOrEqual(44);
+    expect(target.height, `${target.label} height at 320px`).toBeGreaterThanOrEqual(44);
+  }
+
+  if (testInfo.project.name === "desktop") {
+    await saveScreenshot(page, "light-dashboard-expanded-320");
+  }
+  await setTheme(page, "dark");
+  if (testInfo.project.name === "desktop") {
+    await saveScreenshot(page, "dark-dashboard-expanded-320");
+  }
+});
+
+test("mobile menu supports keyboard use and landing controls meet touch target size", async ({
   page,
 }) => {
   await page.emulateMedia({ colorScheme: "light" });
   await clearThemeForFirstDocument(page);
-
-  for (const notebook of [
-    { name: "notebook-1366x768", width: 1366, height: 768 },
-    { name: "notebook-1366x680", width: 1366, height: 680 },
-    { name: "notebook-1280x720-150pct", width: 1280, height: 720 },
-    { name: "notebook-1536x864-125pct", width: 1536, height: 864 },
-  ]) {
-    await page.setViewportSize({ width: notebook.width, height: notebook.height });
-    await page.goto("/inicio");
-
-    const metrics = await page.evaluate(() => {
-      const h1 = document.querySelector(".ff-hero h1")?.getBoundingClientRect();
-      const cta = document.querySelector(".ff-hero-actions .ff-button")?.getBoundingClientRect();
-      const secondary = document
-        .querySelector(".ff-hero-actions .ff-secondary-link")
-        ?.getBoundingClientRect();
-      const bezel = document.querySelector(".dashboard-bezel")?.getBoundingClientRect();
-      const note = document.querySelector(".ff-preview-note")?.getBoundingClientRect();
-      return {
-        viewportHeight: window.innerHeight,
-        h1Bottom: h1?.bottom ?? 0,
-        ctaBottom: cta?.bottom ?? 0,
-        secondaryBottom: secondary?.bottom ?? 0,
-        bezelHeight: bezel?.height ?? 0,
-        bezelBottom: bezel?.bottom ?? 0,
-        noteBottom: note?.bottom ?? 0,
-      };
-    });
-
-    expect(
-      metrics.bezelHeight,
-      `${notebook.name} DemoDashboard height should stay compact`,
-    ).toBeLessThanOrEqual(440);
-    expect(
-      metrics.ctaBottom,
-      `${notebook.name} primary CTA fits above the fold`,
-    ).toBeLessThanOrEqual(metrics.viewportHeight);
-    expect(
-      metrics.secondaryBottom,
-      `${notebook.name} secondary CTA fits above the fold`,
-    ).toBeLessThanOrEqual(metrics.viewportHeight);
-    expect(
-      metrics.bezelBottom,
-      `${notebook.name} DemoDashboard fits completely above the fold`,
-    ).toBeLessThanOrEqual(metrics.viewportHeight);
-    expect(
-      metrics.noteBottom,
-      `${notebook.name} preview footer note fits above the fold`,
-    ).toBeLessThanOrEqual(metrics.viewportHeight);
-  }
-
-  // Test hamburger menu at 1024px and 375px
   await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto("/inicio");
   const menuBtn = page.getByRole("button", { name: "Abrir menu" });
   await expect(menuBtn).toBeVisible();
-  await menuBtn.click();
+  await menuBtn.focus();
+  await page.keyboard.press("Enter");
 
   const closeBtn = page.getByRole("button", { name: "Fechar menu" });
   await expect(closeBtn).toHaveAttribute("aria-expanded", "true");
   await expect(page.locator("#ff-mobile-nav")).toBeVisible();
   expect(await page.evaluate(() => document.body.style.overflow)).toBe("hidden");
-
-  // Touch targets >= 44x44px inside mobile nav and menu button
-  const touchSizes = await page.evaluate(() => {
+  const mobileNavTargets = await page.evaluate(() => {
     const elements = [
       document.querySelector(".ff-menu-button"),
       ...Array.from(document.querySelectorAll("#ff-mobile-nav a, #ff-mobile-nav button")),
@@ -421,41 +651,46 @@ test("notebook above-the-fold fit, mobile drawer interactions, and touch target 
       };
     });
   });
-  for (const item of touchSizes) {
-    expect(item.width, `${item.label} touch width`).toBeGreaterThanOrEqual(44);
-    expect(item.height, `${item.label} touch height`).toBeGreaterThanOrEqual(44);
+  for (const target of mobileNavTargets) {
+    expect(target.width, `${target.label} touch width`).toBeGreaterThanOrEqual(44);
+    expect(target.height, `${target.label} touch height`).toBeGreaterThanOrEqual(44);
   }
 
-  // Close with Escape
   await page.keyboard.press("Escape");
   await expect(page.locator("#ff-mobile-nav")).toBeHidden();
+  await expect(menuBtn).toBeFocused();
   expect(await page.evaluate(() => document.body.style.overflow)).not.toBe("hidden");
 
-  // Reopen and close by clicking anchor link
-  await menuBtn.click();
+  await page.keyboard.press("Enter");
   await expect(page.locator("#ff-mobile-nav")).toBeVisible();
-  await page.locator("#ff-mobile-nav a", { hasText: "Recursos" }).click();
+  await page.keyboard.press("Tab");
+  const resourcesLink = page.locator('#ff-mobile-nav a[href="#recursos"]');
+  await expect(resourcesLink).toBeFocused();
+  await page.keyboard.press("Enter");
   await expect(page.locator("#ff-mobile-nav")).toBeHidden();
+  await expect(page).toHaveURL(/#recursos$/);
   expect(await page.evaluate(() => document.body.style.overflow)).not.toBe("hidden");
 
-  // Mobile (< 768px) layout & zero horizontal overflow across 360px - 430px
-  for (const width of [360, 375, 430]) {
-    await page.setViewportSize({ width, height: 800 });
-    const mobileState = await page.evaluate(() => {
-      const cashflow = document.querySelector(".cashflow")?.getBoundingClientRect();
-      const budgets = document.querySelector(".budget-panel")?.getBoundingClientRect();
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.locator("#demonstracao .ff-preview-details > summary").click();
+  const landingControlTargets = await page.evaluate(() => {
+    const elements = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        ".ff-hero-actions a, .ff-theme-control button, #demonstracao button, #demonstracao select, #demonstracao summary",
+      ),
+    ).filter((element) => element.getClientRects().length > 0);
+    return elements.map((element) => {
+      const rect = element.getBoundingClientRect();
       return {
-        docWidth: document.documentElement.scrollWidth,
-        bodyWidth: document.body.scrollWidth,
-        cashflowVisible: (cashflow?.height ?? 0) > 0,
-        budgetsVisible: (budgets?.height ?? 0) > 0,
-        stackedCleanly: (budgets?.top ?? 0) >= (cashflow?.bottom ?? 0) - 2,
+        label: element.textContent?.trim() || element.getAttribute("aria-label") || element.tagName,
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
       };
     });
-    expect(mobileState.docWidth, `mobile ${width}px docWidth`).toBeLessThanOrEqual(width);
-    expect(mobileState.bodyWidth, `mobile ${width}px bodyWidth`).toBeLessThanOrEqual(width);
-    expect(mobileState.cashflowVisible, `mobile ${width}px cashflow visible`).toBe(true);
-    expect(mobileState.budgetsVisible, `mobile ${width}px budgets visible`).toBe(true);
-    expect(mobileState.stackedCleanly, `mobile ${width}px cashflow and budgets stacked`).toBe(true);
+  });
+  for (const target of landingControlTargets) {
+    expect(target.width, `${target.label} touch width`).toBeGreaterThanOrEqual(44);
+    expect(target.height, `${target.label} touch height`).toBeGreaterThanOrEqual(44);
   }
 });

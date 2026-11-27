@@ -1,4 +1,5 @@
-const BASE_URL = `${import.meta.env.VITE_API_URL ?? "http://localhost:3333"}/api`;
+const DEFAULT_API_ORIGIN = import.meta.env.DEV ? "http://localhost:3333" : "";
+const BASE_URL = `${import.meta.env.VITE_API_URL ?? DEFAULT_API_ORIGIN}/api`;
 const TOKEN_KEY = "finflow_token";
 
 export function getAuthToken(): string | null {

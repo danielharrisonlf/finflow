@@ -13,6 +13,8 @@ html.light {
   --ff-accent-hover: #105437;
   --ff-accent-text: #ffffff;
   --ff-tint: #e9f3ed;
+  --ff-stage: #eaf0ec;
+  --ff-ai-bg: #edf1f7;
   --ff-income: #14764c;
   --ff-expense: #ba3452;
   --ff-warning: #936000;
@@ -34,6 +36,8 @@ html.dark {
   --ff-accent-hover: #abe8c4;
   --ff-accent-text: #12291c;
   --ff-tint: #192c22;
+  --ff-stage: #15231c;
+  --ff-ai-bg: #151e29;
   --ff-income: #6cdbab;
   --ff-expense: #ff93ab;
   --ff-warning: #f2c76b;
@@ -58,8 +62,8 @@ html.dark {
   border: 1px solid transparent;
   background: transparent;
   color: var(--ff-muted);
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   cursor: pointer;
   border-radius: 8px;
   transition:
@@ -67,8 +71,8 @@ html.dark {
     color 0.2s;
 }
 .ff-system-button {
-  width: 27px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   color: var(--ff-subtle);
 }
 .ff-system-button[aria-pressed="true"] {
