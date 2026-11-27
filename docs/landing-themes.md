@@ -1,6 +1,6 @@
 # Landing B2C e temas
 
-> A versão atual é a descrita em **Lançamento local-first — 27 de novembro de 2026**, ao final: o produto deixou de ser pré-lançamento e passou a ser gratuito, de código aberto e executado no computador do usuário. A composição visual aprovada (hero com painel compacto, regras de dobra) foi mantida. Os registros anteriores são históricos.
+> A versão atual é a descrita em **Recursos da v3 — 27 de novembro de 2026**, ao final, que parte do **Lançamento local-first** do mesmo dia: o produto é gratuito, de código aberto e executado no computador do usuário. A composição visual aprovada (hero com painel compacto, regras de dobra) foi mantida sem alteração. Os registros anteriores são históricos.
 
 ## Refatoração visual
 
@@ -144,3 +144,31 @@ Os links de download usam `https://github.com/danielharrisonlf/finflow/releases/
 - Landing: 22/22 (desktop Chromium + Pixel 7) e 22/22 (Android Chromium + iPhone 13 WebKit), incluindo os quatro cenários de dobra, as sete larguras sem rolagem horizontal nos dois temas e axe WCAG 2.1 AA. Com três workers simultâneos, o WebKit chegou a estourar o tempo em dois testes por carga; isolados, passaram.
 - Pacote público: `node apps/web/scripts/build-public-landing.mjs` e `verify-public-landing.mjs` contra o build servido localmente, aprovados em Chromium e WebKit (sete larguras, dois temas, axe, zero chamadas à API).
 - Capturas inspecionadas em `apps/web/test-results/screenshots/local-{light,dark}-{390,1440}-{hero,recursos,planilhas,seguranca,baixar,final}.png`.
+
+## Recursos da v3 — 27 de novembro de 2026
+
+Atualiza a landing para os recursos de `docs/product-v3-contract.md`. Hero, painel compacto, navegação principal e regras de dobra **não mudaram**; tudo o que é novo fica abaixo da dobra e reaproveita os padrões de seção existentes.
+
+### O que mudou
+
+- **Ordem das seções**: hero → Recursos → **Pergunte ao FinFlow** (`#assistente`) → Planilhas → **Patrimônio** (`#patrimonio`) → Como funciona → Celular → Metas → Privacidade → Baixar → Dúvidas. O rodapé ganhou os links Assistente e Patrimônio.
+- **Pergunte ao FinFlow** (`AssistantSection.tsx`, substitui o antigo “Às vezes, você só quer perguntar.”): conversa de exemplo com selo “Exemplo” e “dados fictícios”. As três perguntas (“Posso jantar fora esse mês?”, “Posso fazer uma viagem?”, “Posso comprar um celular em 10x?”) mostram a ferramenta consultada, um veredito (Cabe no mês / Com cuidado / Melhor esperar, com cor semântica e texto) e fatos curtos. A pergunta do celular e o botão **Enviar foto do comprovante** abrem uma proposta “Precisa da sua confirmação” com **Confirmar** / **Agora não**; confirmar responde “Exemplo: nada foi salvo”. As respostas são texto fixo no componente: nenhuma chamada de rede. A copy explica que o assistente usa a chave do próprio usuário da API do Claude, que escritas exigem confirmação e que, no app, só as perguntas vão para a API. Abaixo do painel, dois itens curtos: MCP (Claude ou outra IA compatível, stdio ou HTTP em `/api/mcp` com token) e API pessoal.
+- **Recursos**: o card de limite virou **“Quanto dá para gastar hoje.”**, com o valor do dia e o ritmo contra outubro acima das barras de orçamento. A lista passou de 6 para 9 itens em grade 3×3 (sem cartões): Compromissos, Assinaturas detectadas, Alertas e dicas, Tags, Fluxo de caixa (regime de caixa), Onde dá para cortar, Reserva de emergência, Desejos, Automações. “Ritmo do mês” saiu da lista porque foi para o card.
+- **Patrimônio** (`PlanningSection.tsx`, a única demonstração visual nova além da conversa): lista curta (Investimentos; Dívidas e financiamentos; Evolução do patrimônio) ao lado de um cartão com patrimônio líquido, 12 barras mensais (`role="img"` com descrição textual), Contas / Investimentos / Dívidas e o alternador **Avalanche / Bola de neve** com meses, juros e ordem de quitação. Abaixo, “11 calculadoras para decidir com calma” como uma lista de etiquetas (não interativas).
+- **Celular**: bloco “No celular, pela rede de casa” com `finflow serve --lan`, QR code nas configurações e instalação como app; os dados continuam no computador, sem nuvem. A prévia do telefone e a do Telegram foram mantidas.
+- **Privacidade**: o texto principal agora diz que só as perguntas feitas ao assistente, se ativado, vão para a API do Claude; o item do arquivo local cita o acesso do celular pela rede de casa.
+- **Dúvidas**: novas perguntas “Preciso pagar pela IA?”, “Meus dados vão para a nuvem?” e “Funciona no celular?”; a dos valores testados cita o assistente de exemplo.
+- **Marcas**: só “Claude” e “Anthropic”, ao descrever a integração de IA. O teste proíbe nomes de outros fornecedores de IA. A prévia do Telegram, já aprovada, foi mantida.
+
+### Testes atualizados deliberadamente
+
+- `e2e/landing-themes.spec.ts`: o primeiro teste procura “Pergunte ao FinFlow.” no lugar do título antigo e proíbe ChatGPT/OpenAI/Gemini/Copilot; o teste de recursos exige os 9 itens e o card “Quanto dá para gastar hoje.”; o de interações usa o grupo “Perguntas de exemplo”. Novos testes: conversa do assistente (perguntas, vereditos, proposta com Confirmar e Agora não, comprovante, MCP/API e **zero requisições** para `/api/*` ou `anthropic.com`), seções de patrimônio/celular/dúvidas (12 barras, alternador, 11 calculadoras, `--lan`, respostas das três novas perguntas) e capturas das seções novas a 390 e 1440 px nos dois temas. O axe passa a auditar a proposta pendente, o alternador e uma pergunta nova aberta; o teste de alvos de toque inclui `#assistente button`, `#patrimonio button` e `#duvidas summary`. O teste de dobra não mudou.
+- `scripts/verify-public-landing.mjs`: confere título, perguntas, vereditos, confirmação, comprovante, alternador, 11 calculadoras, `--lan`, as três novas perguntas, alvos de 44 px nas seções novas e mantém a asserção de nenhuma chamada à API (agora também para `anthropic.com`).
+
+### Validação
+
+- `pnpm lint`, `pnpm --filter @finflow/web typecheck` e `pnpm --filter @finflow/web build` aprovados.
+- `playwright test e2e/landing-themes.spec.ts --workers=2`: 27 aprovados e 1 ignorado de propósito (as capturas só rodam no desktop), em desktop Chromium e Pixel 7, incluindo os quatro cenários de dobra, as sete larguras sem rolagem horizontal nos dois temas e o axe WCAG 2.1 AA.
+- `--config=playwright.landing.config.ts --workers=2`: 52 aprovados, 3 ignorados (capturas) e 1 falha no iPhone 13/WebKit, no trecho do teste de interações que navega para o painel `/`: o cabeçalho do `AppShell`, alterado em paralelo por outra frente da v3, não expõe mais “Ativar tema claro” a 390 px. Não é código da landing; fica para quem fecha o `AppShell` ajustar o teste ou o cabeçalho.
+- Pacote público: `node apps/web/scripts/build-public-landing.mjs` e `verify-public-landing.mjs` contra o build servido localmente, aprovados em Chromium e WebKit (sete larguras, dois temas, axe, 0 chamadas à API).
+- Capturas inspecionadas em `apps/web/test-results/screenshots/v3-{light,dark}-{390,1440}-{recursos,assistente,patrimonio,mobile,duvidas}.png` e `fold-*.png`. A inspeção corrigiu o selo do veredito, que esticava até a largura do balão, e os botões da proposta, que quebravam linha a 390 px.

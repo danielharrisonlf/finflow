@@ -19,6 +19,7 @@ var version = "dev"
 
 func main() {
 	config.LoadDotEnv()
+	cli.Version = version
 	args := os.Args[1:]
 
 	if len(args) == 1 && (args[0] == "version" || args[0] == "--version" || args[0] == "-v") {

@@ -59,6 +59,23 @@ export const cardSchema = z.object({
 });
 export type Card = z.infer<typeof cardSchema>;
 
+/** GET /api/cards/{id}/invoices/{invoiceId}/breakdown (v3 §6). */
+export const invoiceBreakdownSchema = z.object({
+  /** Compras (+). */
+  purchasesCents: centsSchema,
+  /** Estornos e créditos, em valor positivo. */
+  creditsCents: centsSchema,
+  paymentsCents: centsSchema,
+  totalCents: centsSchema,
+  composition: z.object({
+    installmentsCents: centsSchema,
+    /** Descrição casada com uma assinatura detectada (v3 §2). */
+    subscriptionsCents: centsSchema,
+    oneOffCents: centsSchema,
+  }),
+});
+export type InvoiceBreakdown = z.infer<typeof invoiceBreakdownSchema>;
+
 export const payInvoiceSchema = z.object({
   accountId: idSchema,
   date: dateStringSchema.optional(),

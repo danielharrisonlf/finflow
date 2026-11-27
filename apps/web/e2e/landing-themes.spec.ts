@@ -141,6 +141,8 @@ test("/inicio is public, isolated from APIs, and links into the existing auth ga
     page.getByText(/disponível em breve|em preparação|ainda não foi lançado/i),
   ).toHaveCount(0);
   await expect(page.getByText(/Breno|Visor/i)).toHaveCount(0);
+  // The AI integration may name Claude/Anthropic; no other AI vendor is named.
+  await expect(page.getByText(/ChatGPT|OpenAI|Gemini|Copilot/i)).toHaveCount(0);
   await expect(page.locator(".ff-hero-copy > p")).toHaveText(
     "Contas, cartões, metas e planilhas em um só lugar, no seu computador. Entenda seu mês e planeje o que vem depois.",
   );
@@ -161,9 +163,7 @@ test("/inicio is public, isolated from APIs, and links into the existing auth ga
       name: /demo|demonstração|criar conta|cadastro|cadastre-se/i,
     }),
   ).toHaveCount(0);
-  await expect(
-    page.getByRole("heading", { name: "Às vezes, você só quer perguntar." }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Pergunte ao FinFlow." })).toBeVisible();
   expect(apiRequests, "/inicio should not contact the authenticated app API").toEqual([]);
 
   if (await page.getByRole("button", { name: "Abrir menu" }).isVisible()) {
@@ -291,9 +291,15 @@ test("spreadsheet and projection previews expose readable data", async ({ page }
   await expect(
     projection.getByRole("list", { name: "Faixas de cor do saldo" }).locator("li"),
   ).toHaveCount(5);
+  // v3: "Ritmo do mês" moved into the spend-today card; subscriptions, alerts, tags and cash flow
+  // joined the list.
+  await expect(page.locator(".ff-feature-list li")).toHaveCount(9);
   for (const title of [
     "Compromissos",
-    "Ritmo do mês",
+    "Assinaturas detectadas",
+    "Alertas e dicas",
+    "Tags",
+    "Fluxo de caixa",
     "Onde dá para cortar",
     "Reserva de emergência",
     "Desejos",
@@ -302,6 +308,165 @@ test("spreadsheet and projection previews expose readable data", async ({ page }
     await expect(
       page.locator(".ff-feature-list").getByRole("heading", { name: title }),
     ).toBeVisible();
+  }
+  const budgets = page.locator(".ff-budgets-feature");
+  await expect(budgets.getByRole("heading", { level: 3 })).toHaveText(
+    "Quanto dá para gastar hoje.",
+  );
+  await expect(budgets.locator(".ff-spend-today")).toContainText("Você pode gastar hoje");
+  await expect(budgets.locator(".ff-spend-today strong")).toHaveText(/R\$\s+86,00/);
+  await expect(budgets.locator(".ff-spend-today")).toContainText("Ritmo");
+});
+
+test("assistant example answers locally and always asks before writing", async ({ page }) => {
+  const apiRequests: string[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname.startsWith("/api/") || url.hostname.endsWith("anthropic.com")) {
+      apiRequests.push(request.url());
+    }
+  });
+  await page.goto("/inicio");
+  const ai = page.locator("#assistente");
+  await expect(ai.getByRole("heading", { level: 2 })).toHaveText("Pergunte ao FinFlow.");
+  await expect(ai.locator(".ff-assistant-badge")).toHaveText("Exemplo");
+  await expect(ai).toContainText("sua própria chave da API do Claude");
+  await expect(ai).toContainText("depois que você confirma");
+  await expect(ai).toContainText("foto do comprovante");
+
+  const questions = ai.getByRole("group", { name: "Perguntas de exemplo" }).getByRole("button");
+  await expect(questions).toHaveText([
+    "Posso jantar fora esse mês?",
+    "Posso fazer uma viagem?",
+    "Posso comprar um celular em 10x?",
+  ]);
+  const thread = ai.locator(".ff-assistant-thread");
+  await expect(questions.first()).toHaveAttribute("aria-pressed", "true");
+  await expect(thread.locator(".ff-chat-outgoing")).toHaveText("Posso jantar fora esse mês?");
+  await expect(thread.locator(".ff-assistant-verdict")).toHaveText("Cabe no mês");
+
+  await questions.nth(1).click();
+  await expect(questions.nth(1)).toHaveAttribute("aria-pressed", "true");
+  await expect(questions.first()).toHaveAttribute("aria-pressed", "false");
+  await expect(thread.locator(".ff-assistant-verdict")).toHaveText("Com cuidado");
+  await expect(thread).toContainText("Consultou sua projeção de saldo");
+  await expect(thread.getByRole("button", { name: "Confirmar" })).toHaveCount(0);
+
+  // The installment question proposes a write; nothing happens until the visitor confirms.
+  await questions.nth(2).click();
+  await expect(thread.locator(".ff-assistant-verdict")).toHaveText("Melhor esperar");
+  const proposal = thread.locator(".ff-assistant-proposal");
+  await expect(proposal).toContainText("Precisa da sua confirmação");
+  await expect(proposal).toContainText("Adicionar aos desejos");
+  await proposal.getByRole("button", { name: "Agora não" }).click();
+  await expect(proposal.getByRole("status")).toHaveText("Tudo bem. Nada foi alterado.");
+  await questions.nth(1).click();
+  await questions.nth(2).click();
+  await proposal.getByRole("button", { name: "Confirmar" }).click();
+  await expect(proposal.getByRole("status")).toContainText("Exemplo: nada foi salvo.");
+
+  const receipt = ai.getByRole("button", { name: "Enviar foto do comprovante" });
+  await receipt.click();
+  await expect(receipt).toHaveAttribute("aria-pressed", "true");
+  await expect(thread.locator(".ff-assistant-attachment")).toContainText("comprovante.jpg");
+  await expect(thread).toContainText("Leu a foto do comprovante");
+  await expect(proposal).toContainText("Nova despesa");
+  await expect(proposal.getByRole("button", { name: "Confirmar" })).toBeVisible();
+
+  await expect(ai.getByRole("heading", { name: "Use com o Claude ou outra IA" })).toBeVisible();
+  await expect(ai).toContainText("/api/mcp");
+  await expect(ai.getByRole("heading", { name: "Sua API pessoal" })).toBeVisible();
+  expect(apiRequests, "the assistant example never contacts an API").toEqual([]);
+});
+
+test("planning, mobile and FAQ sections describe v3 features", async ({ page }) => {
+  await page.goto("/inicio");
+  const wealth = page.locator("#patrimonio");
+  await expect(wealth.getByRole("heading", { level: 2 })).toContainText("patrimônio de amanhã");
+  for (const title of ["Investimentos", "Dívidas e financiamentos", "Evolução do patrimônio"]) {
+    await expect(wealth.locator(".ff-sheets-list")).toContainText(title);
+  }
+  await expect(wealth.locator(".ff-wealth-chart")).toHaveAttribute(
+    "aria-label",
+    /Evolução do patrimônio líquido em 12 meses/,
+  );
+  await expect(wealth.locator(".ff-wealth-chart rect")).toHaveCount(12);
+  const strategy = wealth.getByRole("group", { name: "Estratégia de quitação" });
+  const plan = wealth.locator(".ff-wealth-plan");
+  await expect(plan).toContainText("Maior juro primeiro");
+  await expect(plan).toContainText("31 meses");
+  await strategy.getByRole("button", { name: "Bola de neve" }).click();
+  await expect(strategy.getByRole("button", { name: "Bola de neve" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(plan).toContainText("Menor saldo primeiro");
+  await expect(plan).toContainText("33 meses");
+  await expect(
+    plan.getByRole("list", { name: "Ordem de quitação" }).locator("li").first(),
+  ).toHaveText("Empréstimo pessoal");
+  const calculators = wealth.getByRole("list", { name: "Calculadoras incluídas" }).locator("li");
+  await expect(calculators).toHaveCount(11);
+  await expect(wealth.locator(".ff-calculators h3")).toHaveText(
+    "11 calculadoras para decidir com calma",
+  );
+
+  const lan = page.locator("#mobile .ff-mobile-lan");
+  await expect(lan).toContainText("pela rede de casa");
+  await expect(lan).toContainText("finflow serve --lan");
+  await expect(lan).toContainText("instale como app");
+  await expect(lan).toContainText("sem nuvem");
+
+  const faq = page.locator("#duvidas");
+  for (const [question, answer] of [
+    ["Preciso pagar pela IA?", /sua própria chave da API do Claude, cobrada pela Anthropic/],
+    ["Funciona no celular?", /rede de casa[\s\S]*instale como app/],
+    ["Meus dados vão para a nuvem?", /perguntas que você fizer ao assistente[\s\S]*API do Claude/],
+  ] as const) {
+    const item = faq.locator("details", { has: page.getByText(question, { exact: true }) });
+    await item.locator("summary").click();
+    await expect(item).toHaveAttribute("open", "");
+    await expect(item.locator("p")).toHaveText(answer);
+  }
+});
+
+test("v3 sections render cleanly at 390 and 1440 in both themes", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "screenshots are captured once, on desktop");
+  await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
+  await clearThemeForFirstDocument(page);
+  await page.goto("/inicio");
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+  });
+  await mkdir(screenshotsDir, { recursive: true });
+  await page
+    .locator("#assistente")
+    .getByRole("button", { name: "Posso comprar um celular em 10x?" })
+    .click();
+  for (const question of [
+    "Preciso pagar pela IA?",
+    "Funciona no celular?",
+    "Meus dados vão para a nuvem?",
+  ]) {
+    await page.locator("#duvidas summary", { hasText: question }).click();
+  }
+  for (const theme of ["light", "dark"] as const) {
+    await setTheme(page, theme);
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+        `${theme} ${width}: no horizontal scroll`,
+      ).toBe(true);
+      for (const section of ["recursos", "assistente", "patrimonio", "mobile", "duvidas"]) {
+        await page.locator(`#${section}`).screenshot({
+          path: join(screenshotsDir, `v3-${theme}-${width}-${section}.png`),
+          animations: "disabled",
+          // The sticky header would otherwise be stamped over the captured section.
+          style: ".ff-header, .ff-skip-link { visibility: hidden !important; }",
+        });
+      }
+    }
   }
 });
 
@@ -508,7 +673,7 @@ test("landing preview interactions and app theme styling work across /inicio and
   await page.goto("/inicio");
 
   const ai = page.locator("#assistente");
-  const promptButtons = ai.getByRole("group", { name: "Exemplos de conversa" }).getByRole("button");
+  const promptButtons = ai.getByRole("group", { name: "Perguntas de exemplo" }).getByRole("button");
   await expect(promptButtons).toHaveCount(3);
   for (const button of await promptButtons.all()) {
     await button.click();
@@ -681,6 +846,16 @@ test("axe WCAG AA passes on /inicio in both themes with dashboard, AI, calculato
   await clearThemeForFirstDocument(page);
   await page.goto("/inicio");
   await page.locator("#duvidas details").first().locator("summary").click();
+  await page.locator("#duvidas summary", { hasText: "Preciso pagar pela IA?" }).click();
+  // Audit the assistant with a verdict, a pending confirmation and the debt toggle in use.
+  await page
+    .locator("#assistente")
+    .getByRole("button", { name: "Posso comprar um celular em 10x?" })
+    .click();
+  await page
+    .getByRole("group", { name: "Estratégia de quitação" })
+    .getByRole("button", { name: "Bola de neve" })
+    .click();
 
   const dashboard = page.locator("#demonstracao");
   await dashboard.locator(".ff-preview-details > summary").click();
@@ -801,10 +976,15 @@ test("mobile menu supports keyboard use and landing controls meet touch target s
   await page.setViewportSize({ width: 375, height: 812 });
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.locator("#demonstracao .ff-preview-details > summary").click();
+  // Show the confirmation buttons so their size is measured too.
+  await page
+    .locator("#assistente")
+    .getByRole("button", { name: "Posso comprar um celular em 10x?" })
+    .click();
   const landingControlTargets = await page.evaluate(() => {
     const elements = Array.from(
       document.querySelectorAll<HTMLElement>(
-        ".ff-hero-actions a, .ff-theme-control button, #demonstracao button, #demonstracao select, #demonstracao summary, #baixar a, #baixar button",
+        ".ff-hero-actions a, .ff-theme-control button, #demonstracao button, #demonstracao select, #demonstracao summary, #baixar a, #baixar button, #assistente button, #patrimonio button, #duvidas summary",
       ),
     ).filter((element) => element.getClientRects().length > 0);
     return elements.map((element) => {

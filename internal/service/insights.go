@@ -208,11 +208,9 @@ func (s *Services) InsightsOverview(ctx context.Context, q domain.PeriodQuery) (
 	cur := data.flows(key)
 	totalOut := totalSpend(data.spend[key])
 
-	totalBalance, err := s.Store.TotalBalanceCents(ctx)
-	if err != nil {
-		return domain.InsightsOverview{}, err
-	}
-	openInvoices, err := s.Store.OpenInvoicesCents(ctx)
+	// Patrimônio (v3): posições de investimento no lugar do saldo contábil das contas INVESTMENT
+	// e saldo devedor dos empréstimos como dívida, além das faturas não pagas.
+	netWorth, err := s.netWorthBreakdown(ctx)
 	if err != nil {
 		return domain.InsightsOverview{}, err
 	}
@@ -237,7 +235,7 @@ func (s *Services) InsightsOverview(ctx context.Context, q domain.PeriodQuery) (
 		history = append(history, data.spend[domain.MonthKeyOf(y, m)])
 	}
 
-	return domain.InsightsOverview{
+	out := domain.InsightsOverview{
 		Month:          month,
 		Year:           year,
 		Pace:           domain.ComputePace(totalSpend(paced[key]), totalSpend(paced[prevKey]), paceDay),
@@ -245,10 +243,15 @@ func (s *Services) InsightsOverview(ctx context.Context, q domain.PeriodQuery) (
 		Performance:    domain.ComputePerformance(cur, data.flows(prevKey).PerformanceCents()),
 		SpendTypes:     domain.GroupBySpendType(data.spend[key]),
 		Plan:           settings.SpendPlan,
-		NetWorthCents:  totalBalance - openInvoices,
+		NetWorthCents:  netWorth.NetWorthCents(),
 		Reserve:        domain.ComputeReserve(reserveGoal, domain.AverageRecentCost(costs), settings),
 		CutSuggestions: domain.ComputeCutSuggestions(data.spend[key], history),
-	}, nil
+	}
+	// v3 §4: série do ritmo, gasto projetado e "quanto pode gastar hoje" (insights_v3.go).
+	if err := s.addOverviewV3(ctx, &out, rows, settings, paceDay, totalOut); err != nil {
+		return domain.InsightsOverview{}, err
+	}
+	return out, nil
 }
 
 // InsightsYear resume os 12 meses do ano pelo método da planilha diária.
@@ -404,6 +407,9 @@ func (s *Services) InsightsCommitments(ctx context.Context, q domain.PeriodQuery
 			Realized:    realized[r.ID][key],
 		})
 	}
+	if err := s.addLoanCommitments(ctx, &out, year, month); err != nil {
+		return domain.Commitments{}, err
+	}
 	sort.SliceStable(out.Items, func(i, j int) bool {
 		if out.Items[i].DueDate != out.Items[j].DueDate {
 			return out.Items[i].DueDate < out.Items[j].DueDate
@@ -429,8 +435,9 @@ func (s *Services) InsightsCommitments(ctx context.Context, q domain.PeriodQuery
 	return out, nil
 }
 
-// simulateProjection monta as entradas e roda a simulação diária completa.
-func (s *Services) simulateProjection(ctx context.Context) (domain.Projection, error) {
+// simulateProjection monta as entradas e roda a simulação diária completa. extra injeta saídas
+// hipotéticas (ex.: "Posso comprar?") como lançamentos pendentes.
+func (s *Services) simulateProjection(ctx context.Context, extra ...domain.ProjectionPending) (domain.Projection, error) {
 	today := domain.TodayString()
 	t := domain.FromDateString(today)
 	ty, tm := t.Year(), int(t.Month())
@@ -521,6 +528,10 @@ func (s *Services) simulateProjection(ctx context.Context) (domain.Projection, e
 			}
 		}
 	}
+	if in.Loans, in.LoansByMonth, err = s.loanProjectionInputs(ctx); err != nil {
+		return domain.Projection{}, err
+	}
+	in.Pending = append(in.Pending, extra...)
 	return domain.SimulateProjection(in), nil
 }
 

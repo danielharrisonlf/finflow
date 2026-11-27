@@ -1,9 +1,10 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as Tabs from "@radix-ui/react-tabs";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { cn } from "../lib/cn";
-import { parseBRLInput, todayISO } from "../lib/format";
+import { centsToInput, parseBRLInput, todayISO } from "../lib/format";
 import {
   useAccounts,
   useCards,
@@ -12,10 +13,18 @@ import {
   useCreateTransaction,
   useTransfer,
 } from "../lib/queries";
+import {
+  buildSplitPayload,
+  EMPTY_SPLIT,
+  MemberSplitFields,
+  splitFieldSchema,
+  useHomeMembers,
+} from "./member-split";
 import { Button } from "./ui/button";
 import { formatCategoryLabel } from "./ui/category-icon";
 import { Field, Input, Select } from "./ui/field";
 import { Sheet } from "./ui/sheet";
+import { TagPicker } from "./ui/tags";
 
 const amountField = z
   .string()
@@ -28,6 +37,8 @@ const simpleSchema = z.object({
   categoryId: z.string(),
   date: z.string().min(10),
   pending: z.boolean(),
+  tagIds: z.array(z.string()),
+  split: splitFieldSchema,
 });
 type SimpleForm = z.infer<typeof simpleSchema>;
 
@@ -38,6 +49,8 @@ const cardSchema = z.object({
   categoryId: z.string(),
   installments: z.string(),
   date: z.string().min(10),
+  tagIds: z.array(z.string()),
+  split: splitFieldSchema,
 });
 type CardForm = z.infer<typeof cardSchema>;
 
@@ -58,16 +71,28 @@ type TransferForm = z.infer<typeof transferSchema>;
 const tabCls =
   "h-10 flex-1 rounded-(--radius-control) text-sm text-app-muted transition-colors data-[state=active]:bg-app-soft data-[state=active]:font-medium data-[state=active]:text-app-text";
 
+/** Valores iniciais opcionais (ex.: comprovante lido pelo Assistente). */
+export interface NewTransactionInitialValues {
+  tab: "expense" | "income" | "card";
+  amountCents?: number;
+  description?: string;
+  date?: string;
+  categoryId?: string | null;
+  installments?: number | null;
+}
+
 export function NewTransactionSheet({
   open,
   onOpenChange,
+  initialValues,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialValues?: NewTransactionInitialValues;
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange} title="Novo lançamento">
-      <Tabs.Root defaultValue="expense">
+      <Tabs.Root defaultValue={initialValues?.tab ?? "expense"}>
         <Tabs.List
           className="mb-4 flex gap-1 rounded-(--radius-control) bg-app-background/70 p-1"
           aria-label="Tipo de lançamento"
@@ -86,13 +111,24 @@ export function NewTransactionSheet({
           </Tabs.Trigger>
         </Tabs.List>
         <Tabs.Content value="expense">
-          <SimpleTransactionForm type="EXPENSE" onDone={() => onOpenChange(false)} />
+          <SimpleTransactionForm
+            type="EXPENSE"
+            initial={initialValues?.tab === "expense" ? initialValues : undefined}
+            onDone={() => onOpenChange(false)}
+          />
         </Tabs.Content>
         <Tabs.Content value="income">
-          <SimpleTransactionForm type="INCOME" onDone={() => onOpenChange(false)} />
+          <SimpleTransactionForm
+            type="INCOME"
+            initial={initialValues?.tab === "income" ? initialValues : undefined}
+            onDone={() => onOpenChange(false)}
+          />
         </Tabs.Content>
         <Tabs.Content value="card">
-          <CardExpenseForm onDone={() => onOpenChange(false)} />
+          <CardExpenseForm
+            initial={initialValues?.tab === "card" ? initialValues : undefined}
+            onDone={() => onOpenChange(false)}
+          />
         </Tabs.Content>
         <Tabs.Content value="transfer">
           <TransferFormView onDone={() => onOpenChange(false)} />
@@ -130,30 +166,47 @@ function AmountInput({
 
 function SimpleTransactionForm({
   type,
+  initial,
   onDone,
 }: {
   type: "INCOME" | "EXPENSE";
+  initial?: NewTransactionInitialValues;
   onDone: () => void;
 }) {
   const accounts = useAccounts();
   const categories = useCategories(type);
   const mutation = useCreateTransaction();
+  const home = useHomeMembers();
+  const showSplit = home.isHome && type === "EXPENSE";
+  const [splitError, setSplitError] = useState<string>();
 
   const form = useForm<SimpleForm>({
     resolver: zodResolver(simpleSchema),
     defaultValues: {
-      amount: "",
-      description: "",
+      amount: initial?.amountCents ? centsToInput(initial.amountCents) : "",
+      description: initial?.description ?? "",
       accountId: "",
-      categoryId: "",
-      date: todayISO(),
+      categoryId: initial?.categoryId ?? "",
+      date: initial?.date ?? todayISO(),
       pending: false,
+      tagIds: [],
+      split: EMPTY_SPLIT,
     },
   });
+  useInitialCategory(form.setValue, initial?.categoryId, categories.data);
+  const tagIds = form.watch("tagIds");
+  const split = form.watch("split");
+  const amountCents = parseBRLInput(form.watch("amount"));
 
   const firstAccount = accounts.data?.[0]?.id ?? "";
 
   const submit = form.handleSubmit(async (values) => {
+    const shared = showSplit ? buildSplitPayload(values.split, home.members, false) : null;
+    if (shared && !shared.ok) {
+      setSplitError(shared.error);
+      return;
+    }
+    setSplitError(undefined);
     await mutation.mutateAsync({
       type,
       description: values.description,
@@ -163,6 +216,8 @@ function SimpleTransactionForm({
       accountId: values.accountId || firstAccount,
       categoryId: values.categoryId || null,
       notes: null,
+      tagIds: values.tagIds.length > 0 ? values.tagIds : undefined,
+      ...(shared?.ok ? { paidByMemberId: shared.paidByMemberId, splits: shared.splits } : {}),
     });
     form.reset();
     onDone();
@@ -222,6 +277,19 @@ function SimpleTransactionForm({
           {type === "INCOME" ? "A receber" : "A pagar"}
         </label>
       </div>
+      {showSplit ? (
+        <MemberSplitFields
+          value={split}
+          onChange={(v) => form.setValue("split", v, { shouldDirty: true })}
+          members={home.members}
+          amountCents={amountCents}
+          error={splitError}
+        />
+      ) : null}
+      <TagPicker
+        value={tagIds}
+        onChange={(ids) => form.setValue("tagIds", ids, { shouldDirty: true })}
+      />
       <SubmitRow
         loading={mutation.isPending}
         error={mutation.error?.message}
@@ -231,24 +299,44 @@ function SimpleTransactionForm({
   );
 }
 
-function CardExpenseForm({ onDone }: { onDone: () => void }) {
+function CardExpenseForm({
+  initial,
+  onDone,
+}: {
+  initial?: NewTransactionInitialValues;
+  onDone: () => void;
+}) {
   const cards = useCards();
   const categories = useCategories("EXPENSE");
   const mutation = useCreateCardExpense();
+  const home = useHomeMembers();
+  const [splitError, setSplitError] = useState<string>();
 
   const form = useForm<CardForm>({
     resolver: zodResolver(cardSchema),
     defaultValues: {
-      amount: "",
-      description: "",
+      amount: initial?.amountCents ? centsToInput(initial.amountCents) : "",
+      description: initial?.description ?? "",
       cardId: "",
-      categoryId: "",
-      installments: "1",
-      date: todayISO(),
+      categoryId: initial?.categoryId ?? "",
+      installments: String(initial?.installments ?? 1),
+      date: initial?.date ?? todayISO(),
+      tagIds: [],
+      split: EMPTY_SPLIT,
     },
   });
+  useInitialCategory(form.setValue, initial?.categoryId, categories.data);
+  const tagIds = form.watch("tagIds");
+  const split = form.watch("split");
+  const amountCents = parseBRLInput(form.watch("amount"));
 
   const submit = form.handleSubmit(async (values) => {
+    const shared = home.isHome ? buildSplitPayload(values.split, home.members, false) : null;
+    if (shared && !shared.ok) {
+      setSplitError(shared.error);
+      return;
+    }
+    setSplitError(undefined);
     await mutation.mutateAsync({
       cardId: values.cardId,
       description: values.description,
@@ -257,6 +345,8 @@ function CardExpenseForm({ onDone }: { onDone: () => void }) {
       categoryId: values.categoryId || null,
       installments: Number(values.installments),
       notes: null,
+      tagIds: values.tagIds.length > 0 ? values.tagIds : undefined,
+      ...(shared?.ok ? { paidByMemberId: shared.paidByMemberId, splits: shared.splits } : {}),
     });
     form.reset();
     onDone();
@@ -310,6 +400,19 @@ function CardExpenseForm({ onDone }: { onDone: () => void }) {
           <Input type="date" {...form.register("date")} />
         </Field>
       </div>
+      {home.isHome ? (
+        <MemberSplitFields
+          value={split}
+          onChange={(v) => form.setValue("split", v, { shouldDirty: true })}
+          members={home.members}
+          amountCents={amountCents}
+          error={splitError}
+        />
+      ) : null}
+      <TagPicker
+        value={tagIds}
+        onChange={(ids) => form.setValue("tagIds", ids, { shouldDirty: true })}
+      />
       <SubmitRow
         loading={mutation.isPending}
         error={mutation.error?.message}
@@ -390,6 +493,17 @@ function TransferFormView({ onDone }: { onDone: () => void }) {
       <SubmitRow loading={mutation.isPending} error={mutation.error?.message} label="Transferir" />
     </form>
   );
+}
+
+/** A lista de categorias chega depois do mount: reaplica a categoria inicial quando ela carrega. */
+function useInitialCategory(
+  setValue: (name: "categoryId", value: string) => void,
+  categoryId: string | null | undefined,
+  options: { id: string }[] | undefined,
+) {
+  useEffect(() => {
+    if (categoryId && options?.some((c) => c.id === categoryId)) setValue("categoryId", categoryId);
+  }, [setValue, categoryId, options]);
 }
 
 function SubmitRow({ loading, error, label }: { loading: boolean; error?: string; label: string }) {

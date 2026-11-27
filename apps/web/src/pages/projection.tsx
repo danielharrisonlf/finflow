@@ -5,10 +5,12 @@ import {
   CircleCheck,
   Info,
   PiggyBank,
+  ShoppingBag,
   TrendingUp,
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { CanAffordForm } from "../components/can-afford";
 import { Card, CardHeader } from "../components/ui/card";
 import { Empty, LoadingRows } from "../components/ui/empty";
 import { Money } from "../components/ui/money";
@@ -153,6 +155,19 @@ function ProjectionContent({ p }: { p: Projection }) {
           </p>
         </Card>
       </div>
+
+      <Card className="grid gap-4 p-5 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] md:gap-8">
+        <div>
+          <h2 className="flex items-center gap-1.5 text-sm font-semibold text-app-text">
+            <ShoppingBag size={15} aria-hidden /> Posso comprar?
+          </h2>
+          <p className="mt-1 text-sm text-app-muted">
+            Simule uma compra à vista ou parcelada no cartão e veja se o saldo continua positivo,
+            quanto do limite mensal ela consome e a partir de quando cabe.
+          </p>
+        </div>
+        <CanAffordForm id="posso-comprar" />
+      </Card>
 
       <Card>
         <CardHeader title="Saldo projetado dia a dia" />

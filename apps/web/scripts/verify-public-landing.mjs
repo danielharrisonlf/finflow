@@ -28,7 +28,11 @@ for (const [engine, browserType] of [
     const api = [];
     page.on("pageerror", (error) => errors.push(error.message));
     page.on("request", (request) => {
-      if (new URL(request.url()).pathname.startsWith("/api/")) api.push(request.url());
+      const requested = new URL(request.url());
+      // The assistant example is scripted locally: neither the app API nor Anthropic is contacted.
+      if (requested.pathname.startsWith("/api/") || requested.hostname.endsWith("anthropic.com")) {
+        api.push(request.url());
+      }
     });
     const response = await page.goto(url);
     assert.equal(response.status(), 200);
@@ -46,6 +50,7 @@ for (const [engine, browserType] of [
     );
     assert.equal(await page.getByText(/disponível em breve|em preparação/i).count(), 0);
     assert.equal(await page.getByText(/Breno|Visor/i).count(), 0);
+    assert.equal(await page.getByText(/ChatGPT|OpenAI|Gemini|Copilot/i).count(), 0);
     for (const theme of ["light", "dark"]) {
       if (theme === "dark")
         await page.getByRole("button", { name: "Ativar tema escuro", exact: true }).click();
@@ -98,6 +103,58 @@ for (const [engine, browserType] of [
     assert.equal(await dashboard.locator(".balance strong").innerText(), "R$ 21.803,00");
     await page.getByLabel("Em quanto tempo?", { exact: true }).selectOption("18");
     assert.match(await page.locator(".ff-calculator-result").innerText(), /1\.333,34/);
+
+    // v3: assistant example, net worth and debt strategy, calculators, mobile and FAQ.
+    const ai = page.locator("#assistente");
+    assert.equal(
+      (await ai.getByRole("heading", { level: 2 }).innerText()).trim(),
+      "Pergunte ao FinFlow.",
+    );
+    assert.match(await ai.innerText(), /sua própria chave da API do Claude/);
+    const questions = ai.getByRole("group", { name: "Perguntas de exemplo" }).getByRole("button");
+    assert.deepEqual(await questions.allInnerTexts(), [
+      "Posso jantar fora esse mês?",
+      "Posso fazer uma viagem?",
+      "Posso comprar um celular em 10x?",
+    ]);
+    const verdict = ai.locator(".ff-assistant-verdict");
+    assert.equal(await verdict.innerText(), "Cabe no mês");
+    await questions.nth(1).click();
+    assert.equal(await verdict.innerText(), "Com cuidado");
+    await questions.nth(2).click();
+    assert.equal(await verdict.innerText(), "Melhor esperar");
+    const proposal = ai.locator(".ff-assistant-proposal");
+    await proposal.getByRole("button", { name: "Confirmar", exact: true }).click();
+    assert.match(await proposal.getByRole("status").innerText(), /Exemplo: nada foi salvo/);
+    await ai.getByRole("button", { name: "Enviar foto do comprovante", exact: true }).click();
+    assert.match(await ai.locator(".ff-assistant-attachment").innerText(), /comprovante\.jpg/);
+    assert.match(await proposal.innerText(), /Nova despesa/);
+    const wealth = page.locator("#patrimonio");
+    assert.equal(await wealth.locator(".ff-wealth-chart rect").count(), 12);
+    await wealth.getByRole("button", { name: "Bola de neve", exact: true }).click();
+    assert.match(await wealth.locator(".ff-wealth-plan").innerText(), /Menor saldo primeiro/);
+    assert.equal(
+      await wealth.getByRole("list", { name: "Calculadoras incluídas" }).locator("li").count(),
+      11,
+    );
+    assert.match(await page.locator("#mobile .ff-mobile-lan").innerText(), /finflow serve --lan/);
+    for (const question of [
+      "Preciso pagar pela IA?",
+      "Funciona no celular?",
+      "Meus dados vão para a nuvem?",
+    ]) {
+      const item = page.locator("#duvidas details", { hasText: question });
+      await item.locator("summary").click();
+      assert.equal(await item.getAttribute("open"), "");
+    }
+    const targets = await page.evaluate(
+      () =>
+        Array.from(document.querySelectorAll("#assistente button, #patrimonio button"))
+          .filter((element) => element.getClientRects().length > 0)
+          .map((element) => element.getBoundingClientRect())
+          .filter((rect) => rect.width < 44 || rect.height < 44).length,
+    );
+    assert.equal(targets, 0, `${engine}: v3 touch targets`);
     assert.deepEqual(errors, []);
     assert.deepEqual(api, []);
     for (const asset of ["/robots.txt", "/sitemap.xml", "/fonts/geist-latin.woff2"]) {

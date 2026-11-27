@@ -25,7 +25,7 @@ func decodeOptionalJSON(r *http.Request, dst any) error {
 // ───────────────────────── Recurring ─────────────────────────
 
 func (s *Server) handleListRecurring(w http.ResponseWriter, r *http.Request) {
-	out, err := s.svcs.ListRecurring(r.Context())
+	out, err := s.svc(r).ListRecurring(r.Context())
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -39,7 +39,7 @@ func (s *Server) handleCreateRecurring(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.CreateRecurring(r.Context(), in)
+	out, err := s.svc(r).CreateRecurring(r.Context(), in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -58,7 +58,7 @@ func (s *Server) handleUpdateRecurring(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.UpdateRecurring(r.Context(), id, in)
+	out, err := s.svc(r).UpdateRecurring(r.Context(), id, in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -72,7 +72,7 @@ func (s *Server) handleDeleteRecurring(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	if err := s.svcs.DeleteRecurring(r.Context(), id); err != nil {
+	if err := s.svc(r).DeleteRecurring(r.Context(), id); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -90,7 +90,7 @@ func (s *Server) handlePostRecurring(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.PostRecurring(r.Context(), id, in)
+	out, err := s.svc(r).PostRecurring(r.Context(), id, in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -101,7 +101,7 @@ func (s *Server) handlePostRecurring(w http.ResponseWriter, r *http.Request) {
 // ───────────────────────── Settings ─────────────────────────
 
 func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
-	out, err := s.svcs.GetSettings(r.Context())
+	out, err := s.svc(r).GetSettings(r.Context())
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -115,7 +115,7 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.UpdateSettings(r.Context(), in)
+	out, err := s.svc(r).UpdateSettings(r.Context(), in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -126,7 +126,7 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 // ───────────────────────── Category rules ─────────────────────────
 
 func (s *Server) handleListRules(w http.ResponseWriter, r *http.Request) {
-	out, err := s.svcs.ListCategoryRules(r.Context())
+	out, err := s.svc(r).ListCategoryRules(r.Context())
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -140,7 +140,7 @@ func (s *Server) handleCreateRule(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.CreateCategoryRule(r.Context(), in)
+	out, err := s.svc(r).CreateCategoryRule(r.Context(), in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -159,7 +159,7 @@ func (s *Server) handleUpdateRule(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.UpdateCategoryRule(r.Context(), id, in)
+	out, err := s.svc(r).UpdateCategoryRule(r.Context(), id, in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -173,7 +173,7 @@ func (s *Server) handleDeleteRule(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	if err := s.svcs.DeleteCategoryRule(r.Context(), id); err != nil {
+	if err := s.svc(r).DeleteCategoryRule(r.Context(), id); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -186,7 +186,7 @@ func (s *Server) handleApplyRules(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.ApplyCategoryRules(r.Context(), in)
+	out, err := s.svc(r).ApplyCategoryRules(r.Context(), in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -197,7 +197,7 @@ func (s *Server) handleApplyRules(w http.ResponseWriter, r *http.Request) {
 // ───────────────────────── Wishlist ─────────────────────────
 
 func (s *Server) handleListWishlist(w http.ResponseWriter, r *http.Request) {
-	out, err := s.svcs.ListWishlist(r.Context())
+	out, err := s.svc(r).ListWishlist(r.Context())
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -211,7 +211,7 @@ func (s *Server) handleCreateWishItem(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.CreateWishItem(r.Context(), in)
+	out, err := s.svc(r).CreateWishItem(r.Context(), in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -230,7 +230,7 @@ func (s *Server) handleUpdateWishItem(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.UpdateWishItem(r.Context(), id, in)
+	out, err := s.svc(r).UpdateWishItem(r.Context(), id, in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -244,7 +244,7 @@ func (s *Server) handleDeleteWishItem(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	if err := s.svcs.DeleteWishItem(r.Context(), id); err != nil {
+	if err := s.svc(r).DeleteWishItem(r.Context(), id); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -259,7 +259,7 @@ func (s *Server) handleInsightsOverview(w http.ResponseWriter, r *http.Request) 
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.InsightsOverview(r.Context(), q)
+	out, err := s.svc(r).InsightsOverview(r.Context(), q)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -277,7 +277,7 @@ func (s *Server) handleInsightsProjection(w http.ResponseWriter, r *http.Request
 	if days != nil {
 		n = *days
 	}
-	out, err := s.svcs.InsightsProjection(r.Context(), n)
+	out, err := s.svc(r).InsightsProjection(r.Context(), n)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -291,7 +291,7 @@ func (s *Server) handleInsightsYear(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.InsightsYear(r.Context(), year)
+	out, err := s.svc(r).InsightsYear(r.Context(), year)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -305,7 +305,7 @@ func (s *Server) handleInsightsCommitments(w http.ResponseWriter, r *http.Reques
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.InsightsCommitments(r.Context(), q)
+	out, err := s.svc(r).InsightsCommitments(r.Context(), q)
 	if err != nil {
 		writeError(w, r, err)
 		return

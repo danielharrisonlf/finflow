@@ -130,12 +130,24 @@ const spendBackfillKey = "_migration.spendTypeBackfill"
 // ainda estão sem valor (categorias raiz sem palavra conhecida ficam VARIABLE; subcategorias
 // sem palavra conhecida continuam herdando do pai).
 func Bootstrap(ctx context.Context, s *Store) error {
+	return BootstrapKind(ctx, s, domain.SpacePersonal)
+}
+
+// BootstrapKind é o Bootstrap de um espaço: num banco sem categorias, cria as categorias padrão
+// do tipo (BUSINESS: categorias de empresa com grupo do DRE; demais: taxonomia pessoal).
+func BootstrapKind(ctx context.Context, s *Store, kind domain.SpaceKind) error {
 	var n int
 	if err := s.DB.QueryRow(ctx, `SELECT COUNT(*) FROM categories`).Scan(&n); err != nil {
 		return err
 	}
 	if n == 0 {
-		if _, err := EnsureDefaultCategories(ctx, s); err != nil {
+		var err error
+		if kind == domain.SpaceBusiness {
+			_, err = EnsureBusinessCategories(ctx, s)
+		} else {
+			_, err = EnsureDefaultCategories(ctx, s)
+		}
+		if err != nil {
 			return err
 		}
 	}

@@ -4,6 +4,7 @@ import { Check, HardDrive, Settings as SettingsIcon } from "lucide-react";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { ApiAiSection } from "../components/api-ai-section";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { Empty, LoadingRows } from "../components/ui/empty";
@@ -308,6 +309,9 @@ export function SettingsPage() {
           </div>
         </form>
       )}
+
+      {/* fora do formulário: não interfere no envio das configurações */}
+      <ApiAiSection />
     </div>
   );
 }

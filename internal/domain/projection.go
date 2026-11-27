@@ -5,7 +5,7 @@ import "time"
 // ───────────────────────── Contratos ─────────────────────────
 
 type ProjectionEvent struct {
-	Kind        string `json:"kind"` // "RECURRING" | "INVOICE" | "PENDING" | "DAILY_SPEND"
+	Kind        string `json:"kind"` // "RECURRING" | "INVOICE" | "PENDING" | "DAILY_SPEND" | "LOAN"
 	Description string `json:"description"`
 	AmountCents int64  `json:"amountCents"` // com sinal: + entra, − sai
 }
@@ -33,6 +33,7 @@ type ProjectionMonth struct {
 	InvoicesCents     int64 `json:"invoicesCents"`
 	DailySpendCents   int64 `json:"dailySpendCents"`
 	PendingOutCents   int64 `json:"pendingOutCents"`
+	LoansCents        int64 `json:"loansCents"`
 	EndBalanceCents   int64 `json:"endBalanceCents"`
 }
 
@@ -52,6 +53,7 @@ const (
 	EventInvoice    = "INVOICE"
 	EventPending    = "PENDING"
 	EventDailySpend = "DAILY_SPEND"
+	EventLoan       = "LOAN"
 
 	// ProjectionHorizonDays é o horizonte interno da simulação (e o máximo de dias devolvidos).
 	ProjectionHorizonDays = 365
@@ -106,6 +108,13 @@ type ProjectionInvoice struct {
 	InstallmentsCents int64
 }
 
+// ProjectionLoan é um empréstimo ativo com os vencimentos das parcelas ainda não pagas.
+type ProjectionLoan struct {
+	Description      string
+	InstallmentCents int64
+	DueDates         []string
+}
+
 type ProjectionInput struct {
 	Today             string
 	StartBalanceCents int64
@@ -114,8 +123,12 @@ type ProjectionInput struct {
 	Recurring         []ProjectionRecurring
 	Pending           []ProjectionPending
 	Invoices          []ProjectionInvoice
+	Loans             []ProjectionLoan
 	// InstallmentsByMonth soma as parcelas de cartão (pagas ou não) pelo mês de vencimento da fatura.
 	InstallmentsByMonth map[string]int64
+	// LoansByMonth soma as parcelas de empréstimos (pagas ou não) pelo mês de vencimento; como as
+	// recorrências, consomem o limite mensal antes do gasto diário estimado.
+	LoansByMonth map[string]int64
 	// CurrentMonthVariableCents é o Diário já gasto no mês corrente.
 	CurrentMonthVariableCents int64
 }
@@ -184,6 +197,12 @@ func SimulateProjection(in ProjectionInput) Projection {
 		}
 	}
 
+	for _, l := range in.Loans {
+		for _, due := range l.DueDates {
+			add(due, ProjectionEvent{Kind: EventLoan, Description: l.Description, AmountCents: -l.InstallmentCents})
+		}
+	}
+
 	if in.MonthlyLimitCents != nil {
 		for i := 0; i < monthSpan; i++ {
 			y, m := AddMonths(ty, tm, i)
@@ -196,7 +215,7 @@ func SimulateProjection(in ProjectionInput) Projection {
 					recurringOut += r.AmountCents
 				}
 			}
-			budget := *in.MonthlyLimitCents - recurringOut - in.InstallmentsByMonth[MonthKeyOf(y, m)]
+			budget := *in.MonthlyLimitCents - recurringOut - in.InstallmentsByMonth[MonthKeyOf(y, m)] - in.LoansByMonth[MonthKeyOf(y, m)]
 			if budget < 0 {
 				budget = 0
 			}
@@ -294,6 +313,8 @@ func SimulateProjection(in ProjectionInput) Projection {
 				pm.DailySpendCents -= ev.AmountCents
 			case ev.Kind == EventPending:
 				pm.PendingOutCents -= ev.AmountCents
+			case ev.Kind == EventLoan:
+				pm.LoansCents -= ev.AmountCents
 			}
 		}
 	}

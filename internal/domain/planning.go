@@ -119,12 +119,23 @@ type RuleCandidate struct {
 	CategoryID   string
 	CategoryKind CategoryKind
 	Priority     int
+	TagID        *string // tag aplicada junto com a categoria (v3)
 }
 
 // MatchCategoryRule escolhe a categoria da regra que casa com a descrição: o padrão é
 // substring sem diferenciar maiúsculas nem acentos; vence a maior prioridade e, no empate,
 // o padrão mais longo (depois a ordem recebida). Só considera categorias do mesmo tipo.
 func MatchCategoryRule(rules []RuleCandidate, description string, kind CategoryKind) *string {
+	r := MatchRule(rules, description, kind)
+	if r == nil {
+		return nil
+	}
+	id := r.CategoryID
+	return &id
+}
+
+// MatchRule devolve a regra vencedora (mesmos critérios de MatchCategoryRule) ou nil.
+func MatchRule(rules []RuleCandidate, description string, kind CategoryKind) *RuleCandidate {
 	desc := NormalizeText(description)
 	if desc == "" {
 		return nil
@@ -146,8 +157,8 @@ func MatchCategoryRule(rules []RuleCandidate, description string, kind CategoryK
 	if bestIdx < 0 {
 		return nil
 	}
-	id := rules[bestIdx].CategoryID
-	return &id
+	r := rules[bestIdx]
+	return &r
 }
 
 // CategoryKindForTransaction mapeia o tipo da transação para o tipo de categoria que as

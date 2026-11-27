@@ -329,12 +329,88 @@ func Seed(ctx context.Context, s *Store) (bool, error) {
 		}
 	}
 
+	if err := seedWealth(ctx, s, todayStr, monthDay, xp.ID, itau.ID, catPtr(domain.LoanCategoryName)); err != nil {
+		return false, err
+	}
+
 	if err := s.SaveSettingValues(ctx, map[string]string{
-		SettingMonthlyLimit: "650000",
+		SettingMonthlyLimit: "850000",
 		SettingSpendPlan:    `{"fixedPct":50,"cuttablePct":10,"variablePct":40}`,
 	}); err != nil {
 		return false, err
 	}
 
 	return true, nil
+}
+
+// seedWealth cria duas posições na conta "XP Investimentos" com snapshots dos últimos 6 meses e
+// um financiamento de veículo com 7 parcelas pagas antes do app e as dos últimos meses lançadas.
+func seedWealth(ctx context.Context, s *Store, todayStr string, monthDay func(monthOffset, day int) string, xpID, payerID string, loanCategoryID *string) error {
+	snapDate := func(m int) string {
+		return min(monthDay(m, 28), todayStr)
+	}
+	positions := []struct {
+		name  string
+		kind  domain.InvestmentKind
+		base  int64
+		step  int64
+		yield []int64 // rentabilidade acumulada (milésimos) em cada snapshot
+		notes *string
+	}{
+		{"Tesouro Selic 2029", domain.InvestmentTreasury, 1400000, 120000, []int64{9, 18, 27, 36, 45, 54}, strPtr("reserva de longo prazo")},
+		{"Fundo imobiliário de logística", domain.InvestmentFII, 1350000, 50000, []int64{-8, 4, 12, 20, 31, 46}, nil},
+	}
+	for _, p := range positions {
+		snaps := make([]domain.InvestmentSnapshot, 0, len(p.yield))
+		for i, y := range p.yield {
+			invested := p.base + int64(i)*p.step
+			snaps = append(snaps, domain.InvestmentSnapshot{
+				Date:          snapDate(i - len(p.yield) + 1),
+				ValueCents:    invested * (1000 + y) / 1000,
+				InvestedCents: invested,
+			})
+		}
+		last := snaps[len(snaps)-1]
+		id, err := s.CreateInvestment(ctx, InvestmentRow{
+			Name: p.name, Kind: p.kind, Institution: strPtr("XP Investimentos"), AccountID: strPtr(xpID),
+			InvestedCents: last.InvestedCents, CurrentCents: last.ValueCents, Notes: p.notes, ValueUpdatedAt: strPtr(last.Date),
+		}, nil)
+		if err != nil {
+			return err
+		}
+		for _, snap := range snaps {
+			if err := upsertSnapshot(ctx, s.DB, id, snap); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Financiamento de R$ 48.000 a 1,49% a.m. em 48x: parcelas 1–7 pagas antes de usar o app;
+	// 8, 9 e 10 (meses −2, −1 e o corrente, se o dia 15 já passou) lançadas com loan_id.
+	const (
+		principal = 4800000
+		rateBP    = 149
+		total     = 48
+		basePaid  = 7
+	)
+	installment := domain.PriceInstallment(principal, rateBP, total)
+	loanID, err := s.CreateLoan(ctx, LoanRow{
+		Name: "Financiamento do carro", Lender: strPtr("Financeira (exemplo)"), Kind: domain.LoanVehicle,
+		PrincipalCents: principal, RateBP: rateBP, InstallmentCents: installment, TotalInstallments: total,
+		BasePaid: basePaid, FirstDueDate: monthDay(-9, 15), AccountID: strPtr(payerID), Active: true,
+	})
+	if err != nil {
+		return err
+	}
+	for i, m := range []int{-2, -1, 0} {
+		date := monthDay(m, 15)
+		if date > todayStr {
+			continue
+		}
+		desc := fmt.Sprintf("Financiamento do carro — parcela %d/%d", basePaid+i+1, total)
+		if _, err := s.CreateLoanPayment(ctx, loanID, desc, installment, date, payerID, loanCategoryID); err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -18,6 +18,7 @@ func toWishItem(r store.WishItemRow) domain.WishItem {
 		Notes:      r.Notes,
 		Priority:   r.Priority,
 		Status:     r.Status,
+		ImageURL:   r.ImageURL,
 	}
 }
 
@@ -91,6 +92,7 @@ func (s *Services) CreateWishItem(ctx context.Context, in domain.CreateWishItemI
 		Notes:      in.Notes,
 		Priority:   priority,
 		Status:     domain.WishListed,
+		ImageURL:   emptyToNil(in.ImageURL),
 	})
 	if err != nil {
 		return domain.WishItem{}, err
@@ -126,6 +128,9 @@ func (s *Services) UpdateWishItem(ctx context.Context, id string, in domain.Upda
 	}
 	if in.Status.Set && in.Status.Valid {
 		r.Status = in.Status.Value
+	}
+	if in.ImageURL.Set {
+		r.ImageURL = emptyToNil(optionalString(in.ImageURL))
 	}
 	if err := s.Store.UpdateWishItem(ctx, r); err != nil {
 		return domain.WishItem{}, err

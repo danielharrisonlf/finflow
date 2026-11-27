@@ -16,14 +16,15 @@ Cada pacote contém o binário (`finflow` ou `finflow.exe`) e um `LEIA-ME.txt` c
 ## Caminho recomendado: tag + workflow
 
 1. Confira que `main` está verde no CI.
-2. Crie e envie a tag:
+2. No [`CHANGELOG.md`](../CHANGELOG.md), renomeie a seção “Não lançado” para a versão e a data (por exemplo `## [0.3.0] — 2026-12-10`), abra uma nova “Não lançado” vazia e atualize os links de comparação no fim do arquivo.
+3. Crie e envie a tag:
 
    ```bash
    git tag v0.2.0
    git push origin v0.2.0
    ```
 
-3. O workflow [`.github/workflows/release.yml`](../.github/workflows/release.yml) roda `node scripts/release.mjs v0.2.0` e cria a GitHub Release com `gh release create` (notas geradas automaticamente). Se a release já existir, os arquivos são substituídos (`gh release upload --clobber`).
+4. O workflow [`.github/workflows/release.yml`](../.github/workflows/release.yml) roda `node scripts/release.mjs v0.2.0` e cria a GitHub Release com `gh release create` (notas geradas automaticamente). Se a release já existir, os arquivos são substituídos (`gh release upload --clobber`).
 
 Tags com hífen (`v0.3.0-rc.1`) viram **pre-release** e não entram em `releases/latest`.
 

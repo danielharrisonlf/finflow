@@ -11,6 +11,12 @@ const ROUTES = [
   "/categorias",
   "/configuracoes",
   "/extrato",
+  "/fluxo",
+  "/investimentos",
+  "/dividas",
+  "/calculadoras",
+  "/contas",
+  "/orcamentos",
 ];
 
 test("nenhuma página rola na horizontal em 320px", async ({ page }) => {

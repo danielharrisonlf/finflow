@@ -27,6 +27,7 @@ import { Link } from "react-router-dom";
 import { SPEND_TYPE_META, SPEND_TYPE_ORDER } from "../lib/bands";
 import { cn } from "../lib/cn";
 import { formatBRL, formatPercent, formatSignedBRL } from "../lib/format";
+import { maskMoneyText } from "../lib/privacy";
 import { useCreateGoal } from "../lib/queries";
 import { Button } from "./ui/button";
 import { Card, CardHeader } from "./ui/card";
@@ -228,7 +229,9 @@ export function PerformanceCard({ performance: p }: { performance: Performance }
         <Icon size={20} aria-hidden className={cn("mt-0.5 shrink-0", verdictText[verdict.tone])} />
         <div className="min-w-0">
           <p className={cn("text-sm font-semibold", verdictText[verdict.tone])}>{verdict.title}</p>
-          {p.message ? <p className="mt-0.5 text-sm text-app-text">{p.message}</p> : null}
+          {p.message ? (
+            <p className="mt-0.5 text-sm text-app-text">{maskMoneyText(p.message)}</p>
+          ) : null}
         </div>
       </div>
 

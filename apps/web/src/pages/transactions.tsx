@@ -11,10 +11,20 @@ import {
   ReceiptText,
   Search,
   Trash2,
+  X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
+import { useSearchParams } from "react-router-dom";
 import { z } from "zod";
+import {
+  buildSplitPayload,
+  EMPTY_SPLIT,
+  MemberSplitFields,
+  splitFieldSchema,
+  splitFromTransaction,
+  useHomeMembers,
+} from "../components/member-split";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { CategoryIcon, formatCategoryLabel } from "../components/ui/category-icon";
@@ -22,6 +32,7 @@ import { Empty, LoadingRows } from "../components/ui/empty";
 import { Field, Input, Select } from "../components/ui/field";
 import { Money } from "../components/ui/money";
 import { Sheet } from "../components/ui/sheet";
+import { TagChip, TagPicker } from "../components/ui/tags";
 import { exportUrl } from "../lib/api";
 import { formatBRL, formatDate, formatMonthYear, parseBRLInput } from "../lib/format";
 import {
@@ -31,7 +42,10 @@ import {
   useCategories,
   useConfirmTransaction,
   useDeleteTransaction,
+  useMergeTransfer,
+  useTags,
   useTransactions,
+  useTransferCandidates,
   useUpdateTransaction,
 } from "../lib/queries";
 
@@ -44,18 +58,37 @@ const TYPE_OPTIONS = [
   ["INVOICE_PAYMENT", "Pagamentos de fatura"],
 ] as const;
 
+/** Filtros iniciais vindos da URL (paleta de comandos, links de tags): ?search&month&year&tagId. */
+function initialFilters(params: URLSearchParams): TransactionFilters {
+  const now = new Date();
+  const month = Number(params.get("month"));
+  const year = Number(params.get("year"));
+  return {
+    month: month >= 1 && month <= 12 ? month : now.getMonth() + 1,
+    year: year >= 2000 && year <= 2100 ? year : now.getFullYear(),
+    tagId: params.get("tagId") || undefined,
+    page: 1,
+  };
+}
+
 export function TransactionsPage() {
   const now = new Date();
-  const [filters, setFilters] = useState<TransactionFilters>({
-    month: now.getMonth() + 1,
-    year: now.getFullYear(),
-    page: 1,
-  });
-  const [search, setSearch] = useState("");
+  const [params] = useSearchParams();
+  const [filters, setFilters] = useState<TransactionFilters>(() => initialFilters(params));
+  const [search, setSearch] = useState(() => params.get("search") ?? "");
   const [editing, setEditing] = useState<Transaction | null>(null);
+
+  // a paleta pode navegar para cá com a página já aberta: reaplica os filtros da URL
+  // biome-ignore lint/correctness/useExhaustiveDependencies: só reage a mudanças na URL
+  useEffect(() => {
+    if (!params.toString()) return;
+    setFilters(initialFilters(params));
+    setSearch(params.get("search") ?? "");
+  }, [params.toString()]);
 
   const accounts = useAccounts();
   const categories = useCategories();
+  const tags = useTags();
   const query = useTransactions({ ...filters, search: search || undefined });
   const confirm = useConfirmTransaction();
   const remove = useDeleteTransaction();
@@ -203,7 +236,24 @@ export function TransactionsPage() {
             </option>
           ))}
         </Select>
+        {(tags.data?.length ?? 0) > 0 || filters.tagId ? (
+          <Select
+            className="h-10 w-auto max-w-44"
+            aria-label="Filtrar por tag"
+            value={filters.tagId ?? ""}
+            onChange={(e) => set({ tagId: e.target.value || undefined })}
+          >
+            <option value="">Todas as tags</option>
+            {tags.data?.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </Select>
+        ) : null}
       </Card>
+
+      <TransferSuggestions />
 
       {/* lista */}
       <Card>
@@ -237,6 +287,13 @@ export function TransactionsPage() {
                     {t.accountName ? ` — ${t.accountName}` : t.cardName ? ` — ${t.cardName}` : ""}
                     {t.categoryName ? ` — ${t.categoryName}` : ""}
                   </p>
+                  {(t.tags?.length ?? 0) > 0 ? (
+                    <div className="mt-1 flex flex-wrap gap-1" data-testid="transaction-tags">
+                      {t.tags?.map((tag) => (
+                        <TagChip key={tag.id} name={tag.name} color={tag.color} />
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
                 {t.status === "PENDING" ? (
                   <button
@@ -309,8 +366,93 @@ const editTransactionSchema = z.object({
   categoryId: z.string(),
   pending: z.boolean(),
   notes: z.string().max(500),
+  tagIds: z.array(z.string()),
+  split: splitFieldSchema,
 });
 type EditTransactionForm = z.infer<typeof editTransactionSchema>;
+
+// ───────────────────────── transferências inteligentes (v3 §7) ─────────────────────────
+
+/** Pares despesa/receita entre contas próprias que parecem ser uma transferência. */
+function TransferSuggestions() {
+  const candidates = useTransferCandidates();
+  const merge = useMergeTransfer();
+  const [hidden, setHidden] = useState<string[]>([]);
+  const pairs = (candidates.data ?? []).filter(
+    (p) => p.expense && p.income && !hidden.includes(`${p.expense.id}:${p.income.id}`),
+  );
+  if (pairs.length === 0) return null;
+
+  return (
+    <Card className="border-sky-400/30 p-4" data-testid="transfer-suggestions">
+      <div className="flex items-start gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-400/10 text-sky-600 dark:text-sky-300">
+          <ArrowLeftRight size={16} aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-semibold text-app-text">
+            {pairs.length === 1
+              ? "Isto parece uma transferência entre suas contas"
+              : `${pairs.length} lançamentos parecem transferências entre suas contas`}
+          </h2>
+          <p className="mt-0.5 text-sm text-app-muted">
+            Uma saída e uma entrada de mesmo valor, em contas suas e com poucos dias de diferença.
+            Transformar em transferência tira os dois lançamentos das receitas e despesas.
+          </p>
+        </div>
+      </div>
+      <ul className="mt-3 flex flex-col gap-2">
+        {pairs.map((pair) => {
+          const key = `${pair.expense.id}:${pair.income.id}`;
+          const pending = merge.isPending && merge.variables?.expenseId === pair.expense.id;
+          return (
+            <li
+              key={key}
+              className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-(--radius-control) border border-app-border/80 bg-app-background/60 p-3"
+            >
+              <div className="min-w-0 flex-1 basis-56 text-sm">
+                <p className="truncate text-app-text">
+                  <Money cents={-Math.abs(pair.expense.amountCents)} className="font-medium" /> de{" "}
+                  <span className="font-medium">{pair.expense.accountName ?? "—"}</span> para{" "}
+                  <span className="font-medium">{pair.income.accountName ?? "—"}</span>
+                </p>
+                <p className="truncate text-xs text-app-muted">
+                  “{pair.expense.description}” em {formatDate(pair.expense.date)} · “
+                  {pair.income.description}” em {formatDate(pair.income.date)}
+                  {pair.daysApart > 0
+                    ? ` · ${pair.daysApart} ${pair.daysApart === 1 ? "dia" : "dias"} de diferença`
+                    : ""}
+                </p>
+              </div>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={merge.isPending}
+                  onClick={() =>
+                    merge.mutate({ expenseId: pair.expense.id, incomeId: pair.income.id })
+                  }
+                >
+                  {pending ? "Transformando…" : "Transformar em transferência"}
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => setHidden((h) => [...h, key])}
+                  aria-label="Não é transferência"
+                  title="Não é transferência"
+                  className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full text-app-subtle hover:bg-app-soft hover:text-app-text"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      {merge.error ? <p className="mt-2 text-sm text-expense">{merge.error.message}</p> : null}
+    </Card>
+  );
+}
 
 function centsToInput(cents: number): string {
   return (Math.abs(cents) / 100).toFixed(2).replace(".", ",");
@@ -329,6 +471,11 @@ function EditTransactionSheet({
   const accounts = useAccounts();
   const categories = useCategories(categoryKind);
   const update = useUpdateTransaction();
+  // espaço Casa: quem pagou e divisão só em despesas (conta ou cartão)
+  const home = useHomeMembers();
+  const showSplit =
+    home.isHome && (transaction?.type === "EXPENSE" || transaction?.type === "CARD_EXPENSE");
+  const [splitError, setSplitError] = useState<string>();
 
   const form = useForm<EditTransactionForm>({
     resolver: zodResolver(editTransactionSchema),
@@ -340,8 +487,13 @@ function EditTransactionSheet({
       categoryId: "",
       pending: false,
       notes: "",
+      tagIds: [],
+      split: EMPTY_SPLIT,
     },
   });
+  const tagIds = form.watch("tagIds");
+  const split = form.watch("split");
+  const amountInput = form.watch("amount");
 
   useEffect(() => {
     if (transaction) {
@@ -353,12 +505,21 @@ function EditTransactionSheet({
         categoryId: transaction.categoryId ?? "",
         pending: transaction.status === "PENDING",
         notes: transaction.notes ?? "",
+        tagIds: (transaction.tags ?? []).map((t) => t.id),
+        split: splitFromTransaction(transaction),
       });
+      setSplitError(undefined);
     }
   }, [transaction, form]);
 
   const submit = form.handleSubmit(async (values) => {
     if (!transaction) return;
+    const shared = showSplit ? buildSplitPayload(values.split, home.members, true) : null;
+    if (shared && !shared.ok) {
+      setSplitError(shared.error);
+      return;
+    }
+    setSplitError(undefined);
     await update.mutateAsync({
       id: transaction.id,
       description: values.description.trim(),
@@ -368,6 +529,9 @@ function EditTransactionSheet({
       status: values.pending ? "PENDING" : "CONFIRMED",
       categoryId: values.categoryId || null,
       notes: values.notes.trim() || null,
+      // substitui o conjunto: lista vazia remove todas as tags
+      tagIds: values.tagIds,
+      ...(shared?.ok ? { paidByMemberId: shared.paidByMemberId, splits: shared.splits } : {}),
     });
     onClose();
   });
@@ -452,6 +616,23 @@ function EditTransactionSheet({
           <Field label="Observações (opcional)">
             <Input placeholder="Notas adicionais…" {...form.register("notes")} />
           </Field>
+
+          {showSplit ? (
+            <MemberSplitFields
+              value={split}
+              onChange={(v) => form.setValue("split", v, { shouldDirty: true })}
+              members={home.members}
+              amountCents={
+                isSimple ? parseBRLInput(amountInput) : Math.abs(transaction.amountCents)
+              }
+              error={splitError}
+            />
+          ) : null}
+
+          <TagPicker
+            value={tagIds}
+            onChange={(ids) => form.setValue("tagIds", ids, { shouldDirty: true })}
+          />
 
           {update.error ? <p className="text-sm text-expense">{update.error.message}</p> : null}
           <Button type="submit" disabled={update.isPending} className="h-12">

@@ -23,6 +23,7 @@ import (
 	"finflow/internal/httpapi"
 	"finflow/internal/mcp"
 	"finflow/internal/service"
+	"finflow/internal/spaces"
 	"finflow/internal/store"
 	"finflow/internal/webui"
 
@@ -32,6 +33,21 @@ import (
 type rootOpts struct {
 	apiURL string
 	token  string
+	// space é o espaço escolhido com --espaco (padrão: FINFLOW_SPACE ou pessoal).
+	space string
+}
+
+// spaceSlug devolve o espaço escolhido (--espaco, senão FINFLOW_SPACE); vazio = pessoal.
+func (o *rootOpts) spaceSlug() string {
+	slug := strings.TrimSpace(o.space)
+	if slug == "" {
+		slug = strings.TrimSpace(os.Getenv("FINFLOW_SPACE"))
+	}
+	slug = strings.ToLower(slug)
+	if slug == domain.DefaultSpaceSlug {
+		return ""
+	}
+	return slug
 }
 
 var txTypeLabel = map[domain.TransactionType]string{
@@ -84,10 +100,11 @@ func NewRootCmd() *cobra.Command {
 	root.SetFlagErrorFunc(flagError)
 	root.PersistentFlags().StringVar(&opts.apiURL, "api", "", "URL da API remota (se omitido e sem FINFLOW_API_URL, acessa o banco local direto)")
 	root.PersistentFlags().StringVar(&opts.token, "token", "", "Token ou senha da API remota (padrão: FINFLOW_TOKEN ou FINFLOW_PASSWORD)")
+	root.PersistentFlags().StringVar(&opts.space, "espaco", "", "Espaço (slug) a usar, ex.: casa ou empresa (padrão: FINFLOW_SPACE ou pessoal)")
 
 	root.AddCommand(
 		cmdServe(),
-		cmdSeed(),
+		cmdSeed(opts),
 		cmdMCP(opts),
 		cmdSaldo(opts),
 		cmdResumo(opts),
@@ -106,7 +123,16 @@ func NewRootCmd() *cobra.Command {
 		cmdProjecao(opts),
 		cmdFixas(opts),
 		cmdInsights(opts),
+		cmdAssinaturas(opts),
+		cmdAlertas(opts),
+		cmdPosso(opts),
 		cmdStatus(opts),
+		cmdInvestimentos(opts),
+		cmdDividas(opts),
+		cmdPatrimonio(opts),
+		cmdEspacos(opts),
+		cmdDivisao(opts),
+		cmdEmpresa(opts),
 	)
 	return root
 }
@@ -130,13 +156,42 @@ func openBackendLogged(ctx context.Context, opts *rootOpts, logTo io.Writer, cmd
 	if remote == "" {
 		remote = strings.TrimSpace(os.Getenv("FINFLOW_API_URL"))
 	}
+	slug := opts.spaceSlug()
 	if remote != "" {
-		return client.NewHTTPClient(remote, opts.token), "API: " + remote, func() {}, nil
+		label := "API: " + remote
+		if slug != "" {
+			label += " · espaço " + slug
+		}
+		return client.NewHTTPClient(remote, opts.token).WithSpace(slug), label, func() {}, nil
 	}
+	local, err := openLocal(ctx, logTo, cmdName)
+	if err != nil {
+		return nil, "", nil, err
+	}
+	svcs, err := local.services(ctx, slug)
+	if err != nil {
+		local.close()
+		return nil, "", nil, err
+	}
+	label := fmt.Sprintf("local %s (%s)", local.db.Dialect, local.db.Target)
+	if slug != "" {
+		label += " · espaço " + slug
+	}
+	return &client.LocalBackend{Svcs: svcs}, label, local.close, nil
+}
+
+// localData é o banco pessoal aberto com o registro de espaços (modo local da CLI).
+type localData struct {
+	db  *db.DB
+	reg *spaces.Registry
+}
+
+// openLocal abre o banco pessoal (Migrate + Bootstrap) e o registro de espaços da mesma pasta.
+func openLocal(ctx context.Context, logTo io.Writer, cmdName string) (*localData, error) {
 	cfg := config.Load()
 	database, err := db.Open(ctx, cfg.DatabaseURL, cfg.DBPath)
 	if err != nil {
-		return nil, "", nil, err
+		return nil, err
 	}
 	if logTo != nil {
 		logDatabase(logTo, cmdName, database)
@@ -144,11 +199,25 @@ func openBackendLogged(ctx context.Context, opts *rootOpts, logTo io.Writer, cmd
 	st := store.New(database)
 	if err := store.Bootstrap(ctx, st); err != nil {
 		_ = database.Close()
-		return nil, "", nil, err
+		return nil, err
 	}
-	svcs := service.New(st, nil)
-	label := fmt.Sprintf("local %s (%s)", database.Dialect, database.Target)
-	return &client.LocalBackend{Svcs: svcs}, label, func() { _ = database.Close() }, nil
+	reg := spaces.New(service.New(st, nil), spaces.OptionsFor(database))
+	return &localData{db: database, reg: reg}, nil
+}
+
+// services devolve os serviços do espaço (vazio = pessoal), com uma dica quando o slug não existe.
+func (l *localData) services(ctx context.Context, slug string) (*service.Services, error) {
+	svcs, err := l.reg.Services(ctx, slug)
+	var appErr *service.AppError
+	if errors.As(err, &appErr) && appErr.Status == http.StatusNotFound {
+		return nil, fmt.Errorf("espaço %q não encontrado — veja `finflow espacos`", slug)
+	}
+	return svcs, err
+}
+
+func (l *localData) close() {
+	_ = l.reg.Close()
+	_ = l.db.Close()
 }
 
 func money(cents int64, signed bool) string {
@@ -221,6 +290,7 @@ func cmdServe() *cobra.Command {
 	var port int
 	var host string
 	var autoSeed bool
+	var lan bool
 
 	cmd := &cobra.Command{
 		Use:   "serve",
@@ -231,9 +301,12 @@ func cmdServe() *cobra.Command {
 			if port > 0 {
 				cfg.Port = port
 			}
-			if host != "" {
-				cfg.Host = host
+			// Só esta máquina por padrão; --lan (ou FINFLOW_LAN=1) abre para a rede local e exige senha.
+			lan = lan || lanFromEnv()
+			if err := checkLAN(lan, cfg.Password); err != nil {
+				return err
 			}
+			cfg.Host = resolveBindHost(host, cfg.Host, lan)
 
 			ctx := cmd.Context()
 			database, err := db.Open(ctx, cfg.DatabaseURL, cfg.DBPath)
@@ -258,10 +331,17 @@ func cmdServe() *cobra.Command {
 			}
 
 			svcs := service.New(st, nil)
+			// Espaços (v3 fase 2): bancos SQLite na mesma pasta, abertos sob demanda e fechados no fim.
+			reg := spaces.New(svcs, spaces.OptionsFor(database))
+			defer reg.Close()
 			webFS, hasWeb := webui.DistFS(cfg.WebDir)
 			apiServer := httpapi.NewServer(svcs, httpapi.ServerOptions{
 				WebOrigin: cfg.WebOrigin,
 				WebFS:     webFS,
+				Version:   Version,
+				LAN:       lan,
+				Port:      cfg.Port,
+				Spaces:    reg,
 			})
 
 			addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
@@ -275,15 +355,18 @@ func cmdServe() *cobra.Command {
 				errCh <- httpSrv.ListenAndServe()
 			}()
 
-			displayHost := cfg.Host
-			if displayHost == "" {
-				displayHost = "localhost"
-			}
-			fmt.Fprintf(out, "FinFlow rodando em http://%s:%d (API: /api, banco: %s -> %s)\n", displayHost, cfg.Port, database.Dialect, database.Target)
+			shownHost := displayHost(cfg.Host)
+			fmt.Fprintf(out, "FinFlow rodando em http://%s:%d (API: /api, banco: %s -> %s)\n", shownHost, cfg.Port, database.Dialect, database.Target)
 			if hasWeb {
-				fmt.Fprintf(out, "Interface web disponível em http://%s:%d\n", displayHost, cfg.Port)
+				fmt.Fprintf(out, "Interface web disponível em http://%s:%d\n", shownHost, cfg.Port)
 			} else {
 				fmt.Fprintln(out, cDim("Interface web não embutida ainda (rode `pnpm build` ou use `pnpm dev:web` em :5273)"))
+			}
+			if lan {
+				fmt.Fprintln(out, cGreen("Modo rede local ativo: abra no celular (mesma rede Wi-Fi) em:"))
+				for _, u := range httpapi.LANURLs(cfg.Port) {
+					fmt.Fprintf(out, "  %s\n", u)
+				}
 			}
 
 			select {
@@ -305,16 +388,20 @@ func cmdServe() *cobra.Command {
 		},
 	}
 	cmd.Flags().IntVar(&port, "port", 0, "porta HTTP (padrão: API_PORT ou 3333)")
-	cmd.Flags().StringVar(&host, "host", "", "endereço de bind (padrão: vazio / todas as interfaces)")
+	cmd.Flags().StringVar(&host, "host", "", "endereço de bind (padrão: API_HOST ou 127.0.0.1, só esta máquina)")
+	cmd.Flags().BoolVar(&lan, "lan", false, "escuta em 0.0.0.0 para abrir no celular pela rede local (exige FINFLOW_PASSWORD; também FINFLOW_LAN=1)")
 	cmd.Flags().BoolVar(&autoSeed, "seed", false, "popula o banco com dados de exemplo se estiver vazio")
 	return cmd
 }
 
-func cmdSeed() *cobra.Command {
+func cmdSeed(opts *rootOpts) *cobra.Command {
 	return &cobra.Command{
 		Use:   "seed",
-		Short: "Popula o banco com dados de exemplo (idempotente)",
+		Short: "Popula o banco com dados de exemplo (idempotente; --espaco casa/empresa usa a demo do tipo do espaço)",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if slug := opts.spaceSlug(); slug != "" {
+				return seedSpace(cmd, slug)
+			}
 			out := cmd.OutOrStdout()
 			cfg := config.Load()
 			database, err := db.Open(cmd.Context(), cfg.DatabaseURL, cfg.DBPath)
@@ -335,7 +422,7 @@ func cmdSeed() *cobra.Command {
 				fmt.Fprintln(out, "Seed já aplicado (existem contas) — nada a fazer.")
 				return nil
 			}
-			fmt.Fprintln(out, cGreen("✔ Seed concluído: 5 contas, 2 cartões, categorias padrão com tipo de gasto, 6 recorrências, transações de 3 meses, 5 orçamentos, 3 metas (com reserva de emergência), limite mensal, regras e 2 desejos."))
+			fmt.Fprintln(out, cGreen("✔ Seed concluído: 5 contas, 2 cartões, categorias padrão com tipo de gasto, 6 recorrências, transações de 3 meses, 5 orçamentos, 3 metas (com reserva de emergência), limite mensal, regras, 2 desejos, 2 investimentos e 1 financiamento."))
 			return nil
 		},
 	}
@@ -344,7 +431,7 @@ func cmdSeed() *cobra.Command {
 func cmdMCP(opts *rootOpts) *cobra.Command {
 	return &cobra.Command{
 		Use:   "mcp",
-		Short: "Inicia o servidor MCP em stdio (24 tools para agentes de IA)",
+		Short: "Inicia o servidor MCP em stdio (tools para agentes de IA; também em POST /api/mcp no serve)",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			// stdout é exclusivo do protocolo MCP: diagnósticos vão sempre para stderr.
 			b, mode, cleanup, err := openBackendLogged(cmd.Context(), opts, cmd.ErrOrStderr(), "mcp")

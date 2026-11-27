@@ -2636,3 +2636,511 @@
     gap: 88px;
   }
 }
+
+/* v3: spend-today card, assistant conversation, net worth and calculators. */
+.finflow-landing .ff-spend-today {
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--ff-surface);
+}
+.finflow-landing .ff-spend-today > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 12px;
+}
+.finflow-landing .ff-spend-today span {
+  font-size: 13px;
+  color: var(--ff-muted);
+}
+.finflow-landing .ff-spend-today strong {
+  font-size: 26px;
+  font-weight: 550;
+  letter-spacing: -0.03em;
+  line-height: 1.25;
+}
+.finflow-landing .ff-spend-today p {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ff-income);
+}
+
+.finflow-landing .ff-assistant .ff-ai-benefits li {
+  font-size: 14px;
+  line-height: 1.6;
+}
+.finflow-landing .ff-assistant .ff-ai-benefits svg {
+  margin-top: 3px;
+}
+.finflow-landing .ff-assistant-chat {
+  min-width: 0;
+}
+.finflow-landing .ff-assistant-chat .ff-chat-heading > div {
+  flex: 1;
+  min-width: 0;
+}
+.finflow-landing .ff-assistant-badge {
+  padding: 3px 9px;
+  border: 1px solid var(--ff-border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ff-muted);
+}
+.finflow-landing .ff-assistant-chat .ff-prompt-options {
+  margin-top: 16px;
+}
+.finflow-landing .ff-assistant-chat .ff-prompt-options button {
+  font-size: 13px;
+  text-align: left;
+}
+.finflow-landing .ff-assistant-thread {
+  margin-top: 4px;
+}
+.finflow-landing .ff-assistant-thread .ff-chat-message {
+  font-size: 14px;
+  line-height: 1.6;
+}
+.finflow-landing .ff-assistant-thread .ff-chat-outgoing {
+  margin-left: auto;
+  width: fit-content;
+  max-width: calc(100% - 16px);
+}
+.finflow-landing .ff-assistant-attachment {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.finflow-landing .ff-assistant-attachment > svg {
+  color: var(--ff-accent);
+}
+.finflow-landing .ff-assistant-attachment small {
+  display: block;
+  font-size: 12px;
+  color: var(--ff-muted);
+}
+.finflow-landing .ff-assistant-tool {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ff-muted);
+}
+.finflow-landing .ff-assistant-tool > svg {
+  color: var(--ff-accent);
+}
+.finflow-landing .ff-assistant-thread .ff-assistant-answer {
+  margin-top: 8px;
+}
+.finflow-landing .ff-assistant-answer p {
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--ff-text);
+}
+.finflow-landing .ff-assistant-answer ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0;
+}
+.finflow-landing .ff-assistant-answer li {
+  padding: 3px 9px;
+  border-radius: 7px;
+  background: var(--ff-surface);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ff-muted);
+}
+/* Beats .ff-chat-incoming > span, which would stretch the pill to the bubble width. */
+.finflow-landing .ff-assistant-answer > .ff-assistant-verdict {
+  display: flex;
+  width: fit-content;
+  margin-bottom: 6px;
+  padding: 2px 9px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.finflow-landing .ff-assistant-verdict.is-yes {
+  color: var(--ff-income);
+}
+.finflow-landing .ff-assistant-verdict.is-careful {
+  color: var(--ff-warning);
+}
+.finflow-landing .ff-assistant-verdict.is-no {
+  color: var(--ff-danger);
+}
+.finflow-landing .ff-assistant-proposal {
+  display: grid;
+  gap: 2px;
+  margin: 10px 0 0;
+  padding: 14px;
+  border: 1px solid var(--ff-border);
+  border-radius: 12px;
+  font-size: 13px;
+}
+.finflow-landing .ff-assistant-proposal-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ff-accent);
+}
+.finflow-landing .ff-assistant-proposal > strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+.finflow-landing .ff-assistant-proposal > span:not(.ff-assistant-proposal-label) {
+  color: var(--ff-muted);
+}
+.finflow-landing .ff-assistant-proposal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.finflow-landing .ff-assistant-proposal-actions button,
+.finflow-landing .ff-assistant-receipt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--ff-border);
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 550;
+}
+.finflow-landing .ff-assistant-proposal-actions button:hover,
+.finflow-landing .ff-assistant-receipt:hover {
+  border-color: var(--ff-accent);
+}
+.finflow-landing .ff-assistant-proposal-actions .is-primary {
+  border-color: var(--ff-accent);
+  background: var(--ff-accent);
+  color: var(--ff-accent-text);
+}
+.finflow-landing .ff-assistant-proposal-actions .is-primary:hover {
+  background: var(--ff-accent-hover);
+}
+.finflow-landing .ff-assistant-proposal-result {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ff-text);
+}
+.finflow-landing .ff-assistant-receipt {
+  width: 100%;
+  margin-top: 16px;
+  color: var(--ff-accent);
+}
+.finflow-landing .ff-assistant-receipt[aria-pressed="true"] {
+  border-color: var(--ff-accent);
+  background: var(--ff-tint);
+}
+.finflow-landing .ff-assistant-chat .ff-ai-chat-footer {
+  margin-top: 16px;
+  font-size: 12px;
+}
+.finflow-landing .ff-assistant-more {
+  display: grid;
+  gap: 20px;
+  list-style: none;
+  padding: 0;
+  margin: 32px 0 0;
+}
+.finflow-landing .ff-assistant-more li {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+.finflow-landing .ff-assistant-more .ff-feature-icon {
+  flex-shrink: 0;
+}
+.finflow-landing .ff-assistant-more h3 {
+  font-size: 17px;
+}
+.finflow-landing .ff-assistant-more p {
+  margin-top: 6px;
+  font-size: 13px;
+}
+
+.finflow-landing .ff-mobile-lan {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 20px;
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--ff-soft);
+}
+.finflow-landing .ff-mobile-lan > svg {
+  margin-top: 3px;
+  color: var(--ff-accent);
+}
+.finflow-landing .ff-mobile-lan strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+.finflow-landing .ff-mobile-lan p {
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.65;
+}
+.finflow-landing .ff-mobile-lan code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--ff-surface);
+  color: var(--ff-text);
+  overflow-wrap: anywhere;
+}
+
+.finflow-landing .ff-wealth {
+  display: grid;
+  gap: 32px;
+  align-items: center;
+  border-top: 1px solid var(--ff-border);
+}
+.finflow-landing .ff-wealth-copy {
+  min-width: 0;
+}
+.finflow-landing .ff-wealth-copy h2 {
+  margin-block: 15px 20px;
+}
+.finflow-landing .ff-wealth-copy > p {
+  max-width: 480px;
+}
+.finflow-landing .ff-wealth-copy .ff-sheets-list {
+  margin-top: 24px;
+}
+.finflow-landing .ff-wealth-figure {
+  margin: 0;
+  min-width: 0;
+}
+.finflow-landing .ff-wealth-figure > .ff-fineprint {
+  margin-top: 10px;
+}
+.finflow-landing .ff-wealth-card {
+  padding: 20px 18px;
+  border-radius: 24px;
+  background: var(--ff-soft);
+}
+.finflow-landing .ff-wealth-head span,
+.finflow-landing .ff-wealth-head small {
+  display: block;
+  font-size: 13px;
+}
+.finflow-landing .ff-wealth-head span {
+  color: var(--ff-muted);
+}
+.finflow-landing .ff-wealth-head strong {
+  display: block;
+  font-size: 30px;
+  font-weight: 550;
+  letter-spacing: -0.035em;
+  line-height: 1.25;
+}
+.finflow-landing .ff-wealth-chart {
+  display: block;
+  width: 100%;
+  height: 96px;
+  margin-top: 16px;
+}
+.finflow-landing .ff-wealth-chart rect {
+  fill: var(--ff-band-light-green);
+}
+.finflow-landing .ff-wealth-chart rect.is-current {
+  fill: var(--ff-accent);
+}
+.finflow-landing .ff-wealth-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--ff-subtle);
+}
+.finflow-landing .ff-wealth-parts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--ff-border);
+}
+.finflow-landing .ff-wealth-parts dt {
+  font-size: 12px;
+  color: var(--ff-muted);
+}
+.finflow-landing .ff-wealth-parts dd {
+  margin: 2px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.finflow-landing .ff-wealth-debt {
+  margin-top: 18px;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--ff-surface);
+}
+.finflow-landing .ff-wealth-debt-head {
+  display: grid;
+  gap: 10px;
+}
+.finflow-landing .ff-wealth-debt-head strong {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.finflow-landing .ff-wealth-toggle {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border: 0;
+  border-radius: 11px;
+  background: var(--ff-soft);
+  min-width: 0;
+}
+.finflow-landing .ff-wealth-toggle button {
+  flex: 1;
+  min-height: 44px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--ff-muted);
+}
+.finflow-landing .ff-wealth-toggle button[aria-pressed="true"] {
+  background: var(--ff-surface);
+  color: var(--ff-accent);
+  box-shadow: 0 1px 3px #0000001a;
+}
+.finflow-landing .ff-wealth-plan {
+  margin-top: 12px;
+}
+.finflow-landing .ff-wealth-plan p {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ff-text);
+}
+.finflow-landing .ff-wealth-plan p > span {
+  color: var(--ff-muted);
+}
+.finflow-landing .ff-wealth-plan strong {
+  font-weight: 600;
+}
+.finflow-landing .ff-wealth-plan ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  counter-reset: payoff;
+  padding: 0;
+  margin: 10px 0 0;
+}
+.finflow-landing .ff-wealth-plan li {
+  counter-increment: payoff;
+  padding: 3px 9px;
+  border-radius: 7px;
+  background: var(--ff-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.finflow-landing .ff-wealth-plan li::before {
+  content: counter(payoff) ". ";
+  color: var(--ff-accent);
+  font-weight: 600;
+}
+.finflow-landing .ff-wealth-plan small {
+  display: block;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--ff-muted);
+}
+.finflow-landing .ff-calculators {
+  min-width: 0;
+  padding-top: 8px;
+}
+.finflow-landing .ff-calculators h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 17px;
+}
+.finflow-landing .ff-calculators h3 > svg {
+  color: var(--ff-accent);
+}
+.finflow-landing .ff-calculators ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 14px 0 0;
+}
+.finflow-landing .ff-calculators li {
+  padding: 6px 12px;
+  border: 1px solid var(--ff-border);
+  border-radius: 999px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.finflow-landing .ff-calculators .ff-fineprint {
+  margin-top: 12px;
+}
+
+@media (min-width: 640px) {
+  .finflow-landing .ff-assistant-more {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 28px 32px;
+  }
+  .finflow-landing .ff-wealth-card {
+    padding: 26px;
+  }
+  .finflow-landing .ff-wealth-debt-head {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+  .finflow-landing .ff-wealth-toggle button {
+    flex: none;
+  }
+  .finflow-landing .ff-assistant-receipt {
+    width: auto;
+  }
+  .finflow-landing .ff-assistant-proposal {
+    margin-right: 16px;
+  }
+}
+@media (min-width: 900px) {
+  .finflow-landing .ff-wealth {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 40px 56px;
+  }
+  .finflow-landing .ff-calculators {
+    grid-column: 1 / -1;
+  }
+}
+@media (min-width: 1025px) {
+  .finflow-landing .ff-wealth {
+    column-gap: 88px;
+  }
+  .finflow-landing .ff-assistant-more {
+    margin-top: 40px;
+    padding-inline: 50px;
+  }
+}

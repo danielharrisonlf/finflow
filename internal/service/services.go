@@ -19,6 +19,8 @@ type Services struct {
 	TelegramAPI   *TelegramAPIClient
 	Notifications *NotificationsService
 	Telegram      *TelegramService
+	// LinkPreview busca a prévia de links de desejos (SSRF-safe; substituível nos testes).
+	LinkPreview *LinkPreviewer
 }
 
 func New(st *store.Store, httpClient *http.Client) *Services {
@@ -29,6 +31,7 @@ func New(st *store.Store, httpClient *http.Client) *Services {
 		Auth:          NewAuthService(),
 		TelegramAPI:   tgAPI,
 		Notifications: notif,
+		LinkPreview:   NewLinkPreviewer(),
 	}
 	svcs.Telegram = NewTelegramService(svcs)
 	return svcs
@@ -158,15 +161,27 @@ func (s *Services) ListCategories(ctx context.Context, kind *domain.CategoryKind
 		return nil, err
 	}
 	nodes := categoryNodes(all)
+	dre := dreNodes(all)
 	out := make([]domain.Category, 0, len(all))
 	for _, c := range all {
 		if kind != nil && c.Kind != *kind {
 			continue
 		}
 		c.SpendType = domain.EffectiveSpendType(c.ID, nodes)
+		g := domain.EffectiveDREGroup(c.ID, dre)
+		c.DREGroup = &g
 		out = append(out, c)
 	}
 	return out, nil
+}
+
+// dreNodes monta os nós para resolver o grupo do DRE efetivo (com o valor próprio de cada categoria).
+func dreNodes(cats []domain.Category) map[string]domain.DRENode {
+	nodes := make(map[string]domain.DRENode, len(cats))
+	for _, c := range cats {
+		nodes[c.ID] = domain.DRENode{Name: c.Name, Kind: c.Kind, ParentID: c.ParentID, DREGroup: c.DREGroup}
+	}
+	return nodes
 }
 
 func categoryNodes(cats []domain.Category) map[string]domain.CategoryNode {
@@ -184,9 +199,12 @@ func (s *Services) categoryView(ctx context.Context, id string) (domain.Category
 		return domain.Category{}, err
 	}
 	nodes := categoryNodes(all)
+	dre := dreNodes(all)
 	for _, c := range all {
 		if c.ID == id {
 			c.SpendType = domain.EffectiveSpendType(c.ID, nodes)
+			g := domain.EffectiveDREGroup(c.ID, dre)
+			c.DREGroup = &g
 			return c, nil
 		}
 	}
@@ -285,6 +303,14 @@ func (s *Services) UpdateCategory(ctx context.Context, id string, in domain.Upda
 		}
 	}
 	existing.SpendType = normalizeSpendType(existing.Kind, existing.ParentID, existing.SpendType)
+	if in.DREGroup.Set {
+		if in.DREGroup.Valid {
+			v := in.DREGroup.Value
+			existing.DREGroup = &v
+		} else {
+			existing.DREGroup = nil
+		}
+	}
 	if err := s.Store.UpdateCategory(ctx, existing); err != nil {
 		return domain.Category{}, err
 	}
@@ -487,6 +513,17 @@ func (s *Services) AddCardExpense(ctx context.Context, cardID string, in domain.
 			return domain.CardExpenseResult{}, err
 		}
 	}
+	if err := s.requireTags(ctx, in.TagIDs); err != nil {
+		return domain.CardExpenseResult{}, err
+	}
+	if err := s.requireSharing(ctx, in.PaidByMemberID, in.Splits); err != nil {
+		return domain.CardExpenseResult{}, err
+	}
+	splits := domain.SplitsToShares(in.Splits)
+	tagIDs, err := s.withRuleTag(ctx, in.TagIDs, in.Description, domain.CategoryExpense)
+	if err != nil {
+		return domain.CardExpenseResult{}, err
+	}
 	amounts, err := domain.SplitInstallments(in.TotalCents, in.Installments)
 	if err != nil {
 		return domain.CardExpenseResult{}, BadRequest(err.Error())
@@ -514,6 +551,9 @@ func (s *Services) AddCardExpense(ctx context.Context, cardID string, in domain.
 			InstallmentNumber: num,
 			InstallmentTotal:  tot,
 			InvoicePeriod:     domain.AddMonthsToPeriod(basePeriod, i),
+			TagIDs:            tagIDs,
+			PaidByMemberID:    in.PaidByMemberID,
+			Splits:            splits,
 		}
 	}
 
@@ -672,6 +712,17 @@ func (s *Services) CreateTransaction(ctx context.Context, in domain.CreateTransa
 		}
 		in.CategoryID = suggested
 	}
+	if err := s.requireTags(ctx, in.TagIDs); err != nil {
+		return domain.Transaction{}, err
+	}
+	if err := s.requireSharing(ctx, in.PaidByMemberID, in.Splits); err != nil {
+		return domain.Transaction{}, err
+	}
+	ruleKind, _ := domain.CategoryKindForTransaction(in.Type)
+	tagIDs, err := s.withRuleTag(ctx, in.TagIDs, in.Description, ruleKind)
+	if err != nil {
+		return domain.Transaction{}, err
+	}
 	created, err := s.Store.CreateTransaction(
 		ctx,
 		in.Type,
@@ -685,6 +736,22 @@ func (s *Services) CreateTransaction(ctx context.Context, in domain.CreateTransa
 	)
 	if err != nil {
 		return domain.Transaction{}, err
+	}
+	if len(tagIDs) > 0 {
+		if err := s.Store.SetTransactionTags(ctx, created.ID, tagIDs); err != nil {
+			return domain.Transaction{}, err
+		}
+	}
+	shared := in.PaidByMemberID != nil || len(in.Splits) > 0
+	if shared {
+		if err := s.Store.SetTransactionSharing(ctx, created.ID, true, in.PaidByMemberID, true, domain.SplitsToShares(in.Splits)); err != nil {
+			return domain.Transaction{}, err
+		}
+	}
+	if len(tagIDs) > 0 || shared {
+		if created, err = s.reloadTransaction(ctx, created.ID); err != nil {
+			return domain.Transaction{}, err
+		}
 	}
 	if in.Type == domain.TxExpense && in.CategoryID != nil && domain.IsInCurrentMonth(in.Date) {
 		catID := *in.CategoryID
@@ -709,6 +776,22 @@ func (s *Services) UpdateTransaction(ctx context.Context, id string, in domain.U
 	isSimple := tx.Type == domain.TxIncome || tx.Type == domain.TxExpense
 	if !isSimple && (in.AmountCents.Set || in.AccountID.Set) {
 		return domain.Transaction{}, Conflict("valor e conta de transferências, compras no cartão e pagamentos de fatura não podem ser editados — exclua e lance novamente")
+	}
+	sharingSet := in.PaidByMemberID.Set || in.Splits.Set
+	if sharingSet && tx.Type != domain.TxExpense && tx.Type != domain.TxCardExpense {
+		return domain.Transaction{}, ValidationFailed([]domain.ValidationIssue{{Path: "paidByMemberId", Message: "quem pagou e divisão só se aplicam a despesas"}})
+	}
+	var paidBy *string
+	if in.PaidByMemberID.Set && in.PaidByMemberID.Valid {
+		v := in.PaidByMemberID.Value
+		paidBy = &v
+	}
+	var splits []domain.TransactionSplit
+	if in.Splits.Set && in.Splits.Valid {
+		splits = in.Splits.Value
+	}
+	if err := s.requireSharing(ctx, paidBy, splits); err != nil {
+		return domain.Transaction{}, err
 	}
 	if in.AccountID.Set && in.AccountID.Valid {
 		if err := s.requireActiveAccount(ctx, in.AccountID.Value); err != nil {
@@ -745,11 +828,45 @@ func (s *Services) UpdateTransaction(ctx context.Context, id string, in domain.U
 			tx.Notes = nil
 		}
 	}
+	var tagIDs []string
+	if in.TagIDs.Set && in.TagIDs.Valid {
+		tagIDs = domain.UniqueStrings(in.TagIDs.Value)
+	}
+	if err := s.requireTags(ctx, tagIDs); err != nil {
+		return domain.Transaction{}, err
+	}
 	updated, err := s.Store.UpdateTransaction(ctx, &tx)
 	if err != nil {
 		return domain.Transaction{}, err
 	}
+	if in.TagIDs.Set {
+		if err := s.Store.SetTransactionTags(ctx, id, tagIDs); err != nil {
+			return domain.Transaction{}, err
+		}
+	}
+	if sharingSet {
+		if err := s.Store.SetTransactionSharing(ctx, id, in.PaidByMemberID.Set, paidBy, in.Splits.Set, domain.SplitsToShares(splits)); err != nil {
+			return domain.Transaction{}, err
+		}
+	}
+	if in.TagIDs.Set || sharingSet {
+		if updated, err = s.reloadTransaction(ctx, id); err != nil {
+			return domain.Transaction{}, err
+		}
+	}
 	return *updated, nil
+}
+
+// reloadTransaction relê a transação (com as tags) depois de uma alteração.
+func (s *Services) reloadTransaction(ctx context.Context, id string) (*domain.Transaction, error) {
+	detail, err := s.Store.FindTransactionByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if detail == nil {
+		return nil, NotFound("transação não encontrada")
+	}
+	return &detail.Transaction, nil
 }
 
 func (s *Services) ConfirmTransaction(ctx context.Context, id string) (domain.Transaction, error) {

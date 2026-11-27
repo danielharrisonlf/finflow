@@ -6,7 +6,7 @@ import type {
   Invoice,
 } from "@finflow/contracts";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Landmark, Plus, Wallet } from "lucide-react";
+import { ChevronDown, Landmark, Plus, Wallet } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -18,12 +18,13 @@ import { Money } from "../components/ui/money";
 import { Progress } from "../components/ui/progress";
 import { Sheet } from "../components/ui/sheet";
 import { cn } from "../lib/cn";
-import { formatBRL, formatDate, parseBRLInput } from "../lib/format";
+import { formatBRL, formatDate, formatPercent, parseBRLInput } from "../lib/format";
 import {
   useAccounts,
   useCards,
   useCreateAccount,
   useCreateCard,
+  useInvoiceBreakdown,
   useInvoices,
   usePayInvoice,
 } from "../lib/queries";
@@ -221,6 +222,7 @@ function InvoicesSheet({
   const invoices = useInvoices(card?.id ?? null);
   const pay = usePayInvoice();
   const [payingId, setPayingId] = useState<string | null>(null);
+  const [explainId, setExplainId] = useState<string | null>(null);
   const [accountId, setAccountId] = useState("");
 
   const onPay = async (invoice: Invoice): Promise<void> => {
@@ -294,12 +296,140 @@ function InvoicesSheet({
                     </Button>
                   )
                 ) : null}
+                {invoice.totalCents > 0 ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setExplainId((id) => (id === invoice.id ? null : invoice.id))}
+                      aria-expanded={explainId === invoice.id}
+                      className="mt-2 flex min-h-11 cursor-pointer items-center gap-1.5 text-sm font-medium text-income underline-offset-4 hover:underline"
+                    >
+                      Entender minha fatura
+                      <ChevronDown
+                        size={15}
+                        aria-hidden
+                        className={cn(
+                          "transition-transform",
+                          explainId === invoice.id && "rotate-180",
+                        )}
+                      />
+                    </button>
+                    {explainId === invoice.id && card ? (
+                      <InvoiceBreakdownPanel cardId={card.id} invoiceId={invoice.id} />
+                    ) : null}
+                  </>
+                ) : null}
               </li>
             );
           })}
         </ul>
       )}
     </Sheet>
+  );
+}
+
+const COMPOSITION = [
+  {
+    key: "installmentsCents",
+    label: "Parcelas",
+    hint: "compras parceladas",
+    color: "var(--spend-cuttable)",
+  },
+  {
+    key: "subscriptionsCents",
+    label: "Assinaturas",
+    hint: "cobranças que se repetem",
+    color: "var(--spend-fixed)",
+  },
+  {
+    key: "oneOffCents",
+    label: "Compras avulsas",
+    hint: "à vista, só neste mês",
+    color: "var(--spend-variable)",
+  },
+] as const;
+
+/** Composição da fatura (v3 §6): de onde vem o total e o quanto já se repete todo mês. */
+function InvoiceBreakdownPanel({ cardId, invoiceId }: { cardId: string; invoiceId: string }) {
+  const breakdown = useInvoiceBreakdown(cardId, invoiceId);
+  const b = breakdown.data;
+  const composition = b?.composition;
+
+  if (breakdown.isLoading) return <LoadingRows rows={2} />;
+  if (!b || typeof b.totalCents !== "number" || !composition) {
+    return (
+      <p className="mt-2 text-sm text-app-muted" data-testid="invoice-breakdown">
+        {breakdown.error?.message ?? "Composição indisponível para esta fatura."}
+      </p>
+    );
+  }
+
+  const parts = COMPOSITION.map((c) => ({ ...c, cents: Math.max(0, composition[c.key] ?? 0) }));
+  const partsTotal = parts.reduce((acc, p) => acc + p.cents, 0);
+
+  return (
+    <div
+      className="mt-2 space-y-3 rounded-(--radius-control) bg-app-background/60 p-3"
+      data-testid="invoice-breakdown"
+    >
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
+        <dt className="text-app-muted">Compras</dt>
+        <dd className="tnum text-right text-app-text">{formatBRL(b.purchasesCents ?? 0)}</dd>
+        <dt className="text-app-muted">Estornos e créditos</dt>
+        <dd className="tnum text-right text-income">− {formatBRL(b.creditsCents ?? 0)}</dd>
+        <dt className="text-app-muted">Pagamentos</dt>
+        <dd className="tnum text-right text-app-text">{formatBRL(b.paymentsCents ?? 0)}</dd>
+        <dt className="font-medium text-app-text">Total da fatura</dt>
+        <dd className="tnum text-right font-semibold text-app-text">{formatBRL(b.totalCents)}</dd>
+      </dl>
+
+      {partsTotal > 0 ? (
+        <>
+          <div
+            className="flex h-2.5 w-full overflow-hidden rounded-full bg-app-soft"
+            role="img"
+            aria-label={parts
+              .map((p) => `${p.label}: ${formatPercent((p.cents / partsTotal) * 100)}`)
+              .join("; ")}
+          >
+            {parts.map((p) =>
+              p.cents > 0 ? (
+                <span
+                  key={p.key}
+                  className="h-full"
+                  style={{ width: `${(p.cents / partsTotal) * 100}%`, backgroundColor: p.color }}
+                />
+              ) : null,
+            )}
+          </div>
+          <ul className="space-y-1.5">
+            {parts.map((p) => (
+              <li key={p.key} className="flex items-center gap-2 text-sm">
+                <span
+                  className="h-2.5 w-2.5 shrink-0 rounded-sm"
+                  style={{ backgroundColor: p.color }}
+                  aria-hidden
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="text-app-text">{p.label}</span>{" "}
+                  <span className="text-xs text-app-muted">{p.hint}</span>
+                </span>
+                <span className="tnum text-xs text-app-muted">
+                  {formatPercent((p.cents / partsTotal) * 100)}
+                </span>
+                <span className="tnum w-20 shrink-0 text-right text-app-text">
+                  {formatBRL(p.cents)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+      <p className="text-xs text-app-muted">
+        Parcelas e assinaturas voltam nas próximas faturas; o que dá para controlar já neste mês são
+        as compras avulsas.
+      </p>
+    </div>
   );
 }
 

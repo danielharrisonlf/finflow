@@ -1,5 +1,6 @@
 import type { CashflowPoint, CategorySlice } from "@finflow/contracts";
 import { ArrowDownRight, ArrowUpRight, CalendarClock, CreditCard, Lightbulb } from "lucide-react";
+import { NetWorthChart, PaceChart, SpendTodayTile } from "../components/dashboard-charts";
 import {
   CutSuggestionsCard,
   LimitCard,
@@ -19,6 +20,7 @@ import {
   useCashflow,
   useCategorySlices,
   useInsightsOverview,
+  useNetWorthHistory,
   useSummary,
   useUpcoming,
 } from "../lib/queries";
@@ -30,6 +32,7 @@ export function DashboardPage() {
   const slices = useCategorySlices(period);
   const upcoming = useUpcoming();
   const overview = useInsightsOverview(period);
+  const netWorth = useNetWorthHistory(12);
 
   const s = summary.data;
   const o = overview.data;
@@ -74,6 +77,7 @@ export function DashboardPage() {
             </div>
             <NetWorth overview={o} />
           </div>
+          <SpendTodayTile spendToday={o?.spendToday} />
         </section>
 
         {/* trio de métricas do mês */}
@@ -104,7 +108,10 @@ export function DashboardPage() {
         >
           {o ? (
             <>
-              <PaceCard pace={o.pace} />
+              <div>
+                <PaceCard pace={o.pace} />
+                <PaceChart pace={o.pace} />
+              </div>
               <div className="border-t border-app-border/60 pt-4">
                 <LimitCard limit={o.monthlyLimit} />
               </div>
@@ -197,6 +204,14 @@ export function DashboardPage() {
             <CutSuggestionsCard items={o.cutSuggestions} />
           </div>
         ) : null}
+
+        {/* patrimônio mês a mês (v3 §12) */}
+        <NetWorthChart
+          points={netWorth.data}
+          loading={netWorth.isLoading}
+          className="rise col-span-12 lg:col-span-8"
+          style={{ animationDelay: "350ms" }}
+        />
 
         {/* distribuição por categoria */}
         <Card className="rise col-span-12 lg:col-span-4" style={{ animationDelay: "360ms" }}>

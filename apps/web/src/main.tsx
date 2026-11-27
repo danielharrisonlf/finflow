@@ -3,6 +3,8 @@ import { lazy, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { AppShell } from "./components/layout/app-shell";
+import { PrivacyRerender } from "./lib/privacy";
+import { subscribeSpace } from "./lib/space";
 import "./styles.css";
 
 const DashboardPage = lazy(() =>
@@ -32,16 +34,46 @@ const SpreadsheetsPage = lazy(() =>
 const SettingsPage = lazy(() =>
   import("./pages/settings").then((m) => ({ default: m.SettingsPage })),
 );
+const CashflowPage = lazy(() =>
+  import("./pages/cashflow").then((m) => ({ default: m.CashflowPage })),
+);
+const InvestmentsPage = lazy(() =>
+  import("./pages/investments").then((m) => ({ default: m.InvestmentsPage })),
+);
+const LoansPage = lazy(() => import("./pages/loans").then((m) => ({ default: m.LoansPage })));
+const AssistantPage = lazy(() =>
+  import("./pages/assistant").then((m) => ({ default: m.AssistantPage })),
+);
+const CalculatorsPage = lazy(() =>
+  import("./pages/calculators").then((m) => ({ default: m.CalculatorsPage })),
+);
+const SpacesPage = lazy(() => import("./pages/spaces").then((m) => ({ default: m.SpacesPage })));
+const SplitPage = lazy(() => import("./pages/split").then((m) => ({ default: m.SplitPage })));
+const BusinessPage = lazy(() =>
+  import("./pages/business").then((m) => ({ default: m.BusinessPage })),
+);
 const LandingPage = lazy(() => import("./pages/landing").then((m) => ({ default: m.LandingPage })));
 
+/** Página lazy que re-renderiza ao alternar o modo privacidade (valores mascarados). */
 function page(element: React.ReactNode): React.ReactNode {
-  return <Suspense fallback={null}>{element}</Suspense>;
+  return (
+    <Suspense fallback={null}>
+      <PrivacyRerender>{element}</PrivacyRerender>
+    </Suspense>
+  );
 }
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: { staleTime: 15_000, retry: 1, refetchOnWindowFocus: false },
   },
+});
+
+// Trocar de espaço (inclusive a volta automática para o pessoal) descarta tudo o que veio do
+// espaço anterior; o AppShell remonta com a nova chave e refaz as consultas com o novo cabeçalho.
+subscribeSpace(() => {
+  void queryClient.cancelQueries();
+  queryClient.clear();
 });
 
 const router = createBrowserRouter([
@@ -57,8 +89,16 @@ const router = createBrowserRouter([
       { path: "/categorias", element: page(<CategoriesPage />) },
       { path: "/compromissos", element: page(<CommitmentsPage />) },
       { path: "/ano", element: page(<YearPage />) },
+      { path: "/fluxo", element: page(<CashflowPage />) },
       { path: "/projecao", element: page(<ProjectionPage />) },
+      { path: "/investimentos", element: page(<InvestmentsPage />) },
+      { path: "/dividas", element: page(<LoansPage />) },
       { path: "/planilhas", element: page(<SpreadsheetsPage />) },
+      { path: "/assistente", element: page(<AssistantPage />) },
+      { path: "/calculadoras", element: page(<CalculatorsPage />) },
+      { path: "/espacos", element: page(<SpacesPage />) },
+      { path: "/divisao", element: page(<SplitPage />) },
+      { path: "/empresa", element: page(<BusinessPage />) },
       { path: "/configuracoes", element: page(<SettingsPage />) },
     ],
   },
@@ -74,3 +114,12 @@ createRoot(root).render(
     </QueryClientProvider>
   </StrictMode>,
 );
+
+// PWA (v3 §14): service worker só no build de produção, guardando apenas o shell estático.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      // sem service worker o app segue funcionando normalmente
+    });
+  });
+}

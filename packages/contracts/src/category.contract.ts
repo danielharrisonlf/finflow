@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { dreGroupSchema } from "./business.contract";
 import { hexColorSchema, idSchema } from "./common";
 
 export const categoryKindSchema = z.enum(["INCOME", "EXPENSE"]);
@@ -20,6 +21,8 @@ export const createCategorySchema = z.object({
   parentId: idSchema.nullish(),
   /** Só em EXPENSE (default VARIABLE); null em subcategoria = herda do pai. */
   spendType: spendTypeSchema.nullish(),
+  /** Espaço Empresa: linha do DRE (default por heurística de nome no servidor). */
+  dreGroup: dreGroupSchema.nullish(),
 });
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
 
@@ -34,5 +37,7 @@ export const categorySchema = z.object({
   color: z.string(),
   parentId: idSchema.nullable(),
   spendType: spendTypeSchema.nullable(),
+  /** Só presente em espaços Empresa. */
+  dreGroup: dreGroupSchema.nullish(),
 });
 export type Category = z.infer<typeof categorySchema>;

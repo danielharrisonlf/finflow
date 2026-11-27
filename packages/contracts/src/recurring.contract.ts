@@ -15,6 +15,8 @@ export const createRecurringSchema = z.object({
   categoryId: idSchema.nullish(),
   startDate: dateStringSchema.optional(),
   endDate: dateStringSchema.nullish(),
+  /** Assinatura (v3 §2): conta fixa cortável vinda da detecção. */
+  isSubscription: z.boolean().optional(),
 });
 export type CreateRecurringInput = z.infer<typeof createRecurringSchema>;
 
@@ -48,5 +50,7 @@ export const recurringSchema = z.object({
   active: z.boolean(),
   /** Próxima ocorrência ainda não lançada (>= hoje ou atrasada do mês corrente). */
   nextDate: dateStringSchema.nullable(),
+  /** Opcional para tolerar backend sem a coluna nova (default false). */
+  isSubscription: z.boolean().optional(),
 });
 export type Recurring = z.infer<typeof recurringSchema>;

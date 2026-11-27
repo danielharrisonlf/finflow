@@ -1,11 +1,18 @@
 import type {
   Account,
+  Alert,
   ApplyRulesInput,
   ApplyRulesResult,
   AuthStatus,
   Budget,
+  BusinessDre,
+  BusinessMetrics,
+  CanAffordInput,
+  CanAffordResult,
   Card,
+  CashflowBasis,
   CashflowPoint,
+  CashflowReport,
   Category,
   CategoryRule,
   CategorySlice,
@@ -17,33 +24,65 @@ import type {
   CreateCategoryInput,
   CreateCategoryRuleInput,
   CreateGoalInput,
+  CreateInvestmentInput,
+  CreateLoanInput,
+  CreateMemberInput,
   CreateRecurringInput,
+  CreateSpaceInput,
+  CreateTagInput,
   CreateTransactionInput,
   CreateWishItemInput,
   DashboardSummary,
+  DebtStrategy,
   Goal,
   ImportCommitInput,
   ImportCommitResult,
   ImportMapping,
   ImportPreview,
   InsightsOverview,
+  Investment,
+  InvestmentContributionInput,
+  InvestmentRedeemInput,
+  InvestmentSummary,
   Invoice,
+  InvoiceBreakdown,
+  LinkPreview,
+  Loan,
   LoginInput,
   LoginResponse,
+  Member,
+  MemberBalances,
+  MergeTransferInput,
+  NetWorthPoint,
   Paginated,
   PayInvoiceInput,
+  PayLoanInput,
   PostRecurringInput,
   Projection,
   Recurring,
   Settings,
+  SettleMembersInput,
+  Space,
+  SpacesOverview,
+  SpaceTotals,
+  Subscriptions,
+  SystemInfo,
+  Tag,
+  TagSpending,
   Transaction,
+  TransferCandidate,
   TransferInput,
   UpcomingItem,
   UpdateCategoryInput,
   UpdateCategoryRuleInput,
   UpdateGoalInput,
+  UpdateInvestmentInput,
+  UpdateInvestmentValueInput,
+  UpdateLoanInput,
+  UpdateMemberInput,
   UpdateRecurringInput,
   UpdateSettingsInput,
+  UpdateTagInput,
   UpdateTransactionInput,
   UpdateWishItemInput,
   UpsertBudgetInput,
@@ -127,6 +166,7 @@ export interface TransactionFilters {
   type?: Transaction["type"];
   status?: Transaction["status"];
   search?: string;
+  tagId?: string;
   page?: number;
 }
 
@@ -373,3 +413,367 @@ export const useCommitImport = () =>
   useInvalidatingMutation((input: ImportCommitInput) =>
     api.post<ImportCommitResult>("/import/commit", input),
   );
+
+// ───────────────────────── v3: consultas ─────────────────────────
+// Respostas novas podem chegar incompletas enquanto o backend não acompanha: os hooks
+// normalizam listas e objetos para a tela nunca quebrar.
+
+const asArray = <T>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : []);
+
+export const useTags = () =>
+  useQuery({
+    queryKey: ["tags"],
+    queryFn: async () => asArray<Tag>(await api.get<unknown>("/tags")),
+  });
+
+export const useTagSpending = (p?: Period) =>
+  useQuery({
+    queryKey: ["insights", "tags", p],
+    queryFn: async () =>
+      asArray<TagSpending>(await api.get<unknown>(`/insights/tags${periodQS(p)}`)),
+  });
+
+export const useAlerts = () =>
+  useQuery({
+    queryKey: ["alerts"],
+    queryFn: async () => asArray<Alert>(await api.get<unknown>("/alerts")),
+  });
+
+export const useSubscriptions = () =>
+  useQuery({
+    queryKey: ["insights", "subscriptions"],
+    queryFn: async (): Promise<Subscriptions> => {
+      const res = await api.get<Partial<Subscriptions> | null>("/insights/subscriptions");
+      return { items: asArray(res?.items), monthlyTotalCents: res?.monthlyTotalCents ?? 0 };
+    },
+  });
+
+export const useCashflowReport = (months: number, basis: CashflowBasis) =>
+  useQuery({
+    queryKey: ["insights", "cashflow", months, basis],
+    queryFn: async (): Promise<CashflowReport> => {
+      const res = await api.get<Partial<CashflowReport> | null>(
+        `/insights/cashflow?months=${months}&basis=${basis}`,
+      );
+      return {
+        basis: res?.basis ?? basis,
+        months: asArray(res?.months),
+        whereItWent: asArray(res?.whereItWent),
+      };
+    },
+  });
+
+export const useNetWorthHistory = (months = 12) =>
+  useQuery({
+    queryKey: ["insights", "net-worth", months],
+    queryFn: async () =>
+      asArray<NetWorthPoint>(await api.get<unknown>(`/insights/net-worth?months=${months}`)),
+  });
+
+export const useInvoiceBreakdown = (cardId: string | null, invoiceId: string | null) =>
+  useQuery({
+    queryKey: ["cards", cardId, "invoices", invoiceId, "breakdown"],
+    queryFn: () => api.get<InvoiceBreakdown>(`/cards/${cardId}/invoices/${invoiceId}/breakdown`),
+    enabled: Boolean(cardId && invoiceId),
+  });
+
+export const useTransferCandidates = () =>
+  useQuery({
+    queryKey: ["transactions", "transfer-candidates"],
+    queryFn: async () =>
+      asArray<TransferCandidate>(await api.get<unknown>("/transactions/transfer-candidates")),
+  });
+
+/** Busca livre em todo o histórico (paleta de comandos); só dispara com 2+ caracteres. */
+export const useTransactionSearch = (term: string) =>
+  useQuery({
+    queryKey: ["transactions", "search", term],
+    queryFn: async () => {
+      const res = await api.get<Partial<Paginated<Transaction>> | null>(
+        `/transactions?search=${encodeURIComponent(term)}&pageSize=8`,
+      );
+      return asArray<Transaction>(res?.items).slice(0, 8);
+    },
+    enabled: term.trim().length >= 2,
+    staleTime: 30_000,
+  });
+
+export const useInvestments = () =>
+  useQuery({
+    queryKey: ["investments"],
+    queryFn: async () => asArray<Investment>(await api.get<unknown>("/investments")),
+  });
+
+export const useInvestmentSummary = () =>
+  useQuery({
+    queryKey: ["investments", "summary"],
+    queryFn: async (): Promise<InvestmentSummary> => {
+      const res = await api.get<Partial<InvestmentSummary> | null>("/investments/summary");
+      return {
+        totalInvestedCents: res?.totalInvestedCents ?? 0,
+        totalCurrentCents: res?.totalCurrentCents ?? 0,
+        returnCents: res?.returnCents ?? 0,
+        returnPct: res?.returnPct ?? null,
+        byKind: asArray(res?.byKind),
+        byInstitution: asArray(res?.byInstitution),
+        history: asArray(res?.history),
+      };
+    },
+  });
+
+export const useLoans = () =>
+  useQuery({
+    queryKey: ["loans"],
+    queryFn: async () => asArray<Loan>(await api.get<unknown>("/loans")),
+  });
+
+export const useDebtStrategy = (extraCents: number, enabled = true) =>
+  useQuery({
+    queryKey: ["loans", "strategy", extraCents],
+    queryFn: () => api.get<DebtStrategy>(`/loans/strategy?extraCents=${extraCents}`),
+    enabled,
+  });
+
+export const useSystemInfo = () =>
+  useQuery({
+    queryKey: ["system", "info"],
+    queryFn: () => api.get<SystemInfo>("/system/info"),
+    staleTime: 60_000,
+  });
+
+/** GET /api/ai/status (v3 §15); a chave em si nunca volta para o frontend. */
+export interface AiStatusInfo {
+  configured: boolean;
+  source: "ENV" | "SETTINGS" | null;
+  model: string;
+}
+
+export const useAiStatus = () =>
+  useQuery({
+    queryKey: ["ai", "status"],
+    queryFn: () => api.get<AiStatusInfo>("/ai/status"),
+    retry: false,
+  });
+
+// ───────────────────────── v3: escritas ─────────────────────────
+
+export const useCreateTag = () =>
+  useInvalidatingMutation((input: CreateTagInput) => api.post<Tag>("/tags", input));
+
+export const useUpdateTag = () =>
+  useInvalidatingMutation(({ id, ...input }: UpdateTagInput & { id: string }) =>
+    api.patch<Tag>(`/tags/${id}`, input),
+  );
+
+export const useDeleteTag = () =>
+  useInvalidatingMutation((id: string) => api.delete<void>(`/tags/${id}`));
+
+/** Dispensar some da lista na hora (otimista) e só recarrega o feed de alertas. */
+export const useDismissAlert = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.post<void>(`/alerts/${encodeURIComponent(id)}/dismiss`),
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey: ["alerts"] });
+      const previous = queryClient.getQueryData<Alert[]>(["alerts"]);
+      queryClient.setQueryData<Alert[]>(["alerts"], (list) => list?.filter((a) => a.id !== id));
+      return { previous };
+    },
+    onError: (_error, _id, context) => {
+      if (context?.previous) queryClient.setQueryData(["alerts"], context.previous);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["alerts"] }),
+  });
+};
+
+export const useTrackSubscription = () =>
+  useInvalidatingMutation((key: string) =>
+    api.post<Recurring>(`/insights/subscriptions/${encodeURIComponent(key)}/track`),
+  );
+
+export const useDismissSubscription = () =>
+  useInvalidatingMutation((key: string) =>
+    api.post<void>(`/insights/subscriptions/${encodeURIComponent(key)}/dismiss`),
+  );
+
+export const useMergeTransfer = () =>
+  useInvalidatingMutation((input: MergeTransferInput) =>
+    api.post<{ transferGroupId: string }>("/transactions/merge-transfer", input),
+  );
+
+/** Simulação: não grava nada, então não invalida cache. */
+export const useCanAfford = () =>
+  useMutation({
+    mutationFn: (input: CanAffordInput) => api.post<CanAffordResult>("/insights/can-afford", input),
+  });
+
+/** Só lê a página do produto: não invalida cache. */
+export const usePreviewLink = () =>
+  useMutation({
+    mutationFn: (url: string) => api.post<LinkPreview>("/wishlist/preview-link", { url }),
+  });
+
+export const useCreateInvestment = () =>
+  useInvalidatingMutation((input: CreateInvestmentInput) =>
+    api.post<Investment>("/investments", input),
+  );
+
+export const useUpdateInvestment = () =>
+  useInvalidatingMutation(({ id, ...input }: UpdateInvestmentInput & { id: string }) =>
+    api.patch<Investment>(`/investments/${id}`, input),
+  );
+
+export const useDeleteInvestment = () =>
+  useInvalidatingMutation((id: string) => api.delete<void>(`/investments/${id}`));
+
+export const useUpdateInvestmentValue = () =>
+  useInvalidatingMutation(({ id, ...input }: UpdateInvestmentValueInput & { id: string }) =>
+    api.post<Investment>(`/investments/${id}/value`, input),
+  );
+
+export const useContributeInvestment = () =>
+  useInvalidatingMutation(({ id, ...input }: InvestmentContributionInput & { id: string }) =>
+    api.post<Investment>(`/investments/${id}/contribution`, input),
+  );
+
+export const useRedeemInvestment = () =>
+  useInvalidatingMutation(({ id, ...input }: InvestmentRedeemInput & { id: string }) =>
+    api.post<Investment>(`/investments/${id}/redeem`, input),
+  );
+
+export const useCreateLoan = () =>
+  useInvalidatingMutation((input: CreateLoanInput) => api.post<Loan>("/loans", input));
+
+export const useUpdateLoan = () =>
+  useInvalidatingMutation(({ id, ...input }: UpdateLoanInput & { id: string }) =>
+    api.patch<Loan>(`/loans/${id}`, input),
+  );
+
+export const useDeleteLoan = () =>
+  useInvalidatingMutation((id: string) => api.delete<void>(`/loans/${id}`));
+
+export const usePayLoan = () =>
+  useInvalidatingMutation(({ id, ...input }: PayLoanInput & { id: string }) =>
+    api.post<Transaction>(`/loans/${id}/pay`, input),
+  );
+
+// ───────────────────────── v3 fase 2: espaços ─────────────────────────
+// A lista de espaços e a visão unificada não dependem do espaço ativo, mas vão com o cabeçalho
+// como qualquer chamada; trocar de espaço limpa o cache inteiro (main.tsx).
+
+const PERSONAL_SPACE: Space = {
+  slug: "pessoal",
+  name: "Pessoal",
+  kind: "PERSONAL",
+  color: "#34d399",
+  isDefault: true,
+};
+
+/** Lista de espaços; sem catálogo (ou backend antigo) = só o pessoal. */
+export const useSpaces = () =>
+  useQuery({
+    queryKey: ["spaces"],
+    queryFn: async () => {
+      const list = asArray<Space>(await api.get<unknown>("/spaces")).filter(
+        (s) => typeof s?.slug === "string",
+      );
+      return list.some((s) => s.slug === PERSONAL_SPACE.slug) ? list : [PERSONAL_SPACE, ...list];
+    },
+    staleTime: 60_000,
+  });
+
+const emptyTotals = (t?: Partial<SpaceTotals> | null): SpaceTotals => ({
+  balanceCents: t?.balanceCents ?? 0,
+  netWorthCents: t?.netWorthCents ?? 0,
+  monthIncomeCents: t?.monthIncomeCents ?? 0,
+  monthOutCents: t?.monthOutCents ?? 0,
+  monthResultCents: t?.monthResultCents ?? 0,
+});
+
+export const useSpacesOverview = () =>
+  useQuery({
+    queryKey: ["spaces", "overview"],
+    queryFn: async (): Promise<SpacesOverview> => {
+      const res = await api.get<Partial<SpacesOverview> | null>("/spaces/overview");
+      return {
+        spaces: asArray<SpacesOverview["spaces"][number]>(res?.spaces).map((s) => ({
+          ...s,
+          ...emptyTotals(s),
+        })),
+        totals: emptyTotals(res?.totals),
+      };
+    },
+  });
+
+/** Criar espaço não mexe nos dados do espaço atual: só recarrega a lista. */
+export const useCreateSpace = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateSpaceInput) => api.post<Space>("/spaces", input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["spaces"] }),
+  });
+};
+
+// casa: membros e divisão
+
+export const useMembers = (enabled = true) =>
+  useQuery({
+    queryKey: ["members"],
+    queryFn: async () => asArray<Member>(await api.get<unknown>("/members")),
+    enabled,
+  });
+
+export const useMemberBalances = (p: Period) =>
+  useQuery({
+    queryKey: ["members", "balances", p],
+    queryFn: async (): Promise<MemberBalances> => {
+      const res = await api.get<Partial<MemberBalances> | null>(`/members/balances${periodQS(p)}`);
+      return { members: asArray(res?.members), settlements: asArray(res?.settlements) };
+    },
+  });
+
+export const useCreateMember = () =>
+  useInvalidatingMutation((input: CreateMemberInput) => api.post<Member>("/members", input));
+
+export const useUpdateMember = () =>
+  useInvalidatingMutation(({ id, ...input }: UpdateMemberInput & { id: string }) =>
+    api.patch<Member>(`/members/${id}`, input),
+  );
+
+export const useDeleteMember = () =>
+  useInvalidatingMutation((id: string) => api.delete<void>(`/members/${id}`));
+
+export const useSettleMembers = () =>
+  useInvalidatingMutation((input: SettleMembersInput) =>
+    api.post<unknown>("/members/settle", input),
+  );
+
+// empresa: métricas e DRE
+
+export const useBusinessMetrics = (p: Period) =>
+  useQuery({
+    queryKey: ["business", "metrics", p],
+    queryFn: async (): Promise<BusinessMetrics> => {
+      const res = await api.get<Partial<BusinessMetrics> | null>(`/business/metrics${periodQS(p)}`);
+      return {
+        mrrCents: res?.mrrCents ?? 0,
+        arrCents: res?.arrCents ?? 0,
+        newMrrCents: res?.newMrrCents ?? 0,
+        churnedMrrCents: res?.churnedMrrCents ?? 0,
+        churnPct: res?.churnPct ?? null,
+        burnCents: res?.burnCents ?? 0,
+        runwayMonths: res?.runwayMonths ?? null,
+        cashCents: res?.cashCents ?? 0,
+      };
+    },
+  });
+
+export const useBusinessDre = (year: number) =>
+  useQuery({
+    queryKey: ["business", "dre", year],
+    queryFn: async (): Promise<BusinessDre | null> => {
+      const res = await api.get<Partial<BusinessDre> | null>(`/business/dre?year=${year}`);
+      if (!res?.totals) return null;
+      return { months: asArray(res.months), totals: res.totals };
+    },
+  });
