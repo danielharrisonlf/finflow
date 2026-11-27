@@ -1,11 +1,21 @@
+import { isPrivacyOn, MASKED_BRL } from "./privacy";
+
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
+/** Valor em reais; no modo privacidade devolve a máscara (ver lib/privacy). */
 export function formatBRL(cents: number): string {
+  if (isPrivacyOn()) return MASKED_BRL;
+  return brl.format(cents / 100);
+}
+
+/** Igual a `formatBRL`, mas ignora o modo privacidade (valores digitados pelo usuário). */
+export function formatBRLPlain(cents: number): string {
   return brl.format(cents / 100);
 }
 
 /** Formata com sinal explícito para linhas de extrato: +R$ 12,00 / −R$ 8,50. */
 export function formatSignedBRL(cents: number): string {
+  if (isPrivacyOn()) return MASKED_BRL;
   const value = brl.format(Math.abs(cents) / 100);
   return cents >= 0 ? `+${value}` : `−${value}`;
 }
@@ -104,6 +114,7 @@ export function formatMonthShort(month: number): string {
 
 /** Valor compacto para eixos: 125000 → "1,3k", -50000 → "-500". */
 export function formatAxisBRL(cents: number): string {
+  if (isPrivacyOn()) return "•••";
   const reais = cents / 100;
   const abs = Math.abs(reais);
   if (abs >= 1000) return `${pct.format(reais / 1000)}k`;

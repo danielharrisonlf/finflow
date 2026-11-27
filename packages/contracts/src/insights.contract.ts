@@ -1,6 +1,13 @@
 import { z } from "zod";
 import { spendTypeSchema } from "./category.contract";
-import { centsSchema, dateStringSchema, idSchema, monthSchema, yearSchema } from "./common";
+import {
+  centsSchema,
+  dateStringSchema,
+  idSchema,
+  monthSchema,
+  positiveCentsSchema,
+  yearSchema,
+} from "./common";
 import { spendPlanSchema } from "./settings.contract";
 
 export const insightsQuerySchema = z.object({
@@ -14,6 +21,14 @@ export type InsightsQuery = z.infer<typeof insightsQuerySchema>;
 export const paceStatusSchema = z.enum(["BELOW", "SAME", "ABOVE"]);
 export type PaceStatus = z.infer<typeof paceStatusSchema>;
 
+/** Ponto do gasto acumulado do mês (v3 §4); `currentCents` null depois de hoje. */
+export const pacePointSchema = z.object({
+  day: z.number().int(),
+  currentCents: centsSchema.nullable(),
+  previousCents: centsSchema,
+});
+export type PacePoint = z.infer<typeof pacePointSchema>;
+
 /** Gasto do dia 1 até hoje vs. o mesmo intervalo do mês anterior. */
 export const paceSchema = z.object({
   currentCents: centsSchema,
@@ -21,6 +36,10 @@ export const paceSchema = z.object({
   diffCents: centsSchema,
   dayOfMonth: z.number().int(),
   status: paceStatusSchema,
+  /** v3: opcional para tolerar backend antigo. */
+  series: z.array(pacePointSchema).optional(),
+  /** Gasto até hoje ÷ dia × dias do mês (mês corrente; senão o total). */
+  projectedMonthCents: centsSchema.optional(),
 });
 export type Pace = z.infer<typeof paceSchema>;
 
@@ -101,6 +120,13 @@ export const cutSuggestionSchema = z.object({
 });
 export type CutSuggestion = z.infer<typeof cutSuggestionSchema>;
 
+/** "Você pode gastar R$ X hoje" (v3 §4). */
+export const spendTodaySchema = z.object({
+  cents: centsSchema,
+  basis: z.enum(["LIMIT", "BALANCE"]),
+});
+export type SpendToday = z.infer<typeof spendTodaySchema>;
+
 export const insightsOverviewSchema = z.object({
   month: z.number().int(),
   year: z.number().int(),
@@ -113,6 +139,7 @@ export const insightsOverviewSchema = z.object({
   netWorthCents: centsSchema,
   reserve: reserveInsightSchema,
   cutSuggestions: z.array(cutSuggestionSchema),
+  spendToday: spendTodaySchema.optional(),
 });
 export type InsightsOverview = z.infer<typeof insightsOverviewSchema>;
 
@@ -128,7 +155,7 @@ export const balanceBandSchema = z.enum([
 export type BalanceBand = z.infer<typeof balanceBandSchema>;
 
 export const projectionEventSchema = z.object({
-  kind: z.enum(["RECURRING", "INVOICE", "PENDING", "DAILY_SPEND"]),
+  kind: z.enum(["RECURRING", "INVOICE", "PENDING", "DAILY_SPEND", "LOAN"]),
   description: z.string(),
   /** Com sinal: + entra, − sai. */
   amountCents: centsSchema,
@@ -213,11 +240,13 @@ export const commitmentMonthSchema = z.object({
   recurringExpenseCents: centsSchema,
   recurringIncomeCents: centsSchema,
   installmentsCents: centsSchema,
+  /** Parcelas de empréstimos (v3 §11); opcional para tolerar backend antigo. */
+  loansCents: centsSchema.optional(),
 });
 export type CommitmentMonth = z.infer<typeof commitmentMonthSchema>;
 
 export const commitmentItemSchema = z.object({
-  kind: z.enum(["RECURRING", "INSTALLMENT"]),
+  kind: z.enum(["RECURRING", "INSTALLMENT", "LOAN"]),
   direction: z.enum(["PAY", "RECEIVE"]),
   description: z.string(),
   dueDate: dateStringSchema,
@@ -242,3 +271,126 @@ export const commitmentsSchema = z.object({
   }),
 });
 export type Commitments = z.infer<typeof commitmentsSchema>;
+
+// ───────────────────────── assinaturas detectadas (v3 §2) ─────────────────────────
+
+export const subscriptionCadenceSchema = z.enum(["WEEKLY", "MONTHLY", "YEARLY"]);
+export type SubscriptionCadence = z.infer<typeof subscriptionCadenceSchema>;
+
+export const detectedSubscriptionSchema = z.object({
+  key: z.string(),
+  description: z.string(),
+  averageCents: centsSchema,
+  lastCents: centsSchema,
+  lastDate: dateStringSchema,
+  occurrences: z.number().int(),
+  cadence: subscriptionCadenceSchema,
+  nextExpectedDate: dateStringSchema,
+  /** Último vs. média anterior, quando |Δ| >= 5%. */
+  priceChangePct: z.number().nullable(),
+  categoryId: idSchema.nullable(),
+  accountId: idSchema.nullable(),
+  cardId: idSchema.nullable(),
+  /** Já acompanhada como recorrência. */
+  recurringId: idSchema.nullable(),
+});
+export type DetectedSubscription = z.infer<typeof detectedSubscriptionSchema>;
+
+export const subscriptionsSchema = z.object({
+  items: z.array(detectedSubscriptionSchema),
+  /** Soma normalizada para mês (semanal × 52/12, anual ÷ 12). */
+  monthlyTotalCents: centsSchema,
+});
+export type Subscriptions = z.infer<typeof subscriptionsSchema>;
+
+// ───────────────────────── fluxo de caixa (v3 §5) ─────────────────────────
+
+/** CASH: cartão conta no vencimento da fatura; ACCRUAL: na data da compra. */
+export const cashflowBasisSchema = z.enum(["CASH", "ACCRUAL"]);
+export type CashflowBasis = z.infer<typeof cashflowBasisSchema>;
+
+export const cashflowReportQuerySchema = z.object({
+  months: z.coerce.number().int().min(1).max(12).default(3),
+  basis: cashflowBasisSchema.default("CASH"),
+  month: monthSchema.optional(),
+  year: yearSchema.optional(),
+});
+export type CashflowReportQuery = z.infer<typeof cashflowReportQuerySchema>;
+
+export const cashflowMonthSchema = z.object({
+  month: z.number().int(),
+  year: z.number().int(),
+  incomeCents: centsSchema,
+  /** Despesas com recorrência ou empréstimo. */
+  fixedBillsCents: centsSchema,
+  /** Lançamentos parcelados (installment_total > 1). */
+  installmentsCents: centsSchema,
+  /** O resto: gastos do dia a dia. */
+  dailyCents: centsSchema,
+  totalOutCents: centsSchema,
+  resultCents: centsSchema,
+  /** Variação do resultado vs. mês anterior. */
+  resultChangePct: z.number().nullable(),
+});
+export type CashflowMonth = z.infer<typeof cashflowMonthSchema>;
+
+export const cashflowWhereSchema = z.object({
+  categoryId: idSchema.nullable(),
+  name: z.string(),
+  icon: z.string().nullable(),
+  color: z.string().nullable(),
+  totalCents: centsSchema,
+  percent: z.number(),
+});
+export type CashflowWhere = z.infer<typeof cashflowWhereSchema>;
+
+export const cashflowReportSchema = z.object({
+  basis: cashflowBasisSchema,
+  months: z.array(cashflowMonthSchema),
+  /** Para onde foi o dinheiro no último mês. */
+  whereItWent: z.array(cashflowWhereSchema),
+});
+export type CashflowReport = z.infer<typeof cashflowReportSchema>;
+
+// ───────────────────────── "Posso comprar?" (v3 §8) ─────────────────────────
+
+export const canAffordSchema = z.object({
+  amountCents: positiveCentsSchema,
+  date: dateStringSchema.optional(),
+  installments: z.number().int().min(1).max(48).optional(),
+  cardId: idSchema.optional(),
+  description: z.string().max(120).optional(),
+});
+export type CanAffordInput = z.infer<typeof canAffordSchema>;
+
+export const canAffordVerdictSchema = z.enum(["YES", "CAREFUL", "NO"]);
+export type CanAffordVerdict = z.infer<typeof canAffordVerdictSchema>;
+
+export const canAffordResultSchema = z.object({
+  verdict: canAffordVerdictSchema,
+  /** Menor saldo projetado (365 dias) com a compra. */
+  lowestBalanceAfterCents: centsSchema,
+  lowestDate: dateStringSchema,
+  /** Impacto no limite mensal do mês da compra. */
+  limit: z
+    .object({ limitCents: centsSchema, spentAfterCents: centsSchema, percentAfter: z.number() })
+    .nullable(),
+  /** Quando a compra precisaria sair da reserva. */
+  reserveMonthsAfter: z.number().nullable(),
+  /** 1ª data em que caberia sem saldo negativo (verdict NO). */
+  fitsOn: dateStringSchema.nullable(),
+  message: z.string(),
+});
+export type CanAffordResult = z.infer<typeof canAffordResultSchema>;
+
+// ───────────────────────── evolução do patrimônio (v3 §12) ─────────────────────────
+
+export const netWorthPointSchema = z.object({
+  month: z.number().int(),
+  year: z.number().int(),
+  cashCents: centsSchema,
+  investmentsCents: centsSchema,
+  debtsCents: centsSchema,
+  netWorthCents: centsSchema,
+});
+export type NetWorthPoint = z.infer<typeof netWorthPointSchema>;

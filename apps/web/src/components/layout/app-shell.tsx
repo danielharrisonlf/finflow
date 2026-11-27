@@ -1,125 +1,50 @@
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  CalendarRange,
-  ChartPie,
-  FileSpreadsheet,
-  LayoutDashboard,
-  LogOut,
-  type LucideIcon,
-  Menu,
-  PiggyBank,
-  Plus,
-  ReceiptText,
-  Repeat,
-  Settings,
-  Tags,
-  TrendingUp,
-  Wallet,
-} from "lucide-react";
+import { LogOut, Menu, Plus, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { clearAuthToken } from "../../lib/api";
 import { cn } from "../../lib/cn";
 import { useAuthStatus } from "../../lib/queries";
 import { LoginPage } from "../../pages/login";
+import { AlertsBell } from "../alerts-bell";
+import { CommandPalette } from "../command-palette";
 import { ThemeToggle } from "../landing/ThemeToggle";
 import { NewTransactionSheet } from "../new-transaction-sheet";
+import { PrivacyToggle } from "../privacy-toggle";
 import { Sheet } from "../ui/sheet";
+import { isActivePath, MOBILE_PRIMARY, NAV_GROUPS, type NavItem } from "./nav";
 
-interface NavItem {
-  to: string;
-  label: string;
-  /** Rótulo curto da barra inferior no mobile. */
-  short: string;
-  icon: LucideIcon;
-}
-
-interface NavGroup {
-  title: string | null;
-  items: NavItem[];
-}
-
-const DASHBOARD: NavItem = {
-  to: "/",
-  label: "Visão geral",
-  short: "Início",
-  icon: LayoutDashboard,
-};
-const TRANSACTIONS: NavItem = {
-  to: "/extrato",
-  label: "Transações",
-  short: "Extrato",
-  icon: ReceiptText,
-};
-const COMMITMENTS: NavItem = {
-  to: "/compromissos",
-  label: "Compromissos",
-  short: "Agenda",
-  icon: Repeat,
-};
-const PROJECTION: NavItem = {
-  to: "/projecao",
-  label: "Projeção",
-  short: "Projeção",
-  icon: TrendingUp,
-};
-
-/** Navegação agrupada (contrato v2 §6). */
-const NAV_GROUPS: NavGroup[] = [
-  {
-    title: "Organização",
-    items: [
-      DASHBOARD,
-      TRANSACTIONS,
-      COMMITMENTS,
-      { to: "/ano", label: "Ano", short: "Ano", icon: CalendarRange },
-    ],
-  },
-  {
-    title: "Controle",
-    items: [
-      { to: "/contas", label: "Contas e cartões", short: "Contas", icon: Wallet },
-      { to: "/categorias", label: "Categorias", short: "Categorias", icon: Tags },
-      { to: "/orcamentos", label: "Orçamentos", short: "Orçamentos", icon: ChartPie },
-      { to: "/metas", label: "Metas e desejos", short: "Metas", icon: PiggyBank },
-    ],
-  },
-  {
-    title: "Visão estratégica",
-    items: [
-      PROJECTION,
-      { to: "/planilhas", label: "Planilhas", short: "Planilhas", icon: FileSpreadsheet },
-    ],
-  },
-  {
-    title: null,
-    items: [{ to: "/configuracoes", label: "Configurações", short: "Ajustes", icon: Settings }],
-  },
-];
-
-/** Atalhos fixos da barra inferior; o resto fica no "Mais". */
-const MOBILE_PRIMARY: NavItem[] = [DASHBOARD, TRANSACTIONS, COMMITMENTS, PROJECTION];
-
-function isActivePath(pathname: string, to: string): boolean {
-  return to === "/" ? pathname === "/" : pathname.startsWith(to);
-}
-
-function Brand() {
+function Brand({ compact = false }: { compact?: boolean }) {
   return (
-    <div className="flex items-center gap-2.5 px-3">
+    <div className={cn("flex shrink-0 items-center gap-2.5 px-3", compact && "max-[379px]:px-1")}>
       <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/15">
         <svg width="16" height="16" viewBox="0 0 32 32" fill="none" aria-hidden="true">
           <path d="M9 22V10h12M9 16h9" stroke="#34d399" strokeWidth="3.5" strokeLinecap="round" />
         </svg>
       </span>
-      <span className="text-[17px] font-semibold tracking-tight text-app-text">FinFlow</span>
+      <span
+        className={cn(
+          "text-[17px] font-semibold tracking-tight text-app-text",
+          compact && "max-[379px]:sr-only",
+        )}
+      >
+        FinFlow
+      </span>
     </div>
   );
+}
+
+/** "⌘K" no Mac, "Ctrl K" no resto. */
+function shortcutLabel(): string {
+  return typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
+    ? "⌘K"
+    : "Ctrl K";
 }
 
 export function AppShell() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const { pathname } = useLocation();
   const inMore = !MOBILE_PRIMARY.some((item) => isActivePath(pathname, item.to));
   const auth = useAuthStatus();
@@ -133,6 +58,18 @@ export function AppShell() {
     return () => window.removeEventListener("finflow:unauthorized", onUnauthorized);
   }, [queryClient]);
 
+  // paleta de comandos: ⌘K / Ctrl+K em qualquer página
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((open) => !open);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const onLogout = (): void => {
     clearAuthToken();
     void queryClient.invalidateQueries();
@@ -145,8 +82,28 @@ export function AppShell() {
   return (
     <div className="min-h-dvh md:flex">
       {/* sidebar — desktop */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col gap-5 border-r border-app-border bg-app-background py-6 md:flex">
-        <Brand />
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col gap-4 border-r border-app-border bg-app-background py-6 md:flex">
+        <div className="flex items-center justify-between pr-2">
+          <Brand />
+          <div className="flex items-center">
+            <PrivacyToggle className="h-9 w-9" />
+            <AlertsBell className="h-9 w-9" />
+          </div>
+        </div>
+        <div className="px-3">
+          <button
+            type="button"
+            onClick={() => setPaletteOpen(true)}
+            className="flex h-10 w-full cursor-pointer items-center gap-2 rounded-(--radius-control) border border-app-border px-3 text-sm text-app-muted transition-colors hover:border-app-muted hover:text-app-text"
+            data-testid="open-palette"
+          >
+            <Search size={15} aria-hidden />
+            <span className="flex-1 text-left">Buscar…</span>
+            <kbd className="rounded border border-app-border px-1.5 text-[11px]">
+              {shortcutLabel()}
+            </kbd>
+          </button>
+        </div>
         <nav
           className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3"
           aria-label="Principal"
@@ -208,34 +165,24 @@ export function AppShell() {
       {/* conteúdo */}
       <main className="w-full min-w-0 px-4 pt-5 pb-28 md:ml-60 md:px-8 md:pt-8 md:pb-12">
         <div className="mx-auto max-w-[1360px]">
-          <div className="mb-4 flex items-center justify-between md:hidden">
-            <Brand />
-            <div className="flex items-center gap-2">
-              <ThemeToggle />
-              <NavLink
-                to="/configuracoes"
-                aria-label="Configurações"
-                className={({ isActive }) =>
-                  cn(
-                    "flex h-11 w-11 items-center justify-center rounded-(--radius-control) border transition-colors",
-                    isActive
-                      ? "border-emerald-500/40 bg-emerald-500/10 text-income"
-                      : "border-app-border text-app-muted hover:text-app-text",
-                  )
-                }
+          {/* topo — mobile: ajustes e sair ficam no "Mais"; abaixo de 380px some o nome da marca */}
+          <div className="mb-4 flex items-center justify-between gap-1 md:hidden">
+            <Brand compact />
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                onClick={() => setPaletteOpen(true)}
+                aria-label="Buscar"
+                className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-(--radius-control) text-app-muted hover:bg-app-soft hover:text-app-text"
               >
-                <Settings size={16} aria-hidden />
-              </NavLink>
-              {auth.data?.required ? (
-                <button
-                  type="button"
-                  onClick={onLogout}
-                  aria-label="Sair"
-                  className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-(--radius-control) border border-app-border text-app-muted hover:text-app-text"
-                >
-                  <LogOut size={14} />
-                </button>
-              ) : null}
+                <Search size={18} aria-hidden />
+              </button>
+              <PrivacyToggle />
+              <AlertsBell />
+              {/* só o alternador claro/escuro; "usar o do sistema" fica no "Mais" */}
+              <div className="[&_.ff-system-button]:hidden!">
+                <ThemeToggle />
+              </div>
             </div>
           </div>
           <Outlet />
@@ -314,9 +261,31 @@ export function AppShell() {
               </div>
             </div>
           ))}
+          <div className="flex items-center justify-between gap-3 border-t border-app-border pt-3">
+            <span className="text-sm text-app-muted">Aparência</span>
+            <ThemeToggle />
+          </div>
+          {auth.data?.required ? (
+            <button
+              type="button"
+              onClick={() => {
+                setMoreOpen(false);
+                onLogout();
+              }}
+              className="flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-(--radius-control) border border-app-border text-sm text-app-muted hover:bg-app-soft hover:text-app-text"
+            >
+              <LogOut size={15} aria-hidden />
+              Sair
+            </button>
+          ) : null}
         </nav>
       </Sheet>
 
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        onNewTransaction={() => setSheetOpen(true)}
+      />
       <NewTransactionSheet open={sheetOpen} onOpenChange={setSheetOpen} />
     </div>
   );

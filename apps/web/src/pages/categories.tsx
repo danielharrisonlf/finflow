@@ -1,9 +1,10 @@
-import type { Category, CategoryKind, CategoryRule, SpendType } from "@finflow/contracts";
+import type { Category, CategoryKind, CategoryRule, SpendType, Tag } from "@finflow/contracts";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as Tabs from "@radix-ui/react-tabs";
-import { Pencil, Plus, Tags, Trash2, Wand2 } from "lucide-react";
+import { Hash, Pencil, Plus, Tags, Trash2, Wand2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
+import { Link } from "react-router-dom";
 import { z } from "zod";
 import { Button } from "../components/ui/button";
 import { Card, CardHeader } from "../components/ui/card";
@@ -15,20 +16,29 @@ import {
 } from "../components/ui/category-icon";
 import { Empty, LoadingRows } from "../components/ui/empty";
 import { Field, Input, Select } from "../components/ui/field";
+import { Money } from "../components/ui/money";
+import { currentPeriod } from "../components/ui/month-switcher";
 import { Badge } from "../components/ui/segmented";
 import { Sheet } from "../components/ui/sheet";
+import { TAG_COLORS, TagChip } from "../components/ui/tags";
 import { SPEND_TYPE_META, SPEND_TYPE_ORDER } from "../lib/bands";
 import { cn } from "../lib/cn";
+import { formatMonthYear } from "../lib/format";
 import {
   useApplyRules,
   useCategories,
   useCreateCategory,
   useCreateRule,
+  useCreateTag,
   useDeleteCategory,
   useDeleteRule,
+  useDeleteTag,
   useRules,
+  useTagSpending,
+  useTags,
   useUpdateCategory,
   useUpdateRule,
+  useUpdateTag,
 } from "../lib/queries";
 
 const tabCls =
@@ -68,6 +78,10 @@ export function CategoriesPage() {
   const [editing, setEditing] = useState<Category | null>(null);
   const [tab, setTab] = useState("categories");
   const [ruleSheet, setRuleSheet] = useState<{ open: boolean; editing: CategoryRule | null }>({
+    open: false,
+    editing: null,
+  });
+  const [tagSheet, setTagSheet] = useState<{ open: boolean; editing: Tag | null }>({
     open: false,
     editing: null,
   });
@@ -111,6 +125,14 @@ export function CategoriesPage() {
           <Button variant="outline" size="sm" onClick={openCreate}>
             <Plus size={15} /> Nova categoria
           </Button>
+        ) : tab === "tags" ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setTagSheet({ open: true, editing: null })}
+          >
+            <Plus size={15} /> Nova tag
+          </Button>
         ) : (
           <Button
             variant="outline"
@@ -129,6 +151,9 @@ export function CategoriesPage() {
         >
           <Tabs.Trigger value="categories" className={tabCls}>
             Categorias
+          </Tabs.Trigger>
+          <Tabs.Trigger value="tags" className={tabCls}>
+            Tags
           </Tabs.Trigger>
           <Tabs.Trigger value="rules" className={tabCls}>
             Automações
@@ -169,6 +194,13 @@ export function CategoriesPage() {
           )}
         </Tabs.Content>
 
+        <Tabs.Content value="tags" className="mt-4 outline-none">
+          <TagsPanel
+            onCreate={() => setTagSheet({ open: true, editing: null })}
+            onEdit={(tag) => setTagSheet({ open: true, editing: tag })}
+          />
+        </Tabs.Content>
+
         <Tabs.Content value="rules" className="mt-4 outline-none">
           <RulesPanel
             onCreate={() => setRuleSheet({ open: true, editing: null })}
@@ -177,6 +209,11 @@ export function CategoriesPage() {
         </Tabs.Content>
       </Tabs.Root>
 
+      <TagSheet
+        open={tagSheet.open}
+        editing={tagSheet.editing}
+        onOpenChange={(open) => setTagSheet((s) => ({ open, editing: open ? s.editing : null }))}
+      />
       <RuleSheet
         open={ruleSheet.open}
         editing={ruleSheet.editing}
@@ -478,6 +515,205 @@ function CategorySheet({
   );
 }
 
+// ───────────────────────── tags (v3 §1) ─────────────────────────
+
+function TagsPanel({ onCreate, onEdit }: { onCreate: () => void; onEdit: (tag: Tag) => void }) {
+  const tags = useTags();
+  const period = currentPeriod();
+  const spending = useTagSpending(period);
+  const remove = useDeleteTag();
+  const all = tags.data ?? [];
+  const byTag = new Map((spending.data ?? []).map((s) => [s.tagId, s]));
+  const ranked = [...(spending.data ?? [])].sort((a, b) => b.totalCents - a.totalCents);
+  const max = Math.max(1, ...ranked.map((s) => s.totalCents));
+
+  const onDelete = (tag: Tag): void => {
+    if (window.confirm(`Excluir a tag "${tag.name}"? Ela sai de todos os lançamentos marcados.`)) {
+      remove.mutate(tag.id);
+    }
+  };
+
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <Card>
+        <CardHeader
+          title="Suas tags"
+          action={<span className="tnum text-xs text-app-muted">{all.length}</span>}
+        />
+        {tags.isLoading ? (
+          <LoadingRows rows={3} />
+        ) : all.length === 0 ? (
+          <Empty
+            icon={Hash}
+            title="Nenhuma tag ainda"
+            hint="Tags cruzam categorias: marque “viagem” no hotel, no restaurante e no transporte e veja quanto a viagem custou."
+            action={<Button onClick={onCreate}>Criar primeira tag</Button>}
+          />
+        ) : (
+          <ul className="divide-y divide-app-border/60" data-testid="tags-list">
+            {all.map((tag) => {
+              const spent = byTag.get(tag.id);
+              return (
+                <li key={tag.id} className="flex items-center gap-3 px-4 py-3 md:px-5">
+                  <div className="min-w-0 flex-1">
+                    <TagChip name={tag.name} color={tag.color} className="h-6 max-w-full text-xs" />
+                    <p className="mt-1 truncate text-xs text-app-muted">
+                      {tag.usageCount === undefined
+                        ? "—"
+                        : `${tag.usageCount} ${tag.usageCount === 1 ? "lançamento" : "lançamentos"}`}
+                      {spent ? (
+                        <>
+                          {" · "}
+                          <Money cents={spent.totalCents} neutral /> este mês
+                        </>
+                      ) : null}
+                    </p>
+                  </div>
+                  <Link
+                    to={`/extrato?tagId=${tag.id}&month=${period.month}&year=${period.year}`}
+                    className="inline-flex min-h-11 items-center px-1 text-xs font-medium text-income hover:underline md:min-h-9"
+                  >
+                    Ver no extrato
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => onEdit(tag)}
+                    aria-label={`Editar tag ${tag.name}`}
+                    className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-app-muted hover:bg-app-soft hover:text-app-text md:h-9 md:w-9"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDelete(tag)}
+                    aria-label={`Excluir tag ${tag.name}`}
+                    className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-app-subtle hover:bg-rose-500/10 hover:text-expense md:h-9 md:w-9"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Card>
+
+      <Card data-testid="tag-spending">
+        <CardHeader title={`Gastos por tag · ${formatMonthYear(period.month, period.year)}`} />
+        {spending.isLoading ? (
+          <LoadingRows rows={3} />
+        ) : ranked.length === 0 ? (
+          <p className="px-5 pb-5 text-sm text-app-muted">
+            Nenhum gasto com tag neste mês. Marque lançamentos no extrato ou ao lançar.
+          </p>
+        ) : (
+          <ul className="space-y-3 px-5 pt-2 pb-5">
+            {ranked.map((s) => (
+              <li key={s.tagId}>
+                <div className="flex items-baseline justify-between gap-2">
+                  <TagChip name={s.name} color={s.color} className="h-6 text-xs" />
+                  <p className="tnum text-sm text-app-text">
+                    <Money cents={s.totalCents} neutral className="font-medium" />{" "}
+                    <span className="text-xs text-app-muted">
+                      {s.count} {s.count === 1 ? "lançamento" : "lançamentos"}
+                    </span>
+                  </p>
+                </div>
+                <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-app-soft">
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${Math.max(2, (s.totalCents / max) * 100)}%`,
+                      backgroundColor: s.color,
+                    }}
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+const tagFormSchema = z.object({
+  name: z.string().trim().min(1, "informe o nome da tag").max(40),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "cor hexadecimal inválida"),
+});
+type TagFormValues = z.infer<typeof tagFormSchema>;
+
+function TagSheet({
+  open,
+  editing,
+  onOpenChange,
+}: {
+  open: boolean;
+  editing: Tag | null;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const create = useCreateTag();
+  const update = useUpdateTag();
+  const form = useForm<TagFormValues>({
+    resolver: zodResolver(tagFormSchema),
+    defaultValues: { name: "", color: TAG_COLORS[0] },
+  });
+  const color = form.watch("color");
+
+  useEffect(() => {
+    if (!open) return;
+    form.reset(
+      editing ? { name: editing.name, color: editing.color } : { name: "", color: TAG_COLORS[0] },
+    );
+  }, [open, editing, form]);
+
+  const submit = form.handleSubmit(async (v) => {
+    const payload = { name: v.name.trim(), color: v.color };
+    if (editing) await update.mutateAsync({ id: editing.id, ...payload });
+    else await create.mutateAsync(payload);
+    onOpenChange(false);
+  });
+
+  const error = create.error?.message ?? update.error?.message;
+  const pending = create.isPending || update.isPending;
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange} title={editing ? "Editar tag" : "Nova tag"}>
+      <form onSubmit={submit} className="flex flex-col gap-4 pb-2" data-testid="form-tag">
+        <Field label="Nome" error={form.formState.errors.name?.message}>
+          <Input placeholder="Viagem, casa, trabalho…" {...form.register("name")} />
+        </Field>
+        <Field label="Cor" error={form.formState.errors.color?.message}>
+          <div className="flex items-center gap-2">
+            <div className="flex flex-1 flex-wrap gap-1.5">
+              {TAG_COLORS.map((hex) => (
+                <button
+                  key={hex}
+                  type="button"
+                  onClick={() => form.setValue("color", hex)}
+                  aria-label={`Cor ${hex}`}
+                  aria-pressed={color.toLowerCase() === hex}
+                  className={cn(
+                    "h-7 w-7 cursor-pointer rounded-full transition-transform",
+                    color.toLowerCase() === hex &&
+                      "scale-110 ring-2 ring-app-text ring-offset-2 ring-offset-app-surface",
+                  )}
+                  style={{ backgroundColor: hex }}
+                />
+              ))}
+            </div>
+            <Input type="color" className="h-10 w-14 shrink-0 p-1" {...form.register("color")} />
+          </div>
+        </Field>
+        {error ? <p className="text-sm text-expense">{error}</p> : null}
+        <Button type="submit" disabled={pending} className="h-12">
+          {pending ? "Salvando…" : editing ? "Salvar tag" : "Criar tag"}
+        </Button>
+      </form>
+    </Sheet>
+  );
+}
+
 // ───────────────────────── automações ─────────────────────────
 
 function RulesPanel({
@@ -548,6 +784,7 @@ function RulesPanel({
                   </p>
                   <p className="truncate text-xs text-app-muted">
                     → {rule.categoryName}
+                    {rule.tagName ? ` + tag ${rule.tagName}` : ""}
                     {rule.priority !== 0 ? ` · prioridade ${rule.priority}` : ""}
                   </p>
                 </div>
@@ -582,6 +819,7 @@ const ruleFormSchema = z.object({
   priority: z
     .string()
     .refine((v) => v.trim() === "" || Number.isInteger(Number(v)), "número inteiro"),
+  tagId: z.string(),
 });
 type RuleFormValues = z.infer<typeof ruleFormSchema>;
 
@@ -598,9 +836,10 @@ function RuleSheet({
 }) {
   const create = useCreateRule();
   const update = useUpdateRule();
+  const tags = useTags();
   const form = useForm<RuleFormValues>({
     resolver: zodResolver(ruleFormSchema),
-    defaultValues: { pattern: "", categoryId: "", priority: "" },
+    defaultValues: { pattern: "", categoryId: "", priority: "", tagId: "" },
   });
 
   useEffect(() => {
@@ -611,8 +850,9 @@ function RuleSheet({
             pattern: editing.pattern,
             categoryId: editing.categoryId,
             priority: String(editing.priority),
+            tagId: editing.tagId ?? "",
           }
-        : { pattern: "", categoryId: "", priority: "" },
+        : { pattern: "", categoryId: "", priority: "", tagId: "" },
     );
   }, [open, editing, form]);
 
@@ -621,6 +861,7 @@ function RuleSheet({
       pattern: v.pattern.trim(),
       categoryId: v.categoryId,
       priority: v.priority.trim() === "" ? undefined : Number(v.priority),
+      tagId: v.tagId || null,
     };
     if (editing) await update.mutateAsync({ id: editing.id, ...payload });
     else await create.mutateAsync(payload);
@@ -658,6 +899,16 @@ function RuleSheet({
                   </option>
                 ))}
               </optgroup>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Aplicar também a tag (opcional)">
+          <Select {...form.register("tagId")}>
+            <option value="">Nenhuma tag</option>
+            {tags.data?.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
             ))}
           </Select>
         </Field>

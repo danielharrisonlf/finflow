@@ -1,8 +1,27 @@
-import type { CommitmentItem, CommitmentMonth, Recurring } from "@finflow/contracts";
+import type {
+  CommitmentItem,
+  CommitmentMonth,
+  DetectedSubscription,
+  Recurring,
+  SubscriptionCadence,
+} from "@finflow/contracts";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CalendarClock, Check, CreditCard, Pencil, Plus, Repeat, Trash2 } from "lucide-react";
+import {
+  CalendarClock,
+  Check,
+  CreditCard,
+  HandCoins,
+  Pencil,
+  Plus,
+  Repeat,
+  Trash2,
+  TrendingDown,
+  TrendingUp,
+  Tv,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
+import { Link } from "react-router-dom";
 import { z } from "zod";
 import { Button } from "../components/ui/button";
 import { Card, CardHeader } from "../components/ui/card";
@@ -20,6 +39,7 @@ import {
   formatBRL,
   formatDate,
   formatMonthShort,
+  formatPercent,
   parseBRLInput,
   todayISO,
 } from "../lib/format";
@@ -29,8 +49,11 @@ import {
   useCommitments,
   useCreateRecurring,
   useDeleteRecurring,
+  useDismissSubscription,
   usePostRecurring,
   useRecurring,
+  useSubscriptions,
+  useTrackSubscription,
   useUpdateRecurring,
 } from "../lib/queries";
 import { useElementWidth } from "../lib/use-width";
@@ -151,6 +174,8 @@ export function CommitmentsPage() {
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-app-soft/80 text-app-muted">
                         {item.kind === "INSTALLMENT" ? (
                           <CreditCard size={16} />
+                        ) : item.kind === "LOAN" ? (
+                          <HandCoins size={16} />
                         ) : (
                           <Repeat size={16} />
                         )}
@@ -162,7 +187,9 @@ export function CommitmentsPage() {
                         {formatDate(item.dueDate)}
                         {item.kind === "INSTALLMENT"
                           ? ` · parcela ${item.installmentNumber ?? "?"}/${item.installmentTotal ?? "?"}${item.cardName ? ` · ${item.cardName}` : ""}`
-                          : " · recorrente"}
+                          : item.kind === "LOAN"
+                            ? ` · empréstimo${item.installmentNumber ? ` · parcela ${item.installmentNumber}/${item.installmentTotal ?? "?"}` : ""}`
+                            : " · recorrente"}
                       </p>
                     </div>
                     <Money
@@ -184,6 +211,14 @@ export function CommitmentsPage() {
                       >
                         Lançar
                       </Button>
+                    ) : item.kind === "LOAN" ? (
+                      <Link
+                        to="/dividas"
+                        className="inline-flex h-11 shrink-0 items-center rounded-(--radius-control) border border-app-border px-3 text-sm text-app-text hover:bg-app-surface md:h-9"
+                        aria-label={`Pagar ${item.description} em Dívidas`}
+                      >
+                        Pagar
+                      </Link>
                     ) : null}
                   </li>
                 );
@@ -192,6 +227,8 @@ export function CommitmentsPage() {
           )}
         </Card>
       </div>
+
+      <SubscriptionsCard />
 
       <Card>
         <CardHeader
@@ -226,6 +263,7 @@ export function CommitmentsPage() {
                     {rec.description}
                   </p>
                   <p className="truncate text-xs text-app-muted">
+                    {rec.isSubscription ? "assinatura · " : ""}
                     todo dia {rec.dayOfMonth}
                     {rec.accountName ? ` · ${rec.accountName}` : " · sem conta"}
                     {rec.categoryName ? ` · ${rec.categoryName}` : ""}
@@ -303,6 +341,7 @@ function MonthsChart({ months, direction }: { months: CommitmentMonth[]; directi
   const padTop = 22;
   const padBottom = 24;
   const plotH = height - padTop - padBottom;
+  const hasLoans = months.some((m) => (m.loansCents ?? 0) > 0);
   const series =
     direction === "PAY"
       ? [
@@ -312,6 +351,15 @@ function MonthsChart({ months, direction }: { months: CommitmentMonth[]; directi
             color: "var(--spend-fixed)",
           },
           { key: "installmentsCents" as const, label: "Parcelas", color: "var(--spend-cuttable)" },
+          ...(hasLoans
+            ? [
+                {
+                  key: "loansCents" as const,
+                  label: "Empréstimos",
+                  color: "var(--spend-variable)",
+                },
+              ]
+            : []),
         ]
       : [
           {
@@ -320,7 +368,7 @@ function MonthsChart({ months, direction }: { months: CommitmentMonth[]; directi
             color: "var(--ff-income)",
           },
         ];
-  const totals = months.map((m) => series.reduce((acc, s) => acc + m[s.key], 0));
+  const totals = months.map((m) => series.reduce((acc, s) => acc + (m[s.key] ?? 0), 0));
   const max = Math.max(10_000, ...totals);
   const slot = width / Math.max(1, months.length);
   const barW = Math.min(44, slot * 0.56);
@@ -362,11 +410,11 @@ function MonthsChart({ months, direction }: { months: CommitmentMonth[]; directi
             return (
               <g key={`${m.year}-${m.month}`}>
                 {series.map((s) => {
-                  const h = (m[s.key] / max) * plotH;
+                  const h = ((m[s.key] ?? 0) / max) * plotH;
                   y -= h;
                   return h > 0 ? (
                     <rect key={s.key} x={x} y={y} width={barW} height={h} fill={s.color} rx={3}>
-                      <title>{`${s.label}: ${formatBRL(m[s.key])}`}</title>
+                      <title>{`${s.label}: ${formatBRL(m[s.key] ?? 0)}`}</title>
                     </rect>
                   ) : null;
                 })}
@@ -395,6 +443,146 @@ function MonthsChart({ months, direction }: { months: CommitmentMonth[]; directi
         </svg>
       </div>
     </div>
+  );
+}
+
+// ───────────────────────── assinaturas detectadas (v3 §2) ─────────────────────────
+
+const CADENCE: Record<SubscriptionCadence, string> = {
+  WEEKLY: "semanal",
+  MONTHLY: "mensal",
+  YEARLY: "anual",
+};
+
+function SubscriptionsCard() {
+  const subscriptions = useSubscriptions();
+  const track = useTrackSubscription();
+  const dismiss = useDismissSubscription();
+  const items = subscriptions.data?.items ?? [];
+  const busyKey = track.isPending ? track.variables : dismiss.isPending ? dismiss.variables : null;
+
+  return (
+    <Card data-testid="subscriptions-card">
+      <CardHeader
+        title={
+          <span className="flex items-center gap-1.5">
+            <Tv size={14} aria-hidden /> Assinaturas detectadas
+          </span>
+        }
+        action={
+          items.length > 0 ? (
+            <span className="tnum text-xs text-app-muted" data-testid="subscriptions-total">
+              ≈ <Money cents={subscriptions.data?.monthlyTotalCents ?? 0} neutral />
+              /mês
+            </span>
+          ) : null
+        }
+      />
+      {subscriptions.isLoading ? (
+        <LoadingRows rows={2} />
+      ) : items.length === 0 ? (
+        <p className="px-5 pb-5 text-sm text-app-muted">
+          Nenhuma cobrança repetida encontrada no seu histórico. O FinFlow procura gastos com a
+          mesma descrição e valor parecido toda semana, mês ou ano.
+        </p>
+      ) : (
+        <>
+          <p className="px-4 text-xs text-app-muted md:px-5">
+            Cobranças que se repetem no seu histórico. Acompanhe para entrarem nos compromissos e na
+            projeção, ou ignore o que não for assinatura.
+          </p>
+          <ul
+            className="mt-1 divide-y divide-app-border/60 px-4 pb-2 md:px-5"
+            data-testid="subscriptions-list"
+          >
+            {items.map((sub) => (
+              <SubscriptionRow
+                key={sub.key}
+                sub={sub}
+                busy={busyKey === sub.key}
+                onTrack={() => track.mutate(sub.key)}
+                onDismiss={() => dismiss.mutate(sub.key)}
+              />
+            ))}
+          </ul>
+        </>
+      )}
+      {track.error || dismiss.error ? (
+        <p className="px-5 pb-4 text-sm text-expense" role="alert">
+          {(track.error ?? dismiss.error)?.message}
+        </p>
+      ) : null}
+    </Card>
+  );
+}
+
+function SubscriptionRow({
+  sub,
+  busy,
+  onTrack,
+  onDismiss,
+}: {
+  sub: DetectedSubscription;
+  busy: boolean;
+  onTrack: () => void;
+  onDismiss: () => void;
+}) {
+  const change = sub.priceChangePct;
+  return (
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3">
+      <div className="min-w-0 flex-1 basis-48">
+        <p className="flex items-center gap-2 text-sm text-app-text">
+          <span className="truncate">{sub.description}</span>
+          {change !== null && Math.abs(change) >= 5 ? (
+            <Badge tone={change > 0 ? "warn" : "income"} data-testid="price-change">
+              {change > 0 ? (
+                <TrendingUp size={12} aria-hidden />
+              ) : (
+                <TrendingDown size={12} aria-hidden />
+              )}
+              {change > 0 ? "+" : "−"}
+              {formatPercent(Math.abs(change))}
+            </Badge>
+          ) : null}
+        </p>
+        <p className="truncate text-xs text-app-muted">
+          {CADENCE[sub.cadence] ?? sub.cadence} · {sub.occurrences} cobranças · próxima{" "}
+          {formatDate(sub.nextExpectedDate)}
+          {change !== null && Math.abs(change) >= 5
+            ? ` · média ${formatBRL(sub.averageCents)}`
+            : ""}
+        </p>
+      </div>
+      <Money cents={-Math.abs(sub.lastCents)} signed className="text-sm font-medium" />
+      {sub.recurringId ? (
+        <Badge tone="income">
+          <Check size={12} aria-hidden /> Acompanhada
+        </Badge>
+      ) : (
+        <div className="flex items-center gap-1">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-11 md:h-9"
+            disabled={busy}
+            onClick={onTrack}
+            aria-label={`Acompanhar ${sub.description}`}
+          >
+            Acompanhar
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-11 text-app-muted md:h-9"
+            disabled={busy}
+            onClick={onDismiss}
+            aria-label={`Ignorar ${sub.description}`}
+          >
+            Ignorar
+          </Button>
+        </div>
+      )}
+    </li>
   );
 }
 

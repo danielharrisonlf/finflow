@@ -19,7 +19,117 @@ export const ids = {
   wishA: uuid(14),
   wishB: uuid(15),
   catSalary: uuid(16),
+  tagTrip: uuid(40),
+  tagWork: uuid(41),
+  txTransferOut: uuid(42),
+  txTransferIn: uuid(43),
+  investCdb: uuid(44),
+  investStocks: uuid(45),
+  loanCar: uuid(46),
+  loanPersonal: uuid(47),
+  invoice: uuid(30),
 };
+
+/** Linha de extrato com os campos v3 preenchidos (tags, loanId). */
+function tx(over: Record<string, unknown>) {
+  return {
+    type: "EXPENSE",
+    status: "CONFIRMED",
+    accountId: ids.accountNubank,
+    accountName: "Nubank",
+    cardId: null,
+    cardName: null,
+    categoryId: null,
+    categoryName: null,
+    categoryIcon: null,
+    categoryColor: null,
+    transferGroupId: null,
+    installmentNumber: null,
+    installmentTotal: null,
+    invoiceId: null,
+    recurringId: null,
+    loanId: null,
+    notes: null,
+    tags: [],
+    ...over,
+  };
+}
+
+/** Estratégias de quitação: o extra encurta prazo e juros (valores determinísticos). */
+export function debtStrategy(extraCents: number) {
+  const cut = Math.min(10, Math.floor(extraCents / 20_000));
+  const plan = (months: number, interest: number, payoff: string, order: string[]) => ({
+    order,
+    months,
+    totalInterestCents: interest,
+    payoffDate: payoff,
+    perLoan: order.map((loanId, i) => ({
+      loanId,
+      payoffDate: i === 0 ? "2027-08-20" : payoff,
+      interestCents: Math.round(interest / (i + 2)),
+    })),
+  });
+  return {
+    avalanche: plan(
+      36 - cut,
+      690_000 - cut * 20_000,
+      extraCents > 0 ? "2029-01-15" : "2029-11-15",
+      [ids.loanPersonal, ids.loanCar],
+    ),
+    snowball: plan(36 - cut, 712_000 - cut * 20_000, extraCents > 0 ? "2029-02-15" : "2029-11-15", [
+      ids.loanPersonal,
+      ids.loanCar,
+    ]),
+    minimumOnly: plan(36, 766_000, "2029-11-15", [ids.loanCar, ids.loanPersonal]),
+  };
+}
+
+/** "Posso comprar?": até R$ 1.000 sim, até R$ 5.000 com cuidado, acima não. */
+export function canAfford(amountCents: number) {
+  if (amountCents > 500_000) {
+    return {
+      verdict: "NO",
+      lowestBalanceAfterCents: -420_000,
+      lowestDate: "2026-12-08",
+      limit: null,
+      reserveMonthsAfter: null,
+      fitsOn: "2027-02-11",
+      message: "Essa compra deixaria seu saldo negativo em 8 de dezembro.",
+    };
+  }
+  if (amountCents > 100_000) {
+    return {
+      verdict: "CAREFUL",
+      lowestBalanceAfterCents: 20_000,
+      lowestDate: "2026-12-08",
+      limit: { limitCents: 500_000, spentAfterCents: 581_250, percentAfter: 116.3 },
+      reserveMonthsAfter: null,
+      fitsOn: null,
+      message: "Cabe, mas o saldo fica apertado e o limite do mês estoura.",
+    };
+  }
+  return {
+    verdict: "YES",
+    lowestBalanceAfterCents: 180_000,
+    lowestDate: "2026-12-08",
+    limit: null,
+    reserveMonthsAfter: null,
+    fitsOn: null,
+    message: "Pode comprar: o saldo continua confortável.",
+  };
+}
+
+/** Série acumulada do ritmo: mês atual até o dia 27, anterior completo. */
+function paceSeries() {
+  return Array.from({ length: 30 }, (_, i) => {
+    const day = i + 1;
+    return {
+      day,
+      currentCents: day <= 27 ? Math.round((431_250 / 27) * day) : null,
+      previousCents: Math.round((420_000 / 30) * day),
+    };
+  });
+}
 
 /** Saldo projetado: 40 dias passando por todas as faixas e ficando negativo. */
 function projectionDays() {
@@ -175,6 +285,7 @@ export const fixtures = {
         id: ids.txLunch,
         type: "EXPENSE",
         description: "Almoço — rodízio japonês",
+        tags: [{ id: ids.tagTrip, name: "Viagem", color: "#38bdf8" }],
         amountCents: -12_900,
         date: "2026-10-28",
         status: "CONFIRMED",
@@ -275,7 +386,10 @@ export const fixtures = {
       diffCents: 56_250,
       dayOfMonth: 27,
       status: "ABOVE",
+      series: paceSeries(),
+      projectedMonthCents: 479_166,
     },
+    spendToday: { cents: 17_187, basis: "LIMIT" },
     monthlyLimit: {
       limitCents: 500_000,
       spentCents: 431_250,
@@ -396,6 +510,7 @@ export const fixtures = {
       recurringExpenseCents: 250_000,
       recurringIncomeCents: 985_000,
       installmentsCents: i < 3 ? 40_000 : 0,
+      loansCents: 89_000,
     })),
     items: [
       {
@@ -421,6 +536,18 @@ export const fixtures = {
         installmentNumber: 3,
         installmentTotal: 10,
         cardName: "Nubank Ultravioleta",
+      },
+      {
+        kind: "LOAN",
+        direction: "PAY",
+        description: "Financiamento do carro",
+        dueDate: "2026-11-15",
+        amountCents: 89_000,
+        recurringId: null,
+        realized: false,
+        installmentNumber: 13,
+        installmentTotal: 48,
+        cardName: null,
       },
       {
         kind: "RECURRING",
@@ -512,6 +639,285 @@ export const fixtures = {
       affordableOn: null,
     },
   ],
+  // ───────────── v3 ─────────────
+  tags: [
+    { id: ids.tagTrip, name: "Viagem", color: "#38bdf8", usageCount: 4 },
+    { id: ids.tagWork, name: "Trabalho", color: "#a78bfa", usageCount: 0 },
+  ],
+  tagSpending: [
+    { tagId: ids.tagTrip, name: "Viagem", color: "#38bdf8", totalCents: 152_300, count: 4 },
+  ],
+  alerts: [
+    {
+      id: "NEGATIVE_PROJECTION:saldo:2026-11",
+      kind: "NEGATIVE_PROJECTION",
+      severity: "DANGER",
+      title: "Saldo negativo à vista",
+      message: "Seu saldo deve chegar a −R$ 800,00 em 8 de dezembro.",
+      href: "/projecao",
+      date: "2026-11-27",
+    },
+    {
+      id: `BUDGET_DANGER:${ids.budget}:2026-11`,
+      kind: "BUDGET_DANGER",
+      severity: "WARNING",
+      title: "Alimentação em 92% do orçamento",
+      message: "Já foram R$ 552,00 de R$ 600,00 neste mês.",
+      href: "/orcamentos",
+      date: "2026-11-26",
+    },
+    {
+      id: "SUBSCRIPTION_PRICE_UP:streaming:2026-11",
+      kind: "SUBSCRIPTION_PRICE_UP",
+      severity: "INFO",
+      title: "Assinatura mais cara",
+      message: "Streaming de vídeo subiu 12% (R$ 44,90 → R$ 49,90).",
+      href: "/compromissos",
+      date: "2026-11-20",
+    },
+  ],
+  subscriptions: {
+    items: [
+      {
+        key: "streaming video",
+        description: "Streaming de vídeo",
+        averageCents: 44_900,
+        lastCents: 49_900,
+        lastDate: "2026-11-12",
+        occurrences: 8,
+        cadence: "MONTHLY",
+        nextExpectedDate: "2026-12-12",
+        priceChangePct: 11.1,
+        categoryId: null,
+        accountId: null,
+        cardId: ids.card,
+        recurringId: null,
+      },
+      {
+        key: "academia",
+        description: "Academia",
+        averageCents: 12_000,
+        lastCents: 12_000,
+        lastDate: "2026-11-05",
+        occurrences: 12,
+        cadence: "MONTHLY",
+        nextExpectedDate: "2026-12-05",
+        priceChangePct: null,
+        categoryId: null,
+        accountId: ids.accountNubank,
+        cardId: null,
+        recurringId: ids.recurringRent,
+      },
+    ],
+    monthlyTotalCents: 61_900,
+  },
+  cashflowReport: {
+    CASH: {
+      basis: "CASH",
+      months: [
+        [9, 900_000, 250_000, 60_000, 180_000, null],
+        [10, 985_000, 250_000, 40_000, 210_000, 7.5],
+        [11, 985_000, 339_000, 73_380, 162_000, -12.3],
+      ].map(([month, income, fixed, inst, daily, change]) => ({
+        month: month as number,
+        year: 2026,
+        incomeCents: income as number,
+        fixedBillsCents: fixed as number,
+        installmentsCents: inst as number,
+        dailyCents: daily as number,
+        totalOutCents: (fixed as number) + (inst as number) + (daily as number),
+        resultCents: (income as number) - (fixed as number) - (inst as number) - (daily as number),
+        resultChangePct: change as number | null,
+      })),
+      whereItWent: [
+        {
+          categoryId: ids.catHome,
+          name: "Moradia",
+          icon: "house",
+          color: "#38bdf8",
+          totalCents: 250_000,
+          percent: 43.6,
+        },
+        {
+          categoryId: ids.catFood,
+          name: "Alimentação",
+          icon: "utensils",
+          color: "#fb923c",
+          totalCents: 162_000,
+          percent: 28.2,
+        },
+      ],
+    },
+    ACCRUAL: {
+      basis: "ACCRUAL",
+      months: [9, 10, 11].map((month) => ({
+        month,
+        year: 2026,
+        incomeCents: 985_000,
+        fixedBillsCents: 250_000,
+        installmentsCents: 40_000,
+        dailyCents: 300_000,
+        totalOutCents: 590_000,
+        resultCents: 395_000,
+        resultChangePct: month === 9 ? null : 0,
+      })),
+      whereItWent: [
+        {
+          categoryId: null,
+          name: "Sem categoria",
+          icon: null,
+          color: null,
+          totalCents: 300_000,
+          percent: 50.8,
+        },
+      ],
+    },
+  },
+  netWorth: Array.from({ length: 12 }, (_, i) => ({
+    month: ((11 + i) % 12) + 1,
+    year: 2025 + Math.floor((11 + i) / 12),
+    cashCents: 900_000 + i * 30_000,
+    investmentsCents: 1_500_000 + i * 45_000,
+    debtsCents: 4_000_000 - i * 80_000,
+    netWorthCents: 900_000 + i * 30_000 + 1_500_000 + i * 45_000 - (4_000_000 - i * 80_000),
+  })),
+  invoiceBreakdown: {
+    purchasesCents: 80_380,
+    creditsCents: 7_000,
+    paymentsCents: 0,
+    totalCents: 73_380,
+    composition: { installmentsCents: 40_000, subscriptionsCents: 4_990, oneOffCents: 35_390 },
+  },
+  transferCandidates: [
+    {
+      expense: tx({
+        id: ids.txTransferOut,
+        description: "PIX enviado — Poupança",
+        amountCents: -50_000,
+        date: "2026-11-20",
+      }),
+      income: tx({
+        id: ids.txTransferIn,
+        type: "INCOME",
+        description: "PIX recebido",
+        amountCents: 50_000,
+        date: "2026-11-21",
+        accountId: ids.accountPoupanca,
+        accountName: "Poupança",
+      }),
+      daysApart: 1,
+    },
+  ],
+  linkPreview: {
+    title: "Cafeteira espresso automática",
+    priceCents: 129_900,
+    imageUrl: "https://example.com/cafeteira.jpg",
+  },
+  investments: [
+    {
+      id: ids.investCdb,
+      name: "CDB liquidez diária",
+      kind: "FIXED_INCOME",
+      institution: "Banco A",
+      accountId: ids.accountPoupanca,
+      accountName: "Poupança",
+      investedCents: 1_000_000,
+      currentCents: 1_085_000,
+      returnCents: 85_000,
+      returnPct: 8.5,
+      valueUpdatedAt: "2026-11-20",
+      notes: null,
+      archived: false,
+    },
+    {
+      id: ids.investStocks,
+      name: "Carteira de ações",
+      kind: "STOCKS",
+      institution: "Corretora B",
+      accountId: null,
+      accountName: null,
+      investedCents: 500_000,
+      currentCents: 465_000,
+      returnCents: -35_000,
+      returnPct: -7,
+      valueUpdatedAt: "2026-09-01",
+      notes: null,
+      archived: false,
+    },
+  ],
+  investmentSummary: {
+    totalInvestedCents: 1_500_000,
+    totalCurrentCents: 1_550_000,
+    returnCents: 50_000,
+    returnPct: 3.33,
+    byKind: [
+      { kind: "FIXED_INCOME", currentCents: 1_085_000, percent: 70 },
+      { kind: "STOCKS", currentCents: 465_000, percent: 30 },
+    ],
+    byInstitution: [
+      { institution: "Banco A", currentCents: 1_085_000, percent: 70 },
+      { institution: "Corretora B", currentCents: 465_000, percent: 30 },
+    ],
+    history: Array.from({ length: 12 }, (_, i) => ({
+      month: ((11 + i) % 12) + 1,
+      year: 2025 + Math.floor((11 + i) / 12),
+      currentCents: 1_000_000 + i * 50_000,
+      investedCents: 1_000_000 + i * 45_000,
+    })),
+  },
+  loans: [
+    {
+      id: ids.loanCar,
+      name: "Financiamento do carro",
+      lender: "Banco C",
+      kind: "VEHICLE",
+      principalCents: 4_000_000,
+      monthlyRatePct: 1.49,
+      installmentCents: 89_000,
+      totalInstallments: 48,
+      paidInstallments: 12,
+      remainingInstallments: 36,
+      firstDueDate: "2025-11-15",
+      nextDueDate: "2026-11-15",
+      outstandingCents: 2_520_000,
+      totalInterestRemainingCents: 684_000,
+      accountId: ids.accountNubank,
+      categoryId: null,
+      active: true,
+      notes: null,
+    },
+    {
+      id: ids.loanPersonal,
+      name: "Empréstimo pessoal",
+      lender: null,
+      kind: "PERSONAL",
+      principalCents: 600_000,
+      monthlyRatePct: 3.2,
+      installmentCents: 41_000,
+      totalInstallments: 18,
+      paidInstallments: 6,
+      remainingInstallments: 12,
+      firstDueDate: "2026-05-20",
+      nextDueDate: "2026-11-20",
+      outstandingCents: 410_000,
+      totalInterestRemainingCents: 82_000,
+      accountId: null,
+      categoryId: null,
+      active: true,
+      notes: null,
+    },
+  ],
+  systemInfo: {
+    version: "0.3.0",
+    dbDialect: "sqlite",
+    dataPath: "C:\\Users\\voce\\AppData\\Roaming\\finflow\\finflow.db",
+    authRequired: true,
+    lanEnabled: true,
+    lanUrls: ["http://192.168.0.10:3333"],
+    aiConfigured: false,
+    mcpHttpPath: "/api/mcp",
+  },
+  aiStatus: { configured: false, source: null, model: "claude-opus-5-5" },
   importPreview: {
     format: "CSV",
     sheets: [],
@@ -632,7 +1038,58 @@ export async function mockApi(
       if (path === "/wishlist") return json(route, fixtures.wishlist);
       if (path.startsWith("/cards/") && path.endsWith("/invoices"))
         return json(route, [fixtures.cards[0]!.currentInvoice]);
+      // v3
+      if (path.startsWith("/cards/") && path.endsWith("/breakdown"))
+        return json(route, fixtures.invoiceBreakdown);
+      if (path === "/tags") return json(route, fixtures.tags);
+      if (path === "/insights/tags") return json(route, fixtures.tagSpending);
+      if (path === "/alerts") return json(route, fixtures.alerts);
+      if (path === "/insights/subscriptions") return json(route, fixtures.subscriptions);
+      if (path === "/insights/cashflow") {
+        const basis = url.searchParams.get("basis") === "ACCRUAL" ? "ACCRUAL" : "CASH";
+        return json(route, fixtures.cashflowReport[basis]);
+      }
+      if (path === "/insights/net-worth") return json(route, fixtures.netWorth);
+      if (path === "/transactions/transfer-candidates")
+        return json(route, fixtures.transferCandidates);
+      if (path === "/investments") return json(route, fixtures.investments);
+      if (path === "/investments/summary") return json(route, fixtures.investmentSummary);
+      if (path === "/loans") return json(route, fixtures.loans);
+      if (path === "/loans/strategy")
+        return json(route, debtStrategy(Number(url.searchParams.get("extraCents") ?? 0)));
+      if (path === "/system/info") return json(route, fixtures.systemInfo);
+      if (path === "/ai/status") return json(route, fixtures.aiStatus);
     }
+
+    // v3: escritas
+    if (method === "POST" && path === "/tags")
+      return json(route, { ...fixtures.tags[1], ...(request.postDataJSON() as object) }, 201);
+    if (method === "PATCH" && /^\/tags\/[^/]+$/.test(path))
+      return json(route, { ...fixtures.tags[0], ...(request.postDataJSON() as object) });
+    if (method === "POST" && /^\/alerts\/.+\/dismiss$/.test(path))
+      return route.fulfill({ status: 204 });
+    if (method === "POST" && /^\/insights\/subscriptions\/.+\/track$/.test(path))
+      return json(route, { ...fixtures.recurring[0], isSubscription: true }, 201);
+    if (method === "POST" && /^\/insights\/subscriptions\/.+\/dismiss$/.test(path))
+      return route.fulfill({ status: 204 });
+    if (method === "POST" && path === "/transactions/merge-transfer")
+      return json(route, { transferGroupId: "merged" });
+    if (method === "POST" && path === "/insights/can-afford") {
+      const { amountCents = 0 } = request.postDataJSON() as { amountCents?: number };
+      return json(route, canAfford(amountCents));
+    }
+    if (method === "POST" && path === "/wishlist/preview-link")
+      return json(route, fixtures.linkPreview);
+    if (method === "POST" && path === "/investments")
+      return json(route, fixtures.investments[0], 201);
+    if (method === "PATCH" && /^\/investments\/[^/]+$/.test(path))
+      return json(route, fixtures.investments[0]);
+    if (method === "POST" && /^\/investments\/[^/]+\/(value|contribution|redeem)$/.test(path))
+      return json(route, fixtures.investments[0]);
+    if (method === "POST" && path === "/loans") return json(route, fixtures.loans[0], 201);
+    if (method === "PATCH" && /^\/loans\/[^/]+$/.test(path)) return json(route, fixtures.loans[0]);
+    if (method === "POST" && /^\/loans\/[^/]+\/pay$/.test(path))
+      return json(route, { ...fixtures.transactions.items[0], id: "loan-paid" }, 201);
 
     if (method === "POST" && path === "/auth/login") {
       const payload = request.postDataJSON() as { password?: string };

@@ -1,4 +1,5 @@
 import {
+  Baby,
   Banknote,
   Briefcase,
   Bus,
@@ -7,8 +8,11 @@ import {
   CreditCard,
   Flag,
   Gamepad2,
+  Gem,
   GraduationCap,
+  HandCoins,
   HandHeart,
+  Heart,
   HeartPulse,
   House,
   Landmark,
@@ -23,6 +27,7 @@ import {
   Shield,
   ShoppingCart,
   Tag,
+  TreePalm,
   TrendingUp,
   Utensils,
   Wallet,
@@ -31,6 +36,7 @@ import {
 import { cn } from "../../lib/cn";
 
 const ICONS: Record<string, LucideIcon> = {
+  baby: Baby,
   banknote: Banknote,
   briefcase: Briefcase,
   bus: Bus,
@@ -39,8 +45,11 @@ const ICONS: Record<string, LucideIcon> = {
   "credit-card": CreditCard,
   flag: Flag,
   "gamepad-2": Gamepad2,
+  gem: Gem,
   "graduation-cap": GraduationCap,
+  "hand-coins": HandCoins,
   "hand-heart": HandHeart,
+  heart: Heart,
   "heart-pulse": HeartPulse,
   house: House,
   landmark: Landmark,
@@ -54,6 +63,7 @@ const ICONS: Record<string, LucideIcon> = {
   shield: Shield,
   "shopping-cart": ShoppingCart,
   tag: Tag,
+  "tree-palm": TreePalm,
   "trending-up": TrendingUp,
   utensils: Utensils,
   wallet: Wallet,

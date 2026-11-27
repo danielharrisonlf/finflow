@@ -8,6 +8,8 @@ export const createCategoryRuleSchema = z.object({
   categoryId: idSchema,
   /** Maior prioridade vence; empate → padrão mais longo. */
   priority: z.number().int().optional(),
+  /** Tag aplicada junto com a categoria (v3 §1). */
+  tagId: idSchema.nullish(),
 });
 export type CreateCategoryRuleInput = z.infer<typeof createCategoryRuleSchema>;
 
@@ -20,6 +22,8 @@ export const categoryRuleSchema = z.object({
   categoryId: idSchema,
   categoryName: z.string(),
   priority: z.number().int(),
+  tagId: idSchema.nullish(),
+  tagName: z.string().nullish(),
 });
 export type CategoryRule = z.infer<typeof categoryRuleSchema>;
 

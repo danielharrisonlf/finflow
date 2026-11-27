@@ -5,6 +5,7 @@ import {
   Archive,
   ArrowDown,
   ArrowUp,
+  Calculator,
   ExternalLink,
   Gift,
   Pencil,
@@ -19,10 +20,11 @@ import {
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { CanAffordForm } from "../components/can-afford";
 import { formatMonths } from "../components/insights";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
-import { CategoryIcon } from "../components/ui/category-icon";
+import { CategoryIcon, iconByName } from "../components/ui/category-icon";
 import { Empty, LoadingRows } from "../components/ui/empty";
 import { Field, Input } from "../components/ui/field";
 import { Progress } from "../components/ui/progress";
@@ -37,6 +39,7 @@ import {
   useDeleteWish,
   useGoals,
   useInsightsOverview,
+  usePreviewLink,
   useReorderWishes,
   useSettings,
   useUpdateWish,
@@ -144,7 +147,12 @@ export function GoalsPage() {
         </Tabs.Content>
       </Tabs.Root>
 
-      <NewGoalSheet open={createOpen} onOpenChange={setCreateOpen} preset={preset} />
+      <NewGoalSheet
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        preset={preset}
+        hasReserve={Boolean(reserveGoal)}
+      />
       <ContributeSheet goal={contributing} onClose={() => setContributing(null)} />
       <WishSheet
         open={wishSheet.open}
@@ -332,6 +340,7 @@ function WishlistPanel({
   const remove = useDeleteWish();
   const reorder = useReorderWishes();
   const [status, setStatus] = useState<WishStatus>("LISTED");
+  const [affordItem, setAffordItem] = useState<WishItem | null>(null);
 
   const all = wishlist.data ?? [];
   const items = all.filter((w) => w.status === status).sort((a, b) => a.priority - b.priority);
@@ -397,6 +406,7 @@ function WishlistPanel({
                     {index + 1}
                   </span>
                 ) : null}
+                {item.imageUrl ? <WishThumb src={item.imageUrl} className="h-10 w-10" /> : null}
                 <div className="min-w-0 flex-1 basis-40">
                   <p className="flex items-center gap-1.5 text-sm font-medium text-app-text">
                     <span className="truncate">{item.name}</span>
@@ -455,6 +465,15 @@ function WishlistPanel({
                       <button
                         type="button"
                         className={iconBtn}
+                        onClick={() => setAffordItem(item)}
+                        aria-label={`Posso comprar ${item.name}?`}
+                        title="Posso comprar?"
+                      >
+                        <Calculator size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        className={iconBtn}
                         onClick={() => update.mutate({ id: item.id, status: "BOUGHT" })}
                         aria-label={`Marcar ${item.name} como comprado`}
                         title="Comprei"
@@ -509,19 +528,55 @@ function WishlistPanel({
           {(update.error ?? reorder.error ?? remove.error)?.message}
         </p>
       ) : null}
+      <Sheet
+        open={Boolean(affordItem)}
+        onOpenChange={(open) => !open && setAffordItem(null)}
+        title={affordItem ? `Posso comprar? — ${affordItem.name}` : "Posso comprar?"}
+      >
+        {affordItem ? (
+          <CanAffordForm
+            key={affordItem.id}
+            defaultAmountCents={affordItem.priceCents}
+            description={affordItem.name}
+            className="pb-3"
+          />
+        ) : null}
+      </Sheet>
     </div>
   );
 }
 
+const isHttpUrl = (v: string): boolean => /^https?:\/\/\S+$/i.test(v.trim());
+
 const wishSchema = z.object({
   name: z.string().trim().min(1, "o que você quer comprar?").max(120),
   price: z.string().refine((v) => parseBRLInput(v) !== null, "valor inválido — use 899,90"),
-  url: z
-    .string()
-    .refine((v) => v.trim() === "" || /^https?:\/\//i.test(v.trim()), "use um link http(s)"),
+  url: z.string().refine((v) => v.trim() === "" || isHttpUrl(v), "use um link http(s)"),
+  imageUrl: z.string(),
   notes: z.string().max(500),
 });
 type WishForm = z.infer<typeof wishSchema>;
+
+const emptyWish: WishForm = { name: "", price: "", url: "", imageUrl: "", notes: "" };
+
+/** Miniatura do produto; some sozinha se a imagem não carregar. */
+function WishThumb({ src, className }: { src: string; className?: string }) {
+  const [broken, setBroken] = useState(false);
+  if (broken) return null;
+  return (
+    <img
+      src={src}
+      alt=""
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      onError={() => setBroken(true)}
+      className={cn(
+        "shrink-0 rounded-lg border border-app-border bg-white object-cover",
+        className,
+      )}
+    />
+  );
+}
 
 function WishSheet({
   open,
@@ -534,30 +589,50 @@ function WishSheet({
 }) {
   const create = useCreateWish();
   const update = useUpdateWish();
+  const preview = usePreviewLink();
   const form = useForm<WishForm>({
     resolver: zodResolver(wishSchema),
-    defaultValues: { name: "", price: "", url: "", notes: "" },
+    defaultValues: emptyWish,
   });
+  const imageUrl = form.watch("imageUrl");
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reinicia só ao abrir/trocar o item
   useEffect(() => {
     if (!open) return;
+    preview.reset();
     form.reset(
       editing
         ? {
             name: editing.name,
             price: centsToInput(editing.priceCents),
             url: editing.url ?? "",
+            imageUrl: editing.imageUrl ?? "",
             notes: editing.notes ?? "",
           }
-        : { name: "", price: "", url: "", notes: "" },
+        : emptyWish,
     );
   }, [open, editing, form]);
+
+  /** Lê título, preço e imagem do link e preenche só o que ainda está vazio. */
+  const fetchPreview = async (url: string): Promise<void> => {
+    if (!isHttpUrl(url)) return;
+    const res = await preview.mutateAsync(url.trim()).catch(() => null);
+    if (!res) return;
+    if (res.title && !form.getValues("name").trim()) {
+      form.setValue("name", res.title.slice(0, 120), { shouldValidate: true });
+    }
+    if (res.priceCents && res.priceCents > 0 && !form.getValues("price").trim()) {
+      form.setValue("price", centsToInput(res.priceCents), { shouldValidate: true });
+    }
+    if (res.imageUrl) form.setValue("imageUrl", res.imageUrl);
+  };
 
   const submit = form.handleSubmit(async (v) => {
     const payload = {
       name: v.name.trim(),
       priceCents: parseBRLInput(v.price) ?? 0,
       url: v.url.trim() || null,
+      imageUrl: v.imageUrl.trim() || null,
       notes: v.notes.trim() || null,
     };
     if (editing) await update.mutateAsync({ id: editing.id, ...payload });
@@ -576,15 +651,50 @@ function WishSheet({
       title={editing ? "Editar desejo" : "Novo desejo"}
     >
       <form onSubmit={submit} className="flex flex-col gap-4 pb-2" data-testid="form-wish">
-        <Field label="O que você quer" error={errors.name?.message}>
-          <Input placeholder="Fone com cancelamento de ruído…" {...form.register("name")} />
+        <Field label="Link do produto (opcional)" error={errors.url?.message}>
+          <div className="flex gap-2">
+            <Input
+              type="url"
+              inputMode="url"
+              placeholder="Cole o link e preenchemos o resto"
+              {...form.register("url")}
+              onPaste={(e) => {
+                const pasted = e.clipboardData.getData("text");
+                if (isHttpUrl(pasted)) void fetchPreview(pasted);
+              }}
+            />
+            <Button
+              variant="outline"
+              className="shrink-0"
+              disabled={preview.isPending}
+              onClick={() => void fetchPreview(form.getValues("url"))}
+            >
+              {preview.isPending ? "Lendo…" : "Buscar"}
+            </Button>
+          </div>
         </Field>
-        <Field label="Preço" error={errors.price?.message}>
-          <Input inputMode="decimal" placeholder="899,90" {...form.register("price")} />
-        </Field>
-        <Field label="Link (opcional)" error={errors.url?.message}>
-          <Input type="url" inputMode="url" placeholder="https://…" {...form.register("url")} />
-        </Field>
+        <p className="-mt-2 text-xs text-app-muted" role="status" data-testid="wish-preview-status">
+          {preview.isPending
+            ? "Lendo a página do produto…"
+            : preview.isError
+              ? "Não deu para ler esse link. Preencha nome e preço à mão."
+              : preview.data
+                ? preview.data.title || preview.data.priceCents
+                  ? "Preenchemos o que encontramos na página. Confira antes de salvar."
+                  : "A página não informou nome nem preço."
+                : "O FinFlow lê só o título, o preço e a imagem da página."}
+        </p>
+        <div className="flex items-start gap-3">
+          {imageUrl ? <WishThumb src={imageUrl} className="mt-6 h-16 w-16" /> : null}
+          <div className="flex min-w-0 flex-1 flex-col gap-4">
+            <Field label="O que você quer" error={errors.name?.message}>
+              <Input placeholder="Fone com cancelamento de ruído…" {...form.register("name")} />
+            </Field>
+            <Field label="Preço" error={errors.price?.message}>
+              <Input inputMode="decimal" placeholder="899,90" {...form.register("price")} />
+            </Field>
+          </div>
+        </div>
         <Field label="Observações (opcional)">
           <Input placeholder="Esperar a promoção…" {...form.register("notes")} />
         </Field>
@@ -605,28 +715,97 @@ const goalSchema = z.object({
   deadline: z.string(),
 });
 
+interface GoalTemplate {
+  key: string;
+  name: string;
+  icon: string;
+  color: string;
+  kind?: "RESERVE";
+  hint: string;
+}
+
+/** Modelos de meta (v3 §16): preenchem nome, ícone, cor e tipo. */
+const GOAL_TEMPLATES: GoalTemplate[] = [
+  {
+    key: "house",
+    name: "Casa própria",
+    icon: "house",
+    color: "#38bdf8",
+    hint: "Junte a entrada (em geral 20% do imóvel) e mais uns 5% para impostos, cartório e mudança.",
+  },
+  {
+    key: "child",
+    name: "Filho",
+    icon: "baby",
+    color: "#f472b6",
+    hint: "Enxoval, parto e o primeiro ano; depois, siga guardando para a escola.",
+  },
+  {
+    key: "sabbatical",
+    name: "Período sabático",
+    icon: "tree-palm",
+    color: "#34d399",
+    hint: "Multiplique seu custo de vida pelos meses de pausa e some viagem ou curso.",
+  },
+  {
+    key: "trip",
+    name: "Viagem",
+    icon: "plane",
+    color: "#a78bfa",
+    hint: "Passagens, hospedagem, seguro-viagem e uma folga para o câmbio.",
+  },
+  {
+    key: "vehicle",
+    name: "Veículo",
+    icon: "car",
+    color: "#fb923c",
+    hint: "Comprar à vista costuma sair bem mais barato que financiar; inclua IPVA e seguro.",
+  },
+  {
+    key: "wedding",
+    name: "Casamento",
+    icon: "gem",
+    color: "#fbbf24",
+    hint: "Cerimônia, festa, alianças e lua de mel; use a data do casamento como prazo.",
+  },
+  {
+    key: "reserve",
+    name: "Reserva de emergência",
+    icon: "shield",
+    color: "#10b981",
+    kind: "RESERVE",
+    hint: "Alguns meses do seu custo de vida, guardados onde dá para resgatar no mesmo dia.",
+  },
+];
+
 function NewGoalSheet({
   open,
   onOpenChange,
   preset,
+  hasReserve,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   preset: GoalPreset | null;
+  hasReserve: boolean;
 }) {
   const create = useCreateGoal();
+  const overview = useInsightsOverview();
+  const [template, setTemplate] = useState<GoalTemplate | null>(null);
   const form = useForm<z.infer<typeof goalSchema>>({
     resolver: zodResolver(goalSchema),
     defaultValues: { name: "", target: "", deadline: "" },
   });
-  const isReserve = preset?.kind === "RESERVE";
+  const presetReserve = preset?.kind === "RESERVE";
+  const isReserve = presetReserve || template?.kind === "RESERVE";
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reinicia só ao abrir
   useEffect(() => {
     if (!open) return;
     create.reset();
+    setTemplate(null);
     form.reset(
-      isReserve
+      presetReserve
         ? {
             name: "Reserva de emergência",
             target: preset.targetCents > 0 ? centsToInput(preset.targetCents) : "",
@@ -636,10 +815,22 @@ function NewGoalSheet({
     );
   }, [open]);
 
+  const pickTemplate = (t: GoalTemplate): void => {
+    const same = template?.key === t.key;
+    setTemplate(same ? null : t);
+    if (same) return;
+    form.setValue("name", t.name, { shouldValidate: form.formState.isSubmitted });
+    const suggested = overview.data?.reserve.suggestedTargetCents ?? 0;
+    if (t.kind === "RESERVE" && suggested > 0 && !form.getValues("target")) {
+      form.setValue("target", centsToInput(suggested));
+    }
+  };
+
   const submit = form.handleSubmit(async (values) => {
     await create.mutateAsync({
       name: values.name,
-      icon: isReserve ? "shield" : "piggy-bank",
+      icon: template?.icon ?? (isReserve ? "shield" : "piggy-bank"),
+      ...(template ? { color: template.color } : {}),
       targetCents: parseBRLInput(values.target) ?? 0,
       deadline: values.deadline || null,
       ...(isReserve ? { kind: "RESERVE" as const } : {}),
@@ -652,9 +843,42 @@ function NewGoalSheet({
     <Sheet
       open={open}
       onOpenChange={onOpenChange}
-      title={isReserve ? "Criar reserva de emergência" : "Nova meta"}
+      title={presetReserve ? "Criar reserva de emergência" : "Nova meta"}
     >
       <form onSubmit={submit} className="flex flex-col gap-4 pb-2" data-testid="form-goal">
+        {presetReserve ? null : (
+          <fieldset className="flex flex-col gap-2" data-testid="goal-templates">
+            <legend className="pb-2 text-sm text-app-muted">Começar de um modelo</legend>
+            <div className="flex flex-wrap gap-1.5">
+              {GOAL_TEMPLATES.map((t) => {
+                const Icon = iconByName(t.icon);
+                const disabled = t.kind === "RESERVE" && hasReserve;
+                const selected = template?.key === t.key;
+                return (
+                  <button
+                    key={t.key}
+                    type="button"
+                    aria-pressed={selected}
+                    disabled={disabled}
+                    title={disabled ? "Você já tem uma reserva de emergência" : t.hint}
+                    onClick={() => pickTemplate(t)}
+                    className={cn(
+                      "inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+                      selected
+                        ? "border-transparent font-medium text-app-text"
+                        : "border-app-border text-app-muted hover:text-app-text",
+                    )}
+                    style={selected ? { backgroundColor: `${t.color}33` } : undefined}
+                  >
+                    <Icon size={15} aria-hidden style={{ color: t.color }} />
+                    {t.name}
+                  </button>
+                );
+              })}
+            </div>
+            {template ? <p className="text-xs text-app-muted">{template.hint}</p> : null}
+          </fieldset>
+        )}
         <Field label="Nome" error={form.formState.errors.name?.message}>
           <Input placeholder="Viagem, carro novo…" {...form.register("name")} />
         </Field>

@@ -8,6 +8,10 @@ import {
   positiveCentsSchema,
   yearSchema,
 } from "./common";
+import { transactionTagSchema } from "./tag.contract";
+
+/** Conjunto de tags de um lançamento (substitui o atual quando enviado). */
+const tagIdsSchema = z.array(idSchema).max(20);
 
 export const transactionTypeSchema = z.enum([
   "INCOME",
@@ -31,6 +35,7 @@ export const createTransactionSchema = z.object({
   accountId: idSchema,
   categoryId: idSchema.nullish(),
   notes: z.string().max(500).nullish(),
+  tagIds: tagIdsSchema.optional(),
 });
 export type CreateTransactionInput = z.infer<typeof createTransactionSchema>;
 
@@ -42,6 +47,7 @@ export const updateTransactionSchema = z.object({
   accountId: idSchema.optional(),
   categoryId: idSchema.nullish(),
   notes: z.string().max(500).nullish(),
+  tagIds: tagIdsSchema.optional(),
 });
 export type UpdateTransactionInput = z.infer<typeof updateTransactionSchema>;
 
@@ -55,6 +61,8 @@ export const createCardExpenseSchema = z.object({
   categoryId: idSchema.nullish(),
   installments: z.number().int().min(1).max(48).default(1),
   notes: z.string().max(500).nullish(),
+  /** Aplicadas a todas as parcelas. */
+  tagIds: tagIdsSchema.optional(),
 });
 export type CreateCardExpenseInput = z.infer<typeof createCardExpenseSchema>;
 
@@ -67,6 +75,7 @@ export const listTransactionsQuerySchema = paginationQuerySchema.extend({
   type: transactionTypeSchema.optional(),
   status: transactionStatusSchema.optional(),
   search: z.string().max(120).optional(),
+  tagId: idSchema.optional(),
 });
 export type ListTransactionsQuery = z.infer<typeof listTransactionsQuerySchema>;
 
@@ -99,6 +108,25 @@ export const transactionSchema = z.object({
   invoiceId: idSchema.nullable(),
   /** Recorrência (conta fixa / receita recorrente) que originou o lançamento. */
   recurringId: idSchema.nullable(),
+  /** Empréstimo (v3 §11) cuja parcela originou o lançamento. */
+  loanId: idSchema.nullish(),
   notes: z.string().nullable(),
+  /** Sempre presente no v3; opcional para tolerar backend antigo. */
+  tags: z.array(transactionTagSchema).optional(),
 });
 export type Transaction = z.infer<typeof transactionSchema>;
+
+// ───────────────────────── transferências inteligentes (v3 §7) ─────────────────────────
+
+export const transferCandidateSchema = z.object({
+  expense: transactionSchema,
+  income: transactionSchema,
+  daysApart: z.number().int(),
+});
+export type TransferCandidate = z.infer<typeof transferCandidateSchema>;
+
+export const mergeTransferSchema = z.object({
+  expenseId: idSchema,
+  incomeId: idSchema,
+});
+export type MergeTransferInput = z.infer<typeof mergeTransferSchema>;
