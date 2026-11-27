@@ -429,7 +429,7 @@ func (s *Services) CanAfford(ctx context.Context, in domain.CanAffordInput) (dom
 		desc = strings.TrimSpace(*in.Description)
 	}
 	var extra []domain.ProjectionPending
-	firstLeg := in.AmountCents
+	var firstLeg int64
 	if in.CardID != nil {
 		card, err := s.Store.FindCardByID(ctx, *in.CardID)
 		if err != nil {
