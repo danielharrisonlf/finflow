@@ -14,7 +14,7 @@
       "!**/coverage",
       "!**/playwright-report",
       "!**/test-results",
-      "!apps/api/src/generated",
+      "!internal/webui/dist",
       "!apps/web/src/styles.css"
     ]
   },

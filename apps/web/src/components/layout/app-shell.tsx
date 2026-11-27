@@ -1,38 +1,108 @@
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  CalendarRange,
   ChartPie,
+  FileSpreadsheet,
   LayoutDashboard,
   LogOut,
   type LucideIcon,
+  Menu,
   PiggyBank,
   Plus,
   ReceiptText,
+  Repeat,
+  Settings,
   Tags,
+  TrendingUp,
   Wallet,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { clearAuthToken } from "../../lib/api";
 import { cn } from "../../lib/cn";
 import { useAuthStatus } from "../../lib/queries";
 import { LoginPage } from "../../pages/login";
 import { ThemeToggle } from "../landing/ThemeToggle";
 import { NewTransactionSheet } from "../new-transaction-sheet";
+import { Sheet } from "../ui/sheet";
 
 interface NavItem {
   to: string;
   label: string;
+  /** Rótulo curto da barra inferior no mobile. */
+  short: string;
   icon: LucideIcon;
 }
 
-const NAV: NavItem[] = [
-  { to: "/", label: "Início", icon: LayoutDashboard },
-  { to: "/extrato", label: "Extrato", icon: ReceiptText },
-  { to: "/contas", label: "Contas & Cartões", icon: Wallet },
-  { to: "/orcamentos", label: "Orçamentos", icon: ChartPie },
-  { to: "/metas", label: "Metas", icon: PiggyBank },
-  { to: "/categorias", label: "Categorias", icon: Tags },
+interface NavGroup {
+  title: string | null;
+  items: NavItem[];
+}
+
+const DASHBOARD: NavItem = {
+  to: "/",
+  label: "Visão geral",
+  short: "Início",
+  icon: LayoutDashboard,
+};
+const TRANSACTIONS: NavItem = {
+  to: "/extrato",
+  label: "Transações",
+  short: "Extrato",
+  icon: ReceiptText,
+};
+const COMMITMENTS: NavItem = {
+  to: "/compromissos",
+  label: "Compromissos",
+  short: "Agenda",
+  icon: Repeat,
+};
+const PROJECTION: NavItem = {
+  to: "/projecao",
+  label: "Projeção",
+  short: "Projeção",
+  icon: TrendingUp,
+};
+
+/** Navegação agrupada (contrato v2 §6). */
+const NAV_GROUPS: NavGroup[] = [
+  {
+    title: "Organização",
+    items: [
+      DASHBOARD,
+      TRANSACTIONS,
+      COMMITMENTS,
+      { to: "/ano", label: "Ano", short: "Ano", icon: CalendarRange },
+    ],
+  },
+  {
+    title: "Controle",
+    items: [
+      { to: "/contas", label: "Contas e cartões", short: "Contas", icon: Wallet },
+      { to: "/categorias", label: "Categorias", short: "Categorias", icon: Tags },
+      { to: "/orcamentos", label: "Orçamentos", short: "Orçamentos", icon: ChartPie },
+      { to: "/metas", label: "Metas e desejos", short: "Metas", icon: PiggyBank },
+    ],
+  },
+  {
+    title: "Visão estratégica",
+    items: [
+      PROJECTION,
+      { to: "/planilhas", label: "Planilhas", short: "Planilhas", icon: FileSpreadsheet },
+    ],
+  },
+  {
+    title: null,
+    items: [{ to: "/configuracoes", label: "Configurações", short: "Ajustes", icon: Settings }],
+  },
 ];
+
+/** Atalhos fixos da barra inferior; o resto fica no "Mais". */
+const MOBILE_PRIMARY: NavItem[] = [DASHBOARD, TRANSACTIONS, COMMITMENTS, PROJECTION];
+
+function isActivePath(pathname: string, to: string): boolean {
+  return to === "/" ? pathname === "/" : pathname.startsWith(to);
+}
 
 function Brand() {
   return (
@@ -49,6 +119,9 @@ function Brand() {
 
 export function AppShell() {
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const { pathname } = useLocation();
+  const inMore = !MOBILE_PRIMARY.some((item) => isActivePath(pathname, item.to));
   const auth = useAuthStatus();
   const queryClient = useQueryClient();
 
@@ -72,26 +145,38 @@ export function AppShell() {
   return (
     <div className="min-h-dvh md:flex">
       {/* sidebar — desktop */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col gap-6 border-r border-app-border bg-app-background py-6 md:flex">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col gap-5 border-r border-app-border bg-app-background py-6 md:flex">
         <Brand />
-        <nav className="flex flex-1 flex-col gap-1 px-3" aria-label="Principal">
-          {NAV.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === "/"}
-              className={({ isActive }) =>
-                cn(
-                  "flex h-10 items-center gap-3 rounded-(--radius-control) px-3 text-sm transition-colors",
-                  isActive
-                    ? "bg-app-surface font-medium text-income"
-                    : "text-app-muted hover:bg-app-surface/60 hover:text-app-text",
-                )
-              }
-            >
-              <Icon size={18} strokeWidth={2} />
-              {label}
-            </NavLink>
+        <nav
+          className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3"
+          aria-label="Principal"
+        >
+          {NAV_GROUPS.map((group) => (
+            <div key={group.title ?? "geral"} className="flex flex-col gap-0.5">
+              {group.title ? (
+                <p className="px-3 pb-1 text-[11px] font-medium tracking-wide text-app-subtle uppercase">
+                  {group.title}
+                </p>
+              ) : null}
+              {group.items.map(({ to, label, icon: Icon }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={to === "/"}
+                  className={({ isActive }) =>
+                    cn(
+                      "flex h-10 shrink-0 items-center gap-3 rounded-(--radius-control) px-3 text-sm transition-colors",
+                      isActive
+                        ? "bg-app-surface font-medium text-income"
+                        : "text-app-muted hover:bg-app-surface/60 hover:text-app-text",
+                    )
+                  }
+                >
+                  <Icon size={18} strokeWidth={2} aria-hidden />
+                  {label}
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
         <div className="flex flex-col gap-2 px-3">
@@ -121,32 +206,32 @@ export function AppShell() {
       </aside>
 
       {/* conteúdo */}
-      <main className="w-full px-4 pt-5 pb-28 md:ml-60 md:px-8 md:pt-8 md:pb-12">
+      <main className="w-full min-w-0 px-4 pt-5 pb-28 md:ml-60 md:px-8 md:pt-8 md:pb-12">
         <div className="mx-auto max-w-[1360px]">
           <div className="mb-4 flex items-center justify-between md:hidden">
             <Brand />
             <div className="flex items-center gap-2">
               <ThemeToggle />
               <NavLink
-                to="/categorias"
+                to="/configuracoes"
+                aria-label="Configurações"
                 className={({ isActive }) =>
                   cn(
-                    "flex h-9 items-center gap-1.5 rounded-(--radius-control) border px-2.5 text-xs transition-colors",
+                    "flex h-11 w-11 items-center justify-center rounded-(--radius-control) border transition-colors",
                     isActive
                       ? "border-emerald-500/40 bg-emerald-500/10 text-income"
-                      : "border-app-border text-app-muted hover:border-app-border hover:text-app-text",
+                      : "border-app-border text-app-muted hover:text-app-text",
                   )
                 }
               >
-                <Tags size={14} />
-                Categorias
+                <Settings size={16} aria-hidden />
               </NavLink>
               {auth.data?.required ? (
                 <button
                   type="button"
                   onClick={onLogout}
                   aria-label="Sair"
-                  className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-(--radius-control) border border-app-border text-app-muted hover:text-app-text"
+                  className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-(--radius-control) border border-app-border text-app-muted hover:text-app-text"
                 >
                   <LogOut size={14} />
                 </button>
@@ -164,7 +249,7 @@ export function AppShell() {
         aria-label="Principal"
       >
         <div className="grid h-16 grid-cols-6 items-center">
-          {NAV.slice(0, 2).map((item) => (
+          {MOBILE_PRIMARY.slice(0, 2).map((item) => (
             <MobileLink key={item.to} {...item} />
           ))}
           <div className="relative flex justify-center">
@@ -178,18 +263,66 @@ export function AppShell() {
               <Plus size={26} strokeWidth={2.5} />
             </button>
           </div>
-          {NAV.slice(2, 5).map((item) => (
+          {MOBILE_PRIMARY.slice(2).map((item) => (
             <MobileLink key={item.to} {...item} />
           ))}
+          <button
+            type="button"
+            onClick={() => setMoreOpen(true)}
+            aria-haspopup="dialog"
+            data-testid="mobile-more"
+            className={cn(
+              "flex h-full min-w-11 cursor-pointer flex-col items-center justify-center gap-1 text-[11px]",
+              inMore ? "text-income" : "text-app-muted",
+            )}
+          >
+            <Menu size={20} strokeWidth={2} aria-hidden />
+            Mais
+          </button>
         </div>
       </nav>
+
+      <Sheet open={moreOpen} onOpenChange={setMoreOpen} title="Todas as seções">
+        <nav aria-label="Todas as seções" className="flex flex-col gap-4 pb-2">
+          {NAV_GROUPS.map((group) => (
+            <div key={group.title ?? "geral"}>
+              {group.title ? (
+                <p className="pb-1.5 text-[11px] font-medium tracking-wide text-app-subtle uppercase">
+                  {group.title}
+                </p>
+              ) : null}
+              <div className="grid grid-cols-2 gap-2">
+                {group.items.map(({ to, label, icon: Icon }) => (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    end={to === "/"}
+                    onClick={() => setMoreOpen(false)}
+                    className={({ isActive }) =>
+                      cn(
+                        "flex min-h-12 items-center gap-2.5 rounded-(--radius-control) border px-3 text-sm transition-colors",
+                        isActive
+                          ? "border-emerald-500/40 bg-emerald-500/10 font-medium text-income"
+                          : "border-app-border text-app-text hover:bg-app-soft",
+                      )
+                    }
+                  >
+                    <Icon size={18} aria-hidden className="shrink-0" />
+                    <span className="min-w-0 leading-tight">{label}</span>
+                  </NavLink>
+                ))}
+              </div>
+            </div>
+          ))}
+        </nav>
+      </Sheet>
 
       <NewTransactionSheet open={sheetOpen} onOpenChange={setSheetOpen} />
     </div>
   );
 }
 
-function MobileLink({ to, label, icon: Icon }: NavItem) {
+function MobileLink({ to, short, icon: Icon }: NavItem) {
   return (
     <NavLink
       to={to}
@@ -201,8 +334,8 @@ function MobileLink({ to, label, icon: Icon }: NavItem) {
         )
       }
     >
-      <Icon size={20} strokeWidth={2} />
-      {label.split(" ")[0]}
+      <Icon size={20} strokeWidth={2} aria-hidden />
+      <span className="max-w-full truncate px-0.5">{short}</span>
     </NavLink>
   );
 }

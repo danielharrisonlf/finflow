@@ -1,40 +1,27 @@
 import type { CashflowPoint, CategorySlice } from "@finflow/contracts";
+import { ArrowDownRight, ArrowUpRight, CalendarClock, CreditCard, Lightbulb } from "lucide-react";
 import {
-  ArrowDownRight,
-  ArrowUpRight,
-  CalendarClock,
-  ChevronLeft,
-  ChevronRight,
-  CreditCard,
-} from "lucide-react";
-import { useState } from "react";
+  CutSuggestionsCard,
+  LimitCard,
+  NetWorth,
+  PaceCard,
+  PerformanceCard,
+  ReserveCard,
+  SpendTypeCard,
+} from "../components/insights";
 import { Card, CardHeader } from "../components/ui/card";
 import { CategoryIcon } from "../components/ui/category-icon";
 import { Empty, LoadingRows } from "../components/ui/empty";
 import { Money } from "../components/ui/money";
-import { formatBRL, formatDate, formatMonthYear } from "../lib/format";
+import { MonthSwitcher, usePeriodState } from "../components/ui/month-switcher";
+import { formatBRL, formatDate } from "../lib/format";
 import {
-  type Period,
   useCashflow,
   useCategorySlices,
+  useInsightsOverview,
   useSummary,
   useUpcoming,
 } from "../lib/queries";
-
-function usePeriodState(): [Period, (delta: number) => void] {
-  const now = new Date();
-  const [period, setPeriod] = useState<Period>({
-    month: now.getMonth() + 1,
-    year: now.getFullYear(),
-  });
-  const shift = (delta: number): void => {
-    setPeriod((p) => {
-      const zero = p.year * 12 + (p.month - 1) + delta;
-      return { year: Math.floor(zero / 12), month: (zero % 12) + 1 };
-    });
-  };
-  return [period, shift];
-}
 
 export function DashboardPage() {
   const [period, shiftPeriod] = usePeriodState();
@@ -42,8 +29,10 @@ export function DashboardPage() {
   const cashflow = useCashflow(period);
   const slices = useCategorySlices(period);
   const upcoming = useUpcoming();
+  const overview = useInsightsOverview(period);
 
   const s = summary.data;
+  const o = overview.data;
 
   return (
     <div className="space-y-5">
@@ -52,27 +41,7 @@ export function DashboardPage() {
           <h1 className="text-xl font-semibold tracking-tight text-app-text">Visão geral</h1>
           <p className="text-sm text-app-muted">Suas finanças em um olhar</p>
         </div>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => shiftPeriod(-1)}
-            aria-label="Mês anterior"
-            className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-(--radius-control) text-app-muted hover:bg-app-surface hover:text-app-text"
-          >
-            <ChevronLeft size={18} />
-          </button>
-          <span className="tnum min-w-32 text-center text-sm font-medium text-app-text">
-            {formatMonthYear(period.month, period.year)}
-          </span>
-          <button
-            type="button"
-            onClick={() => shiftPeriod(1)}
-            aria-label="Próximo mês"
-            className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-(--radius-control) text-app-muted hover:bg-app-surface hover:text-app-text"
-          >
-            <ChevronRight size={18} />
-          </button>
-        </div>
+        <MonthSwitcher period={period} onShift={shiftPeriod} />
       </header>
 
       <div className="grid grid-cols-12 gap-4">
@@ -87,7 +56,7 @@ export function DashboardPage() {
             className="pointer-events-none absolute -top-24 -right-20 h-64 w-64 rounded-full bg-emerald-500/10 blur-3xl"
           />
           <p className="text-sm text-app-muted">Saldo geral</p>
-          <p className="tnum mt-2 text-[2.75rem] leading-none font-semibold tracking-tight text-app-text md:text-5xl">
+          <p className="tnum mt-2 text-[clamp(2rem,10vw,2.75rem)] leading-none font-semibold tracking-tight text-app-text md:text-5xl">
             {s ? formatBRL(s.totalBalanceCents) : "—"}
           </p>
           <div className="mt-6 flex flex-wrap gap-x-8 gap-y-3">
@@ -103,13 +72,15 @@ export function DashboardPage() {
                 {s ? `${s.pendingCount} lançamento${s.pendingCount === 1 ? "" : "s"}` : "—"}
               </p>
             </div>
+            <NetWorth overview={o} />
           </div>
         </section>
 
         {/* trio de métricas do mês */}
         <section
-          className="rise col-span-12 grid grid-cols-3 gap-4 lg:col-span-3 lg:grid-cols-1"
+          className="rise col-span-12 grid grid-cols-1 gap-3 min-[380px]:grid-cols-3 sm:gap-4 lg:col-span-3 lg:grid-cols-1"
           style={{ animationDelay: "120ms" }}
+          data-testid="month-stats"
         >
           <StatTile
             label="Receitas"
@@ -126,8 +97,36 @@ export function DashboardPage() {
           <StatTile label="Balanço" cents={s?.monthNetCents} tone="net" />
         </section>
 
+        {/* ritmo + limite: o "como estou indo" do mês */}
+        <Card
+          className="rise col-span-12 flex flex-col gap-5 p-5 lg:col-span-4"
+          style={{ animationDelay: "160ms" }}
+        >
+          {o ? (
+            <>
+              <PaceCard pace={o.pace} />
+              <div className="border-t border-app-border/60 pt-4">
+                <LimitCard limit={o.monthlyLimit} />
+              </div>
+            </>
+          ) : overview.isError ? (
+            <InsightsUnavailable />
+          ) : (
+            <LoadingRows rows={3} />
+          )}
+        </Card>
+
+        {/* performance pelo método da planilha diária */}
+        <div className="rise col-span-12 lg:col-span-8" style={{ animationDelay: "200ms" }}>
+          {o ? (
+            <PerformanceCard performance={o.performance} />
+          ) : (
+            <Card>{overview.isError ? <InsightsUnavailable /> : <LoadingRows rows={4} />}</Card>
+          )}
+        </div>
+
         {/* próximos 7 dias */}
-        <Card className="rise col-span-12 lg:col-span-4" style={{ animationDelay: "180ms" }}>
+        <Card className="rise col-span-12 lg:col-span-4" style={{ animationDelay: "240ms" }}>
           <CardHeader title="Próximos 7 dias" />
           {upcoming.isLoading ? (
             <LoadingRows rows={3} />
@@ -160,7 +159,7 @@ export function DashboardPage() {
         </Card>
 
         {/* fluxo de caixa */}
-        <Card className="rise col-span-12 lg:col-span-8" style={{ animationDelay: "240ms" }}>
+        <Card className="rise col-span-12 lg:col-span-8" style={{ animationDelay: "280ms" }}>
           <CardHeader title="Fluxo de caixa do mês" />
           <div className="h-64 px-2 pb-3" data-testid="cashflow-chart">
             {cashflow.data && cashflow.data.length > 0 ? (
@@ -175,8 +174,32 @@ export function DashboardPage() {
           </div>
         </Card>
 
+        {o ? (
+          <div className="rise col-span-12 lg:col-span-4" style={{ animationDelay: "300ms" }}>
+            <ReserveCard reserve={o.reserve} />
+          </div>
+        ) : null}
+
+        {o ? (
+          <div
+            className="rise col-span-12 md:col-span-6 lg:col-span-4"
+            style={{ animationDelay: "320ms" }}
+          >
+            <SpendTypeCard spendTypes={o.spendTypes} plan={o.plan} />
+          </div>
+        ) : null}
+
+        {o ? (
+          <div
+            className="rise col-span-12 md:col-span-6 lg:col-span-4"
+            style={{ animationDelay: "340ms" }}
+          >
+            <CutSuggestionsCard items={o.cutSuggestions} />
+          </div>
+        ) : null}
+
         {/* distribuição por categoria */}
-        <Card className="rise col-span-12 lg:col-span-4" style={{ animationDelay: "300ms" }}>
+        <Card className="rise col-span-12 lg:col-span-4" style={{ animationDelay: "360ms" }}>
           <CardHeader title="Gastos por categoria" />
           {slices.data && slices.data.length > 0 ? (
             <CategoryDonut data={slices.data} />
@@ -190,6 +213,16 @@ export function DashboardPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+function InsightsUnavailable() {
+  return (
+    <Empty
+      icon={Lightbulb}
+      title="Análises indisponíveis"
+      hint="Não foi possível calcular ritmo, limite e performance agora. Tente recarregar a página."
+    />
   );
 }
 
@@ -213,12 +246,14 @@ function StatTile({
           ? "text-(--color-expense)"
           : "text-app-text";
   return (
-    <Card className="flex flex-col justify-center px-4 py-3.5 lg:px-5">
+    <Card className="flex min-w-0 items-baseline justify-between gap-2 px-4 py-3 min-[380px]:flex-col min-[380px]:items-start min-[380px]:justify-center min-[380px]:px-3 min-[380px]:py-3.5 sm:px-4 lg:px-5">
       <p className="flex items-center gap-1.5 text-xs text-app-muted lg:text-sm">
         {icon}
         {label}
       </p>
-      <p className={`tnum mt-1 text-base font-semibold lg:text-xl ${color}`}>
+      <p
+        className={`tnum truncate text-base font-semibold min-[380px]:mt-1 min-[380px]:text-sm sm:text-base lg:text-xl ${color}`}
+      >
         {cents !== undefined ? formatBRL(cents) : "—"}
       </p>
     </Card>

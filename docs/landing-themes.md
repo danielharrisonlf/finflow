@@ -1,5 +1,13 @@
 # Landing B2C e temas
 
+> A versão atual é a descrita em **Lançamento local-first — 27 de novembro de 2026**, ao final: o produto deixou de ser pré-lançamento e passou a ser gratuito, de código aberto e executado no computador do usuário. A composição visual aprovada (hero com painel compacto, regras de dobra) foi mantida. Os registros anteriores são históricos.
+
+## Refatoração visual
+
+A abertura usa “Seu dinheiro em ordem. Mais espaço para viver.”, seguida de um dashboard amplo com números e controles legíveis. A interface não é comprimida por regras de altura do notebook. Cartões e orçamento precedem a experiência móvel; celular e Telegram ficam na mesma narrativa. O assistente ocupa uma superfície distinta, e a chamada final usa uma pilha vertical acessível no celular. Os temas, dados ilustrativos e interações locais foram preservados.
+
+Referências de composição consultadas: [Copilot Money](https://www.copilot.money/), [Monarch](https://www.monarch.com/) e [Origin](https://useorigin.com/). Capturas de referência e comparações antes/depois estão em `.qa/` no repositório público, ignoradas pelo Git e pela publicação.
+
 A landing foi integrada em `/inicio`, fora de `AppShell`, sem alterar a entrada `/` do painel ou seu controle de autenticação. A versão pública continua em https://finflow-landing-umber.vercel.app/ no repositório independente `finflow-landing`.
 
 ## Conteúdo e acesso
@@ -25,3 +33,114 @@ Os comandos padrão `pnpm typecheck`, `pnpm build` e `pnpm lint` passaram no mon
 Resultado final em 2 de novembro de 2026: 44/44 testes na suíte completa do frontend do app (incluindo 12 novos cenários da landing e temas) e 9/9 na landing pública. O axe não reportou violações WCAG 2.1 AA nos estados verificados em ambos os temas após concluir as transições. A revisão independente foi aceita sem defeitos materiais pendentes. Screenshots de 390 e 1440 px foram inspecionados.
 
 As alterações preexistentes do workspace foram preservadas; este trabalho não publica o monorepo privado. Semantica não está disponível nesta sessão, por isso as decisões foram registradas aqui.
+
+## Reformulação de pré-lançamento — 3 de novembro de 2026
+
+Escopo implementado: landing integrada em `apps/web`, acessível em `/inicio`. O painel autenticado continua na rota `/`, com o acesso e as regras de negócio preservados. Nenhuma dependência de produção foi adicionada.
+
+### Diagnóstico e decisões
+
+- O painel anterior reduzia textos a 7–9px no mobile, escondia os orçamentos e usava curvas sem escala monetária. A nova composição reorganiza os blocos e mantém limites disponíveis por expansão.
+- O hero apresenta “Seu dinheiro mais organizado. Sua vida mais tranquila.” e “FinFlow · disponível em breve”. As chamadas de demonstração gratuita foram substituídas por navegação para seções reais. Não há cadastro ou lista de espera sem implementação.
+- A hierarquia segue perguntas práticas: entender gastos, escolher limites, antecipar parcelas e planejar objetivos. Como funciona, celular, calculadora, conversa ilustrativa e dúvidas complementam a apresentação. Recursos de integração não têm disponibilidade prometida no lançamento.
+- A direção preserva verde, tipografia Geist local e temas claro/escuro. O CSS da landing foi reorganizado com estilos mobile-first e ampliações em breakpoints, sem esconder overflow para disfarçar problemas.
+- Referências consultadas no UItopic: [dashboard financeiro editorial](https://uitopic.com/design/editorial-finance-dashboard-with-card-system), [indicadores financeiros em painéis](https://uitopic.com/design/portfolio-dashboard-with-card-based-kpi-panels) e [hero com painel financeiro](https://uitopic.com/design/wealth-management-landing-hero-with-embedded-dashboard-card). Foram usadas como inspiração de hierarquia e apresentação de dados.
+
+### Gráficos e comportamento
+
+`FinanceChart.tsx` desenha a evolução de saldo e barras de entradas/saídas a partir dos mesmos valores em centavos que alimentam os indicadores. Cada período tem suas entradas, despesas e saldo inicial. O gasto fictício atualiza totais e série; desfazer restaura ambos. A escala mostra reais e as datas são controles de toque/teclado, com leitura textual e tabela expandida para consulta.
+
+A distribuição por categoria usa barras horizontais com valores explícitos. Os limites têm percentuais e mensagens de estado; no painel são medidores semânticos. A calculadora mantém aritmética em centavos e funciona localmente, sem juros ou rendimentos presumidos.
+
+Foram preservados período, gasto/desfazer, download CSV com BOM, telefone, exemplos de conversa, FAQ e preferências de tema. Extrato e Metas agora mostram telas próprias na prévia do telefone. A despesa rápida usa uma conta, coerente com a redução de saldo. Nenhum dado da prévia é enviado à API.
+
+O menu mantém Escape, restauração de rolagem e percurso de foco. A rodada WebKit identificou que o Safari pode pular links na navegação por Tab conforme as preferências do navegador; o menu agora percorre explicitamente seus controles nos dois sentidos. Os nomes acessíveis dos botões também correspondem aos textos visíveis.
+
+### Validação reproduzível
+
+```powershell
+pnpm lint
+pnpm --filter @finflow/web typecheck
+pnpm --filter @finflow/web build
+pnpm --filter @finflow/web test:e2e
+pnpm --filter @finflow/web exec playwright test --config=playwright.landing.config.ts --project=ios-webkit --workers=2
+```
+
+- Suíte padrão: 48 testes aprovados entre desktop Chromium e perfil Android/Pixel 7, dos quais 16 são da landing.
+- Rodada adicional: 8 testes aprovados com WebKit e perfil iPhone 13.
+- Larguras verificadas em ambos os temas: 320, 375, 390, 430, 768, 1024 e 1440px. Sem rolagem horizontal. A tabela do gráfico e os limites também foram abertos a 320px.
+- Axe WCAG 2.1 AA: sem violações nos estados auditados, nos dois temas e modos de gráfico. Asserções conferem alvos de 44px, menu por teclado, dados e CSV, simulador e interações preservadas.
+- Evidências locais: `apps/web/test-results/screenshots/`, com 14 capturas de largura/tema e duas do painel expandido a 320px. Esses arquivos são ignorados pelo Git.
+- Lint, typecheck do frontend, build e `git diff --check` aprovados. Revisão independente sem defeitos materiais pendentes.
+
+As verificações de Android/iOS usam emulação de navegador; não substituem validação em aparelhos físicos. Não houve publicação nem teste de backend, pois o escopo desta mudança é a landing e seus exemplos locais.
+
+O repositório irmão `finflow-landing` já contém alterações próprias e não foi modificado nem sobrescrito por sincronização nesta tarefa. Compare as versões antes de usar `sync-app.mjs`, para preservar esta reformulação. As mudanças locais anteriores do workspace foram mantidas como base.
+
+Semantica não está disponível nesta sessão. O histórico de decisões e evidências foi registrado neste arquivo; não foi persistido em memória externa.
+
+## Correção após revisão visual do usuário
+
+O usuário rejeitou a primeira reformulação: o hero ficou desproporcional, o painel ultrapassava a dobra e o gráfico mostrava controles demais. A aprovação funcional anterior não representava aceitação visual do produto.
+
+Correções implementadas:
+
+- Headline original restaurada: “Seu dinheiro em ordem. Mais espaço para viver.” O subtítulo, os textos de recursos e os títulos de celular, privacidade e fechamento também retomam a linguagem anterior, mantendo o pré-lançamento.
+- Título limitado a 52px no desktop e 36px nas menores telas. Duas linhas no desktop e até quatro no mobile.
+- Uma superfície para o painel, sem a moldura verde adicional. Saldo, entradas/saídas e curva aparecem diretamente. A altura inicial caiu de aproximadamente 1.093px para 525px.
+- As abas, datas interativas, tabela, limites, lançamentos, simulação e download CSV continuam funcionais dentro de “Explorar exemplo”. A expansão cresce naturalmente, sem cortar conteúdo.
+- O gráfico inicial tem uma única série, escala em reais, datas discretas e um marcador final. Não repete saldo em uma segunda linha de resultado nem apresenta abas no primeiro contato.
+- Os dois cards extras de categoria e plano foram retirados; os cards originais de cartões e orçamento foram preservados.
+
+Foi acrescentado um teste específico da dobra em 1366×768, 1536×864, 1920×900 e 1536×718 (aproximação do espaço útil com zoom de 125%). O teste exige painel fechado entre 480 e 540px, CTA e nota completos no viewport e título de até três linhas no desktop. As medições aguardam o React e as fontes antes da captura.
+
+A prévia foi aberta no navegador integrado do Orca em `http://localhost:5273/inicio`. Na janela real de 1272×706 CSS px, o painel mediu 524px e a nota terminou em 685px, sem rolagem horizontal. A revisão visual independente aceitou a composição desktop escura nessa captura.
+
+Validação da correção: 18/18 testes da landing em Chromium (desktop e Android) e 9/9 no perfil iPhone/WebKit aprovados. Os sete tamanhos solicitados, os dois temas, o conteúdo expandido a 320px e os quatro cenários de dobra foram verificados. Axe sem violações nos estados auditados. Não foi repetida a suíte completa do aplicativo nesta correção, que ficou restrita à landing. Capturas de dobra em `apps/web/test-results/screenshots/fold-*.png`.
+
+## Redeploy em produção — 3 de novembro de 2026
+
+Publicado a pedido do usuário em [finflow-landing-umber.vercel.app](https://finflow-landing-umber.vercel.app/). Deployment `dpl_BvpTfQWHQHeMqbx6PAVoLt8eQc5c`, estado `READY`, ambiente `production`. [Inspeção na Vercel](https://vercel.com/daniels-projects-f8239060/finflow-landing/BvpTfQWHQHeMqbx6PAVoLt8eQc5c).
+
+A fonte publicada é a landing corrigida deste monorepo. O repositório irmão contém uma versão local diferente e foi preservado. O script `apps/web/scripts/build-public-landing.mjs` cria um pacote isolado em `apps/web/test-results/vercel-landing`, copia os nove componentes aprovados e a fonte local, gera hashes de origem em `manifest.json` e compila somente a landing. A entrada pública abre o diálogo de pré-lançamento para acesso à conta, sem apontar ao painel privado. Não inclui roteador do aplicativo, API, arquivos de ambiente ou source maps.
+
+Reprodução a partir da raiz do monorepo:
+
+```powershell
+node apps/web/scripts/build-public-landing.mjs
+vercel deploy --prebuilt --prod --yes --cwd apps/web/test-results/vercel-landing
+node apps/web/scripts/verify-public-landing.mjs https://finflow-landing-umber.vercel.app/
+```
+
+O vínculo Vercel existente é lido de `../finflow-landing/.vercel/project.json`. O pacote usa a Build Output API v3, com conteúdo estático, os cabeçalhos existentes e suporte a `/inicio`.
+
+Antes do deploy e no domínio de produção, as verificações passaram em Chromium e WebKit: HTTP 200 sem autenticação, copy original, dois temas, sete larguras, painel na dobra, axe AA, diálogo de acesso, gasto/desfazer, troca de mês, CSV, calculadora e assets. Nenhuma chamada à API. Capturas da versão pública em `apps/web/test-results/public-verification/`. O pacote teve revisão independente dos hashes e do conteúdo a publicar.
+
+## Lançamento local-first — 27 de novembro de 2026
+
+O FinFlow passou a ser distribuído como binário único, gratuito e de código aberto, publicado em GitHub Releases. A landing deixou de anunciar “disponível em breve” e agora leva ao download.
+
+### O que mudou
+
+- **Hero**: headline e painel compacto preservados (mesmas regras de dobra). Selo “FinFlow · grátis e de código aberto”, subtítulo com planilhas e “no seu computador”, CTA principal **Baixar grátis** (rola até `#baixar`) e secundário “Como funciona”. Provas: “Windows, macOS e Linux” e “Seus dados ficam com você”.
+- **Navegação**: Recursos, Planilhas, Como funciona, Dúvidas. Na rota integrada `/inicio`, **Acessar minha conta** continua levando a `/`. Na landing pública (sem `accountHref`), o mesmo espaço vira o link **Baixar grátis** para `#baixar`; o diálogo de pré-lançamento foi removido (não há login falso).
+- **Recursos** (`#recursos`): novo card largo **Projeção** (`#projecao`, `ProjectionPreview.tsx` + `projection.ts`) com 30 barras coloridas pelas faixas de saldo, menor saldo nos próximos 30 dias e legenda das cinco faixas; cards de cartões e limite preservados (o de limite cita limite mensal e ritmo do mês); lista de seis recursos: compromissos, ritmo do mês, onde dá para cortar (Fixo/Cortável/Variável), reserva de emergência (6 ou 12 meses), desejos e automações.
+- **Planilhas** (`#planilhas`, `SpreadsheetSection.tsx`): importação da planilha diária (Entrada · Saída · Diário · Saldo), Excel/CSV e OFX; exportação `.xlsx` anual com fórmulas vivas, saldo colorido e aba Economia. A ilustração é uma `<table>` real com barra de fórmula, células de saldo tingidas pela faixa (com o nome da faixa para leitores de tela) e abas da pasta.
+- **Rode no seu computador** (`#baixar`, `DownloadSection.tsx` + `download.ts`): botão principal detectado pelo sistema (Windows, macOS Apple Silicon, macOS Intel, Linux; arquitetura via `userAgentData` quando disponível, Apple Silicon como padrão no Mac), os outros cinco pacotes, três passos (baixe → abra → use em localhost:3333), comandos `install.sh` / `install.ps1` com botão de copiar (com seleção manual quando a área de transferência é bloqueada), link para compilar do código-fonte e nota de privacidade (SQLite local, nada vai para a nuvem). Em celulares, uma nota explica que o FinFlow roda no computador.
+- **Copy**: “Como funciona”, assistente de IA (MCP incluído), privacidade (arquivo local, sem senha bancária, código aberto), perguntas frequentes (gratuidade, dados, instalação, planilhas, banco) e chamada final (“Baixar grátis”) atualizados. Nenhuma marca ou autor de terceiros é citado.
+- **Temas**: tokens `--ff-band-*` (cinco faixas) em `theme.css` para claro e escuro. As cores de faixa são gráficas; textos continuam em `--ff-text` / `--ff-muted`.
+- **SEO**: `index.html` e `build-public-landing.mjs` sem “Em breve” (título público “FinFlow — Seu dinheiro em ordem, grátis e no seu computador”).
+
+Os links de download usam `https://github.com/danielharrisonlf/finflow/releases/latest/download/finflow-<os>-<arch>.(zip|tar.gz)`; os nomes estáveis são gerados por `scripts/release.mjs` (veja `docs/release.md`).
+
+### Testes atualizados deliberadamente
+
+- `e2e/landing-themes.spec.ts`: o primeiro teste agora exige “Baixar grátis” → `#baixar` e proíbe textos de pré-lançamento e nomes de terceiros (a proibição de “grátis” em links foi retirada; demo/cadastro continuam proibidos). Novos testes: seção de download (asset por sistema com UA emulado, cinco alternativas, passos, comandos, cópia, código-fonte, todos os CTAs “Baixar grátis”) e prévias de planilha e projeção (tabela, 30 barras, legenda, seis recursos). O teste de alvos de toque inclui `#baixar a, #baixar button`. O teste de dobra não mudou.
+- `scripts/verify-public-landing.mjs`: sem diálogo de conta; confere o link “Baixar grátis” do cabeçalho, o formato do link de release e as cinco alternativas.
+
+### Validação
+
+- `pnpm --filter @finflow/web typecheck` e `pnpm --filter @finflow/web build` aprovados. Biome limpo em todos os arquivos desta mudança (o `pnpm lint` global acusou apenas `src/pages/projection.tsx`, trabalho paralelo de outra frente).
+- Landing: 22/22 (desktop Chromium + Pixel 7) e 22/22 (Android Chromium + iPhone 13 WebKit), incluindo os quatro cenários de dobra, as sete larguras sem rolagem horizontal nos dois temas e axe WCAG 2.1 AA. Com três workers simultâneos, o WebKit chegou a estourar o tempo em dois testes por carga; isolados, passaram.
+- Pacote público: `node apps/web/scripts/build-public-landing.mjs` e `verify-public-landing.mjs` contra o build servido localmente, aprovados em Chromium e WebKit (sete larguras, dois temas, axe, zero chamadas à API).
+- Capturas inspecionadas em `apps/web/test-results/screenshots/local-{light,dark}-{390,1440}-{hero,recursos,planilhas,seguranca,baixar,final}.png`.

@@ -7,12 +7,17 @@ import {
   positiveCentsSchema,
 } from "./common";
 
+/** RESERVE = reserva de emergência (no máximo uma não arquivada). */
+export const goalKindSchema = z.enum(["GOAL", "RESERVE"]);
+export type GoalKind = z.infer<typeof goalKindSchema>;
+
 export const createGoalSchema = z.object({
   name: z.string().min(1).max(60),
   icon: z.string().min(1).max(40).default("piggy-bank"),
   color: hexColorSchema.optional(),
   targetCents: positiveCentsSchema,
   deadline: dateStringSchema.nullish(),
+  kind: goalKindSchema.optional(),
 });
 export type CreateGoalInput = z.infer<typeof createGoalSchema>;
 
@@ -29,6 +34,7 @@ export type ContributeGoalInput = z.infer<typeof contributeGoalSchema>;
 
 export const goalSchema = z.object({
   id: idSchema,
+  kind: goalKindSchema,
   name: z.string(),
   icon: z.string(),
   color: z.string().nullable(),

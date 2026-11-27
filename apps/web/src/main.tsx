@@ -19,6 +19,19 @@ const GoalsPage = lazy(() => import("./pages/goals").then((m) => ({ default: m.G
 const CategoriesPage = lazy(() =>
   import("./pages/categories").then((m) => ({ default: m.CategoriesPage })),
 );
+const CommitmentsPage = lazy(() =>
+  import("./pages/commitments").then((m) => ({ default: m.CommitmentsPage })),
+);
+const ProjectionPage = lazy(() =>
+  import("./pages/projection").then((m) => ({ default: m.ProjectionPage })),
+);
+const YearPage = lazy(() => import("./pages/year").then((m) => ({ default: m.YearPage })));
+const SpreadsheetsPage = lazy(() =>
+  import("./pages/spreadsheets").then((m) => ({ default: m.SpreadsheetsPage })),
+);
+const SettingsPage = lazy(() =>
+  import("./pages/settings").then((m) => ({ default: m.SettingsPage })),
+);
 const LandingPage = lazy(() => import("./pages/landing").then((m) => ({ default: m.LandingPage })));
 
 function page(element: React.ReactNode): React.ReactNode {
@@ -42,6 +55,11 @@ const router = createBrowserRouter([
       { path: "/orcamentos", element: page(<BudgetsPage />) },
       { path: "/metas", element: page(<GoalsPage />) },
       { path: "/categorias", element: page(<CategoriesPage />) },
+      { path: "/compromissos", element: page(<CommitmentsPage />) },
+      { path: "/ano", element: page(<YearPage />) },
+      { path: "/projecao", element: page(<ProjectionPage />) },
+      { path: "/planilhas", element: page(<SpreadsheetsPage />) },
+      { path: "/configuracoes", element: page(<SettingsPage />) },
     ],
   },
 ]);

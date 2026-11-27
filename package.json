@@ -1,26 +1,28 @@
 {
   "name": "finflow",
   "private": true,
+  "license": "MIT",
   "version": "0.1.0",
-  "description": "FinFlow — controle financeiro pessoal (monorepo pnpm + Turborepo)",
+  "description": "FinFlow — controle financeiro pessoal (Go binário único + React web)",
   "packageManager": "pnpm@10.11.1",
   "engines": {
     "node": ">=22.12"
   },
   "scripts": {
-    "dev": "turbo run dev",
-    "build": "turbo run build",
+    "dev:api": "go run ./cmd/finflow serve",
+    "dev:web": "pnpm --filter @finflow/web dev",
+    "build:web": "pnpm --filter @finflow/contracts build && pnpm --filter @finflow/web build && node scripts/sync-webui.mjs",
+    "build:go": "node scripts/build-go.mjs",
+    "build": "pnpm build:web && pnpm build:go",
+    "release": "node scripts/release.mjs",
+    "serve": "go run ./cmd/finflow serve",
+    "seed": "go run ./cmd/finflow seed",
     "typecheck": "turbo run typecheck",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
-    "test": "turbo run test",
-    "test:integration": "pnpm --filter @finflow/api test:integration",
-    "test:e2e": "turbo run test:e2e",
-    "cli": "node apps/cli/dist/index.js",
-    "db:up": "docker compose up -d db",
-    "db:migrate": "pnpm --filter @finflow/api db:migrate",
-    "db:seed": "pnpm --filter @finflow/api db:seed"
+    "test": "go test -v ./...",
+    "test:e2e": "pnpm --filter @finflow/contracts build && pnpm --filter @finflow/web test:e2e"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.8",

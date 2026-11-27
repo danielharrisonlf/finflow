@@ -1,19 +1,28 @@
 # dependencies
 node_modules/
 
-# builds
+# builds & binaries
 dist/
 build/
 .turbo/
 *.tsbuildinfo
+# binário na raiz (ancorado para não ignorar cmd/finflow/)
+/finflow
+/finflow.exe
+# web embutido: só o placeholder é versionado (go:embed exige ao menos um arquivo)
+!internal/webui/dist/
+internal/webui/dist/*
+!internal/webui/dist/.gitkeep
+
+# local SQLite databases
+*.db
+*.db-wal
+*.db-shm
 
 # environment — nunca versionar credenciais
 .env
 .env.*
 !.env.example
-
-# prisma generated client
-apps/api/src/generated/
 
 # tests
 coverage/

@@ -5,59 +5,65 @@ import {
   ArrowUpRight,
   AudioLines,
   Bell,
+  CalendarClock,
   Check,
   CheckCheck,
   ChevronRight,
   CreditCard,
   Download,
+  Gauge,
+  Github,
+  HardDrive,
+  Heart,
   LayoutDashboard,
   LockKeyhole,
   Menu,
-  MessageCircle,
   Plus,
+  Scissors,
   Send,
   ShieldCheck,
   Sparkles,
   Target,
   TrendingUp,
+  Umbrella,
   Wallet,
+  Wand2,
   X,
 } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Brand } from "./Brand";
 import { DemoDashboard } from "./DemoDashboard";
+import { DownloadSection } from "./DownloadSection";
+import { repoUrl } from "./download";
 import { GoalCalculator } from "./GoalCalculator";
 import { money } from "./money";
+import { ProjectionPreview } from "./ProjectionPreview";
+import { SpreadsheetSection } from "./SpreadsheetSection";
 import { ThemeToggle } from "./ThemeToggle";
 import "./landing.css";
 
 const links = [
   ["Recursos", "#recursos"],
-  ["No celular", "#mobile"],
-  ["Cartões", "#cartoes"],
-  ["Assistente de IA", "#assistente"],
-  ["Segurança", "#seguranca"],
+  ["Planilhas", "#planilhas"],
+  ["Como funciona", "#como-funciona"],
+  ["Dúvidas", "#duvidas"],
 ];
 const year = new Date().getFullYear();
 
-function StartButton({ children = "Comece agora" }: { children?: React.ReactNode }) {
+function DownloadButton({ children = "Baixar grátis" }: { children?: React.ReactNode }) {
   return (
-    <a className="ff-button" href="#demonstracao">
+    <a className="ff-button" href="#baixar">
       {children}
-      <ArrowUpRight size={17} />
+      <Download size={17} aria-hidden="true" />
     </a>
   );
 }
 
-function AccountAccess({
-  href,
-  onNavigate,
-  onOpenDialog,
-}: {
-  href?: string;
-  onNavigate?: () => void;
-  onOpenDialog?: () => void;
-}) {
+const downloadAnchor = "#baixar";
+
+// Inside the self-hosted app the account link opens the dashboard; the public page has no
+// accounts to sign in to, so the same slot leads to the download section.
+function AccountAccess({ href, onNavigate }: { href?: string; onNavigate?: () => void }) {
   if (href) {
     return (
       <a className="ff-account-link" href={href} onClick={onNavigate}>
@@ -67,17 +73,10 @@ function AccountAccess({
     );
   }
   return (
-    <button
-      type="button"
-      className="ff-account-link"
-      onClick={() => {
-        onNavigate?.();
-        onOpenDialog?.();
-      }}
-    >
-      Acessar minha conta
-      <ArrowUpRight size={15} />
-    </button>
+    <a className="ff-account-link" href={downloadAnchor} onClick={onNavigate}>
+      Baixar grátis
+      <Download size={15} aria-hidden="true" />
+    </a>
   );
 }
 
@@ -85,13 +84,14 @@ function Navbar({ accountHref }: { accountHref?: string }) {
   const [open, setOpen] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
   const mobileNav = useRef<HTMLElement>(null);
-  const dialog = useRef<HTMLDialogElement>(null);
-  const titleId = useId();
 
   useEffect(() => {
     if (!open) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    // Safari does not consistently focus buttons after pointer activation.
+    // Keep the disclosure trigger as the start of the menu's keyboard sequence.
+    menuButton.current?.focus();
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -109,15 +109,16 @@ function Navbar({ accountHref }: { accountHref?: string }) {
           ).filter((el) => el.getClientRects().length > 0),
         ];
         if (focusables.length === 0) return;
-        const first = focusables[0];
-        const last = focusables[focusables.length - 1];
-        if (event.shiftKey && document.activeElement === first) {
-          event.preventDefault();
-          last?.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
-          event.preventDefault();
-          first?.focus();
-        }
+        const current = focusables.indexOf(document.activeElement as HTMLElement);
+        const next = event.shiftKey
+          ? current <= 0
+            ? focusables.length - 1
+            : current - 1
+          : (current + 1) % focusables.length;
+        // Safari can skip links with its default keyboard preferences.
+        // Traverse the complete menu consistently and keep focus inside it.
+        event.preventDefault();
+        focusables[next]?.focus();
       }
     };
 
@@ -156,7 +157,7 @@ function Navbar({ accountHref }: { accountHref?: string }) {
         </div>
         <div className="ff-nav-actions">
           <ThemeToggle />
-          <AccountAccess href={accountHref} onOpenDialog={() => dialog.current?.showModal()} />
+          <AccountAccess href={accountHref} />
           <button
             ref={menuButton}
             type="button"
@@ -191,46 +192,10 @@ function Navbar({ accountHref }: { accountHref?: string }) {
                 <span>Aparência</span>
                 <ThemeToggle />
               </div>
-              <AccountAccess
-                href={accountHref}
-                onNavigate={() => setOpen(false)}
-                onOpenDialog={() => dialog.current?.showModal()}
-              />
+              <AccountAccess href={accountHref} onNavigate={() => setOpen(false)} />
             </div>
           </nav>
         </div>
-      )}
-      {!accountHref && (
-        <dialog ref={dialog} className="ff-account-dialog" aria-labelledby={titleId}>
-          <form method="dialog">
-            <button type="submit" className="ff-icon-button" aria-label="Fechar acesso à conta">
-              <X size={20} />
-            </button>
-          </form>
-          <span className="ff-feature-icon">
-            <Wallet size={22} />
-          </span>
-          <h2 id={titleId}>Seu próximo passo começa por aqui.</h2>
-          <p>
-            O acesso à conta ainda não está disponível nesta página. Enquanto preparamos essa etapa,
-            você pode conhecer o FinFlow em uma demonstração gratuita, sem cadastro.
-          </p>
-          <button
-            className="ff-button"
-            type="button"
-            onClick={() => {
-              dialog.current?.close();
-              document.getElementById("demonstracao")?.scrollIntoView({
-                behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
-                  ? "instant"
-                  : "smooth",
-              });
-            }}
-          >
-            Explorar demonstração
-            <ArrowUpRight size={17} />
-          </button>
-        </dialog>
       )}
     </header>
   );
@@ -240,33 +205,32 @@ function Hero() {
   return (
     <section className="ff-hero ff-container" id="inicio">
       <div className="ff-hero-copy">
+        <span className="ff-eyebrow ff-launch-status">
+          <span />
+          FinFlow · grátis e de código aberto
+        </span>
         <h1>
-          O controle total do seu dinheiro, com a{" "}
-          <span className="ff-hero-emphasis">simplicidade</span> que você sempre quis.
+          Seu dinheiro em ordem. <span className="ff-hero-emphasis">Mais espaço para viver.</span>
         </h1>
         <p>
-          Organize contas, antecipe faturas de cartão e acompanhe metas financeiras. E se você usa
-          inteligência artificial, conecte seu agente favorito para gerenciar tudo por você.
+          Contas, cartões, metas e planilhas em um só lugar, no seu computador. Entenda seu mês e
+          planeje o que vem depois.
         </p>
         <div className="ff-hero-actions">
-          <StartButton />
-          <a className="ff-secondary-link" href="#mobile">
-            Veja como funciona
-            <ArrowRight size={17} />
+          <DownloadButton />
+          <a className="ff-secondary-link" href="#como-funciona">
+            Como funciona
+            <ArrowRight size={17} aria-hidden="true" />
           </a>
         </div>
         <ul className="ff-hero-proof">
           <li>
             <Check size={15} />
-            Sem cadastro
+            Windows, macOS e Linux
           </li>
           <li>
             <Check size={15} />
-            Sem cartão de crédito
-          </li>
-          <li>
-            <Check size={15} />
-            No computador e no celular
+            Seus dados ficam com você
           </li>
         </ul>
       </div>
@@ -281,23 +245,23 @@ function Hero() {
   );
 }
 
-type PhoneScreen = "inicio" | "lancamento" | "cartoes";
+type PhoneScreen = "inicio" | "lancamento" | "cartoes" | "extrato" | "metas";
 
 const mobileSteps: { id: PhoneScreen; title: string; text: string }[] = [
   {
     id: "inicio",
-    title: "Saldo livre num relance",
-    text: "Abra o app e veja quanto ainda pode gastar no mês, com cada orçamento em cores.",
+    title: "Seu mês num relance",
+    text: "Saldo, gastos e limites organizados para você entender o que está acontecendo.",
   },
   {
     id: "lancamento",
-    title: "Um gasto em três toques",
-    text: "Toque no + da barra inferior, confirme valor e categoria e siga o seu dia.",
+    title: "O pequeno gasto também conta",
+    text: "Veja um exemplo de registro de despesa. Aquele café não precisa ficar só na memória.",
   },
   {
     id: "cartoes",
     title: "Faturas e metas no bolso",
-    text: "Limite de cada cartão, próximas parcelas e o progresso da sua reserva.",
+    text: "Uma visão das parcelas do cartão e do caminho até sua reserva.",
   },
 ];
 
@@ -440,8 +404,8 @@ function PhoneQuickAdd({ saved, onToggle }: { saved: boolean; onToggle: () => vo
       <div className="ff-phone-field">
         <small>Pagar com</small>
         <div className="ff-phone-account">
-          <CreditCard size={16} />
-          <span>Cartão final 4829</span>
+          <Wallet size={16} />
+          <span>Conta do dia a dia</span>
           <ChevronRight size={16} />
         </div>
       </div>
@@ -462,7 +426,7 @@ function PhoneCards() {
       </div>
       <div className="ff-phone-credit">
         <div>
-          <span>FinFlow Black</span>
+          <span>Cartão do dia a dia</span>
           <CreditCard size={18} />
         </div>
         <small>Fatura aberta</small>
@@ -503,9 +467,79 @@ function PhoneCards() {
   );
 }
 
+function PhoneTransactions({ saved }: { saved: boolean }) {
+  return (
+    <div className="ff-phone-view">
+      <div className="ff-phone-sheet-head">
+        <strong>Extrato</strong>
+        <span>Novembro · exemplo</span>
+      </div>
+      <p className="ff-fineprint">Um lugar para lembrar de cada gasto.</p>
+      {[
+        ...(saved ? [{ name: "Padaria", category: "Alimentação", amount: "− R$ 32,00" }] : []),
+        { name: "Uber", category: "Transporte", amount: "− R$ 28,90" },
+        { name: "Reembolso Pix", category: "Entrada", amount: "+ R$ 180,00" },
+        { name: "Mercado", category: "Alimentação", amount: "− R$ 286,90" },
+      ].map((item) => (
+        <div className="ff-phone-row" key={item.name}>
+          <span className="ff-phone-row-icon">
+            <ArrowLeftRight size={15} aria-hidden="true" />
+          </span>
+          <div>
+            <strong>{item.name}</strong>
+            <small>{item.category}</small>
+          </div>
+          <strong>{item.amount}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PhoneGoals() {
+  return (
+    <div className="ff-phone-view">
+      <div className="ff-phone-sheet-head">
+        <strong>Minhas metas</strong>
+        <Target size={17} aria-hidden="true" />
+      </div>
+      <div className="ff-phone-card">
+        <div className="ff-phone-card-head">
+          <strong>Reserva de emergência</strong>
+          <small>84%</small>
+        </div>
+        <div className="ff-progress">
+          <span style={{ width: "84%" }} />
+        </div>
+        <small className="ff-phone-goal-note">R$ 25.200 de R$ 30.000</small>
+      </div>
+      <div className="ff-phone-card">
+        <div className="ff-phone-card-head">
+          <strong>Próxima viagem</strong>
+          <small>40%</small>
+        </div>
+        <div className="ff-progress">
+          <span style={{ width: "40%" }} />
+        </div>
+        <small className="ff-phone-goal-note">R$ 2.000 de R$ 5.000</small>
+      </div>
+      <p className="ff-fineprint">Objetivos de exemplo. Cada passo conta.</p>
+    </div>
+  );
+}
+
 function MobileExperience() {
   const [screen, setScreen] = useState<PhoneScreen>("inicio");
   const [saved, setSaved] = useState(false);
+  const showScreen = (next: PhoneScreen) => {
+    setScreen(next);
+    if (matchMedia("(max-width: 600px)").matches) {
+      document.querySelector("#mobile .ff-phone")?.scrollIntoView({
+        block: "center",
+        behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+      });
+    }
+  };
 
   return (
     <section className="ff-section ff-container" id="mobile">
@@ -529,17 +563,25 @@ function MobileExperience() {
                   <PhoneQuickAdd saved={saved} onToggle={() => setSaved(!saved)} />
                 )}
                 {screen === "cartoes" && <PhoneCards />}
+                {screen === "extrato" && <PhoneTransactions saved={saved} />}
+                {screen === "metas" && <PhoneGoals />}
               </div>
               <fieldset className="ff-phone-tabbar" aria-label="Navegação do aplicativo">
                 <button
                   type="button"
                   className={screen === "inicio" ? "active" : ""}
+                  aria-pressed={screen === "inicio"}
                   onClick={() => setScreen("inicio")}
                 >
                   <LayoutDashboard size={18} />
                   Início
                 </button>
-                <button type="button" onClick={() => setScreen("inicio")}>
+                <button
+                  type="button"
+                  className={screen === "extrato" ? "active" : ""}
+                  aria-pressed={screen === "extrato"}
+                  onClick={() => setScreen("extrato")}
+                >
                   <ArrowLeftRight size={18} />
                   Extrato
                 </button>
@@ -554,12 +596,18 @@ function MobileExperience() {
                 <button
                   type="button"
                   className={screen === "cartoes" ? "active" : ""}
+                  aria-pressed={screen === "cartoes"}
                   onClick={() => setScreen("cartoes")}
                 >
                   <CreditCard size={18} />
                   Cartões
                 </button>
-                <button type="button" onClick={() => setScreen("cartoes")}>
+                <button
+                  type="button"
+                  className={screen === "metas" ? "active" : ""}
+                  aria-pressed={screen === "metas"}
+                  onClick={() => setScreen("metas")}
+                >
                   <Target size={18} />
                   Metas
                 </button>
@@ -580,10 +628,17 @@ function MobileExperience() {
         </div>
 
         <div className="ff-mobile-copy">
-          <h2>O FinFlow cabe no bolso.</h2>
+          <span className="ff-eyebrow">Pensado para a vida que acontece</span>
+          <h2>
+            O café de hoje.
+            <br />
+            Os planos de amanhã.
+            <br />
+            <span>Tudo no seu bolso.</span>
+          </h2>
           <p>
-            No celular, a navegação fica embaixo, ao alcance do polegar, e o botão + registra um
-            gasto antes de você guardar o troco.
+            Cuidar do dinheiro não deveria tomar o seu dia. Uma experiência simples no celular, com
+            o que importa ao alcance da mão.
           </p>
           <fieldset className="ff-mobile-steps" aria-label="Telas do aplicativo">
             {mobileSteps.map((step) => (
@@ -592,13 +647,23 @@ function MobileExperience() {
                 type="button"
                 className="ff-mobile-step"
                 aria-pressed={screen === step.id}
-                onClick={() => setScreen(step.id)}
+                onClick={() => showScreen(step.id)}
               >
                 <strong>{step.title}</strong>
                 <span>{step.text}</span>
               </button>
             ))}
           </fieldset>
+          <p className="ff-fineprint">
+            Prévia ilustrativa. A interface se adapta à tela do celular.
+          </p>
+          <div className="ff-mobile-telegram">
+            <div>
+              <Send size={18} />
+              <span>Um exemplo por mensagem</span>
+            </div>
+            <TelegramPreview />
+          </div>
         </div>
       </div>
     </section>
@@ -611,7 +676,7 @@ function CardPreview() {
     <div className="ff-card-preview">
       <div className="ff-physical-card" aria-hidden="true">
         <div>
-          <span>FinFlow</span>
+          <span>Seu cartão</span>
           <CreditCard size={20} />
         </div>
         <span className="ff-card-chip" />
@@ -696,7 +761,7 @@ function TelegramPreview() {
         </span>
         <div>
           <strong>FinFlow no Telegram</strong>
-          <small>bot conectado</small>
+          <small>prévia com dados fictícios</small>
         </div>
       </div>
       <div className="ff-chat-message ff-chat-outgoing">
@@ -722,32 +787,80 @@ function TelegramPreview() {
         </div>
       )}
       <button type="button" className="ff-chat-input" onClick={() => setSent(!sent)}>
-        {sent ? "Reiniciar conversa" : "Experimentar consulta de saldo"}
+        {sent ? "Reiniciar exemplo" : "Ver exemplo de consulta"}
         <Send size={16} />
       </button>
     </div>
   );
 }
 
+const moreFeatures = [
+  {
+    icon: CalendarClock,
+    title: "Compromissos",
+    text: "Contas fixas e parcelas dos próximos meses, separadas entre a pagar e a receber.",
+  },
+  {
+    icon: Gauge,
+    title: "Ritmo do mês",
+    text: "Quanto você gastou até hoje comparado ao mesmo período do mês passado.",
+  },
+  {
+    icon: Scissors,
+    title: "Onde dá para cortar",
+    text: "Cada gasto é Fixo, Cortável ou Variável. Assim fica claro o que pode sair primeiro.",
+  },
+  {
+    icon: Umbrella,
+    title: "Reserva de emergência",
+    text: "Uma meta de 6 meses do seu custo de vida, ou 12 se alguém depende de você.",
+  },
+  {
+    icon: Heart,
+    title: "Desejos",
+    text: "Sua lista de compras por prioridade, com a data em que cada item cabe no saldo.",
+  },
+  {
+    icon: Wand2,
+    title: "Automações",
+    text: "Regras que categorizam lançamentos e importações sozinhas pela descrição.",
+  },
+];
+
 function DailyFeatures() {
   return (
     <section className="ff-section ff-container" id="recursos">
       <div className="ff-section-head">
+        <span className="ff-eyebrow">Clareza para as decisões do dia a dia</span>
         <h2>
-          Menos “para onde foi?”.
+          O mês fica mais leve
           <br />
-          Mais “está tudo aqui”.
+          quando você vê o todo.
         </h2>
         <p>
-          Do café de hoje aos planos para o ano que vem. Um lugar para entender, organizar e seguir
-          em frente.
+          Menos contas de cabeça. Mais clareza sobre o que já foi, o que vem pela frente e o que
+          ainda cabe nos seus planos.
         </p>
       </div>
       <div className="ff-features-grid">
+        <article className="ff-feature-card ff-projection-feature" id="projecao">
+          <div className="ff-feature-copy">
+            <span className="ff-feature-icon">
+              <TrendingUp size={20} aria-hidden="true" />
+            </span>
+            <h3>Veja o saldo de cada dia antes de ele chegar.</h3>
+            <p>
+              Contas fixas, parcelas e faturas entram na projeção do saldo dia a dia, com faixas de
+              cor do folgado ao negativo. O FinFlow avisa qual será o menor saldo nos próximos 30
+              dias e quanto dá para guardar sem apertar.
+            </p>
+          </div>
+          <ProjectionPreview />
+        </article>
         <article className="ff-feature-card ff-cards-feature" id="cartoes">
           <div className="ff-feature-copy">
             <span className="ff-feature-icon">
-              <CreditCard size={20} />
+              <CreditCard size={20} aria-hidden="true" />
             </span>
             <h3>Cartões e faturas sem surpresa.</h3>
             <p>
@@ -760,33 +873,68 @@ function DailyFeatures() {
         <article className="ff-feature-card ff-budgets-feature">
           <div className="ff-feature-copy">
             <span className="ff-feature-icon">
-              <Wallet size={20} />
+              <Wallet size={20} aria-hidden="true" />
             </span>
             <h3>Seu limite, no seu ritmo.</h3>
             <p>
-              Veja quanto ainda pode gastar em cada categoria. Cores que ajudam a decidir, sem fazer
-              conta de cabeça.
+              Defina um limite mensal e veja se o mês está mais rápido que o anterior. Cores por
+              categoria ajudam a decidir, sem fazer conta de cabeça.
             </p>
           </div>
           <BudgetPreview />
         </article>
-        <article className="ff-feature-card ff-message-feature">
-          <div className="ff-feature-copy">
-            <span className="ff-feature-icon">
-              <MessageCircle size={20} />
-            </span>
-            <h3>Aconteceu. Anotou. Seguiu.</h3>
-            <p>
-              Lance o gasto na hora, sem esquecer nada. Registre por texto no Telegram, mesmo no
-              meio da correria.
-            </p>
-            <span className="ff-fineprint">Disponível nas instalações com o bot configurado.</span>
-          </div>
-          <div className="ff-telegram-stage">
-            <TelegramPreview />
-          </div>
-        </article>
       </div>
+      <ul className="ff-feature-list">
+        {moreFeatures.map(({ icon: Icon, title, text }) => (
+          <li key={title}>
+            <span className="ff-feature-icon">
+              <Icon size={19} aria-hidden="true" />
+            </span>
+            <div>
+              <h3>{title}</h3>
+              <p>{text}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function HowItWorks() {
+  return (
+    <section className="ff-section ff-how ff-container" id="como-funciona">
+      <div className="ff-section-head">
+        <span className="ff-eyebrow">Um começo possível</span>
+        <h2>
+          Um pouco de organização.
+          <br />
+          Uma nova visão do mês.
+        </h2>
+        <p>Reunir as informações e ajudar você a decidir com mais clareza, no seu tempo.</p>
+      </div>
+      <ol className="ff-how-steps">
+        {[
+          {
+            title: "Reúna o que entra e sai",
+            text: "Lance receitas e despesas ou importe sua planilha e o extrato do banco.",
+          },
+          {
+            title: "Encontre o seu ritmo",
+            text: "Separe o fixo do variável, escolha um limite mensal e acompanhe o ritmo do mês.",
+          },
+          {
+            title: "Dê espaço aos seus planos",
+            text: "Veja o saldo dos próximos dias, guarde quando sobrar e monte sua reserva.",
+          },
+        ].map((step, index) => (
+          <li key={step.title}>
+            <span className="ff-step-index">0{index + 1}</span>
+            <h3>{step.title}</h3>
+            <p>{step.text}</p>
+          </li>
+        ))}
+      </ol>
     </section>
   );
 }
@@ -822,15 +970,19 @@ function AIAssistant() {
     <section className="ff-section ff-container" id="assistente">
       <div className="ff-ai-panel">
         <div className="ff-ai-copy">
-          <h2>Conecte seu agente de IA via CLI ou MCP</h2>
+          <span className="ff-eyebrow">
+            <Sparkles size={16} />
+            MAIS CONVERSA. MENOS FORMULÁRIOS.
+          </span>
+          <h2>Às vezes, você só quer perguntar.</h2>
           <p>
-            Prefere conversar em vez de preencher formulários? Conecte seu assistente pessoal, como
-            Claude ou agentes locais, para consultar saldos, registrar compras por linguagem natural
-            e analisar gastos sem abrir planilhas.
+            “Quanto gastei com alimentação?” Uma conversa pode ajudar a entender o mês. Veja
+            exemplos de como o FinFlow pode apresentar suas informações a um assistente compatível.
           </p>
           <ul className="ff-ai-benefits">
             <li>
-              <Check size={16} />O seu assistente, com o contexto das suas finanças.
+              <Check size={16} />
+              Perguntas do dia a dia, em linguagem simples.
             </li>
             <li>
               <Check size={16} />
@@ -838,8 +990,8 @@ function AIAssistant() {
             </li>
           </ul>
           <p className="ff-fineprint">
-            A conexão depende de um assistente compatível e de configuração na sua instalação. Os
-            exemplos ao lado são simulações locais.
+            Os exemplos são ilustrativos. O FinFlow inclui um servidor MCP e uma linha de comando; o
+            recurso depende de um assistente compatível configurado por você.
           </p>
         </div>
         <div className="ff-ai-chat">
@@ -891,35 +1043,37 @@ function Privacy() {
   return (
     <section className="ff-section ff-privacy ff-container" id="seguranca">
       <div className="ff-privacy-heading">
+        <span className="ff-eyebrow">Confiança começa com clareza</span>
         <h2>
           Seu dinheiro.
           <br />
           Seus dados. Suas escolhas.
         </h2>
         <p>
-          Tranquilidade também é entender onde suas informações estão e poder levá-las com você.
+          O FinFlow roda no seu computador. Sem conta, sem cadastro e sem enviar seus dados
+          financeiros para servidor nenhum.
         </p>
-        <a className="ff-text-link" href="#demonstracao">
-          Experimente exportar seus dados
-          <Download size={16} />
+        <a className="ff-text-link" href="#baixar">
+          Baixar o FinFlow
+          <Download size={16} aria-hidden="true" />
         </a>
       </div>
       <div className="ff-privacy-features">
         {[
           {
-            icon: Download,
-            title: "Leve seus dados com você",
-            text: "Exporte para Excel em CSV ou para ferramentas compatíveis com OFX. Seu histórico pode acompanhar suas escolhas.",
+            icon: HardDrive,
+            title: "Um arquivo no seu computador",
+            text: "Tudo fica num banco SQLite local. Para fazer backup, basta copiar o arquivo. Nada vai para a nuvem.",
           },
           {
             icon: LockKeyhole,
-            title: "Você decide onde guardar",
-            text: "Em uma instalação própria, os dados ficam no ambiente que você administra. Você escolhe quem tem acesso.",
+            title: "Nenhuma senha bancária",
+            text: "O FinFlow não se conecta ao seu banco nem faz pagamentos. Você importa o extrato quando quiser.",
           },
           {
-            icon: ShieldCheck,
-            title: "Clareza antes de qualquer ação",
-            text: "Nesta demonstração, tudo acontece no navegador. Nenhuma conta é conectada, nenhum valor é enviado e nenhum pagamento real é feito.",
+            icon: Github,
+            title: "Código aberto e gratuito",
+            text: "Qualquer pessoa pode ler o código, compilar a própria versão e conferir o que o programa faz.",
           },
         ].map(({ icon: Icon, title, text }) => (
           <article key={title}>
@@ -939,20 +1093,32 @@ function Privacy() {
 
 const questions = [
   {
-    q: "Preciso entender de tecnologia para usar?",
-    a: "Não para organizar suas finanças pela interface visual. Você acompanha contas, cartões, orçamentos e metas no computador ou no celular, sem usar comandos. A conexão com IA e o Telegram são opções extras que dependem de configuração.",
+    q: "O FinFlow é gratuito?",
+    a: "Sim. O FinFlow é gratuito e de código aberto. Não há cadastro, mensalidade ou pedido de cartão: você baixa o programa e usa no seu computador.",
+  },
+  {
+    q: "Onde ficam os meus dados?",
+    a: "Num arquivo SQLite no seu computador, na pasta de configuração do usuário (AppData no Windows, Application Support no macOS, ~/.config no Linux). Nada é enviado para a nuvem. Para fazer backup, copie esse arquivo.",
+  },
+  {
+    q: "Preciso instalar alguma coisa?",
+    a: "Não. O FinFlow é um único arquivo para Windows, macOS ou Linux. Abra o programa e use pelo navegador em localhost:3333. Não precisa de Docker nem de banco de dados à parte.",
+  },
+  {
+    q: "Consigo trazer a planilha que já uso?",
+    a: "Sim. O FinFlow importa a planilha diária (Entrada, Saída, Diário e Saldo), arquivos do Excel e CSV, e o extrato OFX do banco. Antes de importar, você confere uma prévia com possíveis duplicados. E pode exportar tudo para uma pasta .xlsx com fórmulas.",
   },
   {
     q: "O FinFlow se conecta automaticamente ao meu banco?",
-    a: "Os exemplos mostram contas e cartões cadastrados manualmente. Não há conexão automática com bancos ou Open Finance anunciada nesta página. Você pode exportar seu histórico em CSV ou OFX para ferramentas compatíveis.",
+    a: "Não. O FinFlow não pede sua senha bancária nem acessa contas reais. Você registra os lançamentos ou importa o extrato exportado pelo internet banking.",
   },
   {
-    q: "Como faço para acessar minha conta?",
-    a: "No app instalado, use Acessar minha conta para abrir o acesso existente. Esta landing pública ainda não oferece uma conta online. O produto permanece privado e sua abertura está planejada, sem data anunciada. Enquanto isso, explore a demonstração sem cadastro.",
+    q: "Preciso entender de finanças para usar?",
+    a: "Não. A proposta é ajudar quem quer organizar o dinheiro no dia a dia, mesmo sem conhecer termos financeiros. Receitas, gastos, limites e metas aparecem com valores e explicações simples.",
   },
   {
     q: "O que acontece com os valores que eu testar aqui?",
-    a: "Os números da demonstração e do simulador ficam apenas nesta página e desaparecem ao recarregar. Não enviamos esses valores para um servidor. A preferência de tema é salva no navegador, quando ele permite.",
+    a: "Os controles da prévia e da calculadora funcionam só no seu navegador. Os valores voltam ao início quando você recarrega a página. A preferência de tema é salva no navegador, quando ele permite.",
   },
 ];
 
@@ -991,9 +1157,12 @@ function Footer() {
             <br />
             <span>Um passo de cada vez.</span>
           </h2>
-          <p>Conheça um jeito mais simples de cuidar do seu dinheiro.</p>
-          <StartButton>Comece agora</StartButton>
-          <small>Demonstração gratuita. Sem cadastro, sem cartão.</small>
+          <p>Baixe, abra no seu computador e comece hoje. Grátis e sem cadastro.</p>
+          <DownloadButton />
+          <a className="ff-text-link" href="#inicio">
+            Voltar ao início
+            <ArrowUpRight size={17} aria-hidden="true" />
+          </a>
         </div>
       </section>
       <footer className="ff-footer ff-container">
@@ -1003,14 +1172,18 @@ function Footer() {
         </div>
         <div className="ff-footer-links">
           <a href="#recursos">Recursos</a>
+          <a href="#planilhas">Planilhas</a>
           <a href="#mobile">No celular</a>
-          <a href="#cartoes">Cartões</a>
-          <a href="#assistente">Assistente de IA</a>
+          <a href="#como-funciona">Como funciona</a>
           <a href="#seguranca">Privacidade</a>
+          <a href="#baixar">Baixar</a>
           <a href="#duvidas">Dúvidas</a>
+          <a href={repoUrl} rel="noopener">
+            Código-fonte
+          </a>
         </div>
         <div className="ff-footer-bottom">
-          <span>© {year} FinFlow. Feito para a vida real.</span>
+          <span>© {year} FinFlow. Gratuito, de código aberto e feito para a vida real.</span>
           <a href="#inicio">
             Voltar ao início
             <ArrowUpRight size={14} />
@@ -1030,11 +1203,14 @@ export function LandingPage({ accountHref }: { accountHref?: string }) {
       <Navbar accountHref={accountHref} />
       <main id="ff-content">
         <Hero />
-        <MobileExperience />
         <DailyFeatures />
+        <SpreadsheetSection />
+        <HowItWorks />
+        <MobileExperience />
         <GoalCalculator />
         <AIAssistant />
         <Privacy />
+        <DownloadSection />
         <FAQ />
       </main>
       <Footer />

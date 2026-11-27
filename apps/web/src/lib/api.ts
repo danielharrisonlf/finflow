@@ -1,4 +1,5 @@
-const BASE_URL = `${import.meta.env.VITE_API_URL ?? "http://localhost:3333"}/api`;
+const DEFAULT_API_ORIGIN = import.meta.env.DEV ? "http://localhost:3333" : "";
+const BASE_URL = `${import.meta.env.VITE_API_URL ?? DEFAULT_API_ORIGIN}/api`;
 const TOKEN_KEY = "finflow_token";
 
 export function getAuthToken(): string | null {
@@ -38,7 +39,9 @@ export class ApiError extends Error {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getAuthToken();
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  // FormData: o navegador define o Content-Type com o boundary do multipart.
+  const headers: Record<string, string> =
+    init?.body instanceof FormData ? {} : { "Content-Type": "application/json" };
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
@@ -83,12 +86,24 @@ export const api = {
       body: body === undefined ? undefined : JSON.stringify(body),
     }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+  /** POST multipart/form-data (upload de arquivo). */
+  upload: <T>(path: string, form: FormData) => request<T>(path, { method: "POST", body: form }),
 };
 
-export function exportUrl(format: "csv" | "ofx", params: URLSearchParams): string {
+/**
+ * URL absoluta para download direto via `<a href>`: o token vai em `?token=`,
+ * já que o navegador não envia o header Authorization em navegação.
+ */
+export function downloadUrl(path: string, params?: URLSearchParams): string {
   const query = new URLSearchParams(params);
-  query.set("format", format);
   const token = getAuthToken();
   if (token) query.set("token", token);
-  return `${BASE_URL}/transactions/export?${query.toString()}`;
+  const qs = query.toString();
+  return `${BASE_URL}${path}${qs ? `?${qs}` : ""}`;
+}
+
+export function exportUrl(format: "csv" | "ofx" | "xlsx", params: URLSearchParams): string {
+  const query = new URLSearchParams(params);
+  query.set("format", format);
+  return downloadUrl("/transactions/export", query);
 }

@@ -1,0 +1,49 @@
+name: Release
+
+# Publica os binários (6 plataformas) como assets da GitHub Release ao enviar uma tag v*.
+#   git tag v0.2.0 && git push origin v0.2.0
+# Os nomes dos assets não levam versão: .../releases/latest/download/finflow-windows-amd64.zip
+# sempre aponta para a última release estável (tags com "-", como v0.3.0-rc.1, viram pre-release).
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build & publish
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build release archives
+        run: node scripts/release.mjs "$GITHUB_REF_NAME"
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          flags=()
+          if [[ "$TAG" == *-* ]]; then flags+=(--prerelease); fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/release/* --clobber
+          else
+            gh release create "$TAG" dist/release/* --verify-tag --generate-notes \
+              --title "FinFlow $TAG" "${flags[@]}"
+          fi

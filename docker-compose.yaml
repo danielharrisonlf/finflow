@@ -1,7 +1,10 @@
+# PostgreSQL é opcional — por padrão o FinFlow usa SQLite embutido (zero Docker).
+# Para subir o Postgres localmente: docker compose --profile postgres up -d db
 services:
   db:
     image: postgres:16-alpine
     container_name: finflow-db
+    profiles: ["postgres"]
     restart: unless-stopped
     environment:
       POSTGRES_USER: finflow
@@ -17,11 +20,10 @@ services:
       timeout: 3s
       retries: 10
 
-  # Banco descartável exclusivo para testes de integração (nome termina em _test)
   db_test:
     image: postgres:16-alpine
     container_name: finflow-db-test
-    restart: unless-stopped
+    profiles: ["test"]
     environment:
       POSTGRES_USER: finflow
       POSTGRES_PASSWORD: finflow

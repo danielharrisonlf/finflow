@@ -13,12 +13,20 @@ html.light {
   --ff-accent-hover: #105437;
   --ff-accent-text: #ffffff;
   --ff-tint: #e9f3ed;
+  --ff-stage: #eaf0ec;
+  --ff-ai-bg: #edf1f7;
   --ff-income: #14764c;
   --ff-expense: #ba3452;
   --ff-warning: #936000;
   --ff-danger: #b92f42;
   --ff-sky: #236e8b;
   --ff-shadow: 0 24px 80px #243d2d0c, 0 4px 16px #243d2d04;
+  /* Daily balance bands, from comfortable to very negative. */
+  --ff-band-dark-green: #15784a;
+  --ff-band-light-green: #6dbb87;
+  --ff-band-yellow: #e0aa1b;
+  --ff-band-light-red: #e9899a;
+  --ff-band-red: #c0283f;
 }
 html.dark {
   color-scheme: dark;
@@ -34,12 +42,19 @@ html.dark {
   --ff-accent-hover: #abe8c4;
   --ff-accent-text: #12291c;
   --ff-tint: #192c22;
+  --ff-stage: #15231c;
+  --ff-ai-bg: #151e29;
   --ff-income: #6cdbab;
   --ff-expense: #ff93ab;
   --ff-warning: #f2c76b;
   --ff-danger: #ff94a6;
   --ff-sky: #91d2e8;
   --ff-shadow: 0 24px 80px #0004, 0 4px 16px #0002;
+  --ff-band-dark-green: #3dbb7c;
+  --ff-band-light-green: #a6e3bd;
+  --ff-band-yellow: #f2c76b;
+  --ff-band-light-red: #ff9fb0;
+  --ff-band-red: #ff5470;
 }
 
 .ff-theme-control {
@@ -58,8 +73,8 @@ html.dark {
   border: 1px solid transparent;
   background: transparent;
   color: var(--ff-muted);
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   cursor: pointer;
   border-radius: 8px;
   transition:
@@ -67,8 +82,8 @@ html.dark {
     color 0.2s;
 }
 .ff-system-button {
-  width: 27px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   color: var(--ff-subtle);
 }
 .ff-system-button[aria-pressed="true"] {
