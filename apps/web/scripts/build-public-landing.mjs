@@ -33,6 +33,12 @@ for (const name of ["robots.txt", "sitemap.xml"]) {
 let html = await readFile(join(web, "index.html"), "utf8");
 html = html
   .replace(/\s*<link\b(?=[^>]*(?:fonts\.googleapis\.com|fonts\.gstatic\.com))[^>]*>/g, "")
+  // O PWA é do app instalado no computador do usuário; o site público não publica manifest nem ícones.
+  .replace(/\s*<link\b(?=[^>]*rel="(?:manifest|apple-touch-icon)")[^>]*>/g, "")
+  .replace(
+    /\s*<meta\b(?=[^>]*name="(?:mobile-web-app-capable|apple-mobile-web-app-title)")[^>]*>/g,
+    "",
+  )
   .replace(
     "<title>FinFlow</title>",
     "<title>FinFlow — Seu dinheiro em ordem, grátis e no seu computador</title>",

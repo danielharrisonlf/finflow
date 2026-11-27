@@ -1,0 +1,54 @@
+# Changelog
+
+Todas as mudanças relevantes do FinFlow. O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e as versões seguem o [SemVer](https://semver.org/lang/pt-BR/). Os pacotes de cada versão ficam em [Releases](https://github.com/danielharrisonlf/finflow/releases).
+
+## [Não lançado] — v0.3.0
+
+Recursos de planejamento da v3, descritos em [docs/product-v3-contract.md](docs/product-v3-contract.md). Em implementação.
+
+### Adicionado
+
+- **Quanto posso gastar hoje** no painel, com gráfico do ritmo do mês (gasto acumulado contra o mês anterior) e gasto projetado até o fim do mês.
+- **Posso comprar?**: simulador de compra à vista ou parcelada no cartão sobre a projeção de 365 dias, com veredito (cabe, com cuidado, melhor esperar), impacto no limite e data em que caberia.
+- **Assinaturas detectadas** no histórico, com aviso de aumento de preço e opção de acompanhar como compromisso ou ignorar.
+- **Alertas e dicas** num sino com contador: orçamento, ritmo, saldo negativo projetado, vencimentos, assinaturas, reserva baixa, meta atrasada, pendências antigas e lançamentos sem categoria.
+- **Tags** em lançamentos (filtro, gasto por tag e regras de automação que aplicam tag).
+- **Fluxo de caixa** mês a mês em regime de caixa ou de competência, com “para onde foi o dinheiro”.
+- **Composição da fatura** (parcelas, assinaturas e compras avulsas) e **transferências inteligentes** entre contas próprias.
+- **Prévia do link** em Desejos (título, preço e imagem do produto).
+- **Investimentos**: posições, aportes, resgates, rentabilidade, alocação por tipo e instituição e histórico de 12 meses.
+- **Dívidas e financiamentos**: parcelas Price, saldo devedor, juros restantes e estratégia de quitação avalanche, bola de neve ou só as parcelas; parcelas futuras entram na projeção e nos compromissos.
+- **Evolução do patrimônio** mês a mês (contas, investimentos e dívidas).
+- **11 calculadoras** em `/calculadoras`: alugar ou comprar, carro ou app de transporte, juros compostos, pequenos gastos, 13º salário, reserva de emergência, independência financeira, quitar dívidas, Price × SAC, à vista ou parcelado, CDB × poupança.
+- **Modelos de meta** (casa própria, filho, período sabático, viagem, veículo, casamento, reserva), **paleta de comandos** (Ctrl+K / ⌘K) e **modo privacidade** que oculta valores.
+- **No celular pela rede de casa**: `finflow serve --lan` (ou `FINFLOW_LAN=1`, exige `FINFLOW_PASSWORD`), QR code nas configurações e app instalável (PWA) que guarda só a interface.
+- **Assistente “Pergunte ao FinFlow”** com a chave do próprio usuário para a API do Claude (`ANTHROPIC_API_KEY` ou Configurações): respostas sobre a projeção, leitura de foto ou PDF de comprovante, e escritas sempre como proposta confirmada pelo usuário.
+- **MCP via HTTP** em `POST /api/mcp` (Bearer), dez novas tools MCP, `GET /api/system/info` e a página **API e IA** em Configurações.
+- CLI: `assinaturas`, `alertas`, `posso`, `investimentos`, `dividas`, `patrimonio`.
+- Landing: seção “Pergunte ao FinFlow” com conversa de exemplo local, seção de patrimônio com estratégia de quitação e as 11 calculadoras, card “quanto dá para gastar hoje”, recursos atualizados, acesso pelo celular e novas perguntas frequentes.
+
+### Alterado
+
+- Sem `--lan`, `finflow serve` passa a escutar só em `127.0.0.1`.
+
+## [0.2.0] — 2026-11-27
+
+Primeira versão distribuída como binário único, gratuito e de código aberto (licença MIT).
+
+### Adicionado
+
+- **Binário único em Go** (`cmd/finflow`) com API REST, interface web embutida, CLI e servidor MCP (stdio). SQLite embutido por padrão (pure Go, sem CGO nem Docker); PostgreSQL opcional via `DATABASE_URL`. Dois cliques iniciam o servidor e abrem o navegador; `finflow version`.
+- **Planejamento**: tipos de gasto Fixo / Cortável / Variável com taxonomia brasileira padrão, compromissos (contas e receitas recorrentes que viram lançamentos), limite mensal, faixas de saldo, reserva de emergência (6 ou 12 meses), desejos com a data em que cabem no saldo e regras de automação aplicadas a lançamentos, cartões, Telegram e importações.
+- **Insights**: ritmo do mês, limite mensal, performance (entradas − fixo − diário), taxa de economia, patrimônio, cobertura da reserva, onde cortar, projeção diária e de 12 meses sobre o saldo líquido, visão do ano e compromissos.
+- **Planilhas**: pasta `.xlsx` anual no formato da planilha diária com fórmulas vivas, modelo de importação, extrato em `.xlsx`, e importação com prévia e detecção de duplicados para planilha diária, Excel/CSV e OFX.
+- **Interface web**: cards de insight no painel, Compromissos, Projeção com saldo diário colorido e plano de ação, Ano, Planilhas (assistente de importação e exportações), reserva e desejos em Metas, tipos de gasto e automações em Categorias, Configurações e navegação agrupada.
+- CLI: `projecao`, `fixas`, `insights`, `importar`, `exportar --formato xlsx`. MCP com 24 tools.
+- **Distribuição**: `scripts/release.mjs` gera pacotes para 6 plataformas com `checksums.txt`, workflow de release por tag e instaladores `install.sh` / `install.ps1` com conferência de SHA-256.
+- **Landing**: download gratuito com detecção do sistema, comandos de instalação e seção de planilhas no lugar do diálogo de pré-lançamento.
+
+### Alterado
+
+- API NestJS, CLI Node e servidor MCP em Node substituídos pelo binário Go.
+
+[Não lançado]: https://github.com/danielharrisonlf/finflow/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/danielharrisonlf/finflow/releases/tag/v0.2.0

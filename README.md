@@ -1,6 +1,6 @@
 # FinFlow
 
-Controle financeiro pessoal **gratuito, de código aberto e local-first**: contas, cartões com faturas e parcelas, projeção do saldo dia a dia, compromissos, limite mensal, metas e reserva de emergência, desejos e importação/exportação de planilhas. Um único programa roda no seu computador e abre no navegador. Seus dados ficam num arquivo SQLite local. Nada vai para a nuvem.
+Controle financeiro pessoal **gratuito, de código aberto e local-first**: contas, cartões com faturas e parcelas, projeção do saldo dia a dia, compromissos, limite mensal, metas e reserva de emergência, desejos, investimentos, dívidas, patrimônio e importação/exportação de planilhas, com um assistente opcional que usa a sua chave da API do Claude. Um único programa roda no seu computador e abre no navegador (e no celular, pela rede de casa). Seus dados ficam num arquivo SQLite local. Nada vai para a nuvem, exceto as perguntas que você fizer ao assistente.
 
 ## Baixar e usar
 
@@ -61,17 +61,55 @@ Para fazer backup, copie o arquivo com o FinFlow fechado. Para usar outro local,
 
 ## O que o FinFlow faz
 
-- **Contas e cartões**: saldos, transferências, faturas com fechamento e vencimento, compras parceladas.
+- **Contas e cartões**: saldos, transferências, faturas com fechamento e vencimento, compras parceladas e a composição de cada fatura (parcelas, assinaturas, compras avulsas). Despesa e receita de mesmo valor entre contas suas viram transferência com um clique.
 - **Projeção do saldo dia a dia** com faixas de cor (do folgado ao muito negativo), menor saldo nos próximos 30 dias e quanto dá para guardar até a próxima entrada.
-- **Compromissos**: contas fixas, receitas recorrentes e parcelas dos próximos meses, a pagar e a receber.
-- **Limite mensal e ritmo do mês**: quanto ainda cabe por dia e a comparação com o mesmo período do mês anterior.
+- **Quanto posso gastar hoje e ritmo do mês**: o que sobra do limite dividido pelos dias restantes (ou o menor saldo projetado, sem limite), com o gasto acumulado comparado ao mês anterior.
+- **Posso comprar?**: simula uma compra à vista ou parcelada no cartão sobre a projeção e responde “cabe”, “com cuidado” ou “melhor esperar”, com a data em que caberia.
+- **Compromissos e assinaturas**: contas fixas, receitas recorrentes e parcelas dos próximos meses; cobranças repetidas são detectadas no histórico, com aviso de aumento de preço.
+- **Alertas e dicas**: orçamento perto do limite, fatura ou conta vencendo, saldo que vai ficar negativo, reserva baixa, meta atrasada e outros, num sino com contador.
+- **Tags**: marque lançamentos (viagem, reforma...) e veja o gasto por tag, além das categorias.
+- **Fluxo de caixa**: mês a mês em regime de caixa (compra no cartão no mês do vencimento da fatura) ou de competência.
 - **Fixo / Cortável / Variável**: cada categoria tem um tipo de gasto, com sugestões de onde dá para cortar.
-- **Orçamentos, metas e reserva de emergência** (6 meses de custo de vida, ou 12 com dependentes).
-- **Desejos**: lista de compras por prioridade com a data em que cada item cabe no saldo.
-- **Automações**: regras que categorizam lançamentos e importações pela descrição.
+- **Orçamentos, metas com modelos e reserva de emergência** (6 meses de custo de vida, ou 12 com dependentes).
+- **Desejos**: lista de compras por prioridade, com prévia do link do produto e a data em que cada item cabe no saldo.
+- **Investimentos**: posições por tipo e instituição, aportes, resgates, rentabilidade e alocação.
+- **Dívidas e financiamentos**: parcelas (Price), saldo devedor, juros restantes e estratégia de quitação avalanche ou bola de neve.
+- **Evolução do patrimônio**: contas + investimentos − dívidas no fim de cada mês.
+- **11 calculadoras**: alugar ou comprar, carro ou app de transporte, juros compostos, pequenos gastos, 13º salário, reserva de emergência, independência financeira, quitar dívidas, Price × SAC, à vista ou parcelado, CDB × poupança.
+- **Automações**: regras que categorizam (e marcam com tag) lançamentos e importações pela descrição.
 - **Visão do ano**: entradas, saídas, performance e economia mês a mês.
 - **Planilhas**: importa a planilha diária (Entrada · Saída · Diário · Saldo), Excel/CSV e extrato OFX; exporta uma pasta `.xlsx` anual com fórmulas vivas, saldo diário colorido e aba Economia.
-- **CLI, servidor MCP** para assistentes de IA e **bot do Telegram**, no mesmo binário.
+- **Busca e privacidade**: paleta de comandos (Ctrl+K / ⌘K) e modo que oculta os valores na tela.
+- **No celular, sem nuvem**: modo rede local e app instalável (PWA). Veja [No celular](#no-celular-rede-local--app).
+- **Assistente “Pergunte ao FinFlow”** com a sua chave da API do Claude, inclusive leitura de foto de comprovante. Veja [Assistente](#assistente-pergunte-ao-finflow).
+- **CLI, servidor MCP** (stdio e HTTP), **API pessoal** e **bot do Telegram**, no mesmo binário.
+
+### No celular (rede local + app)
+
+O FinFlow continua rodando no computador; o celular só acessa pela rede de casa. Nada passa por servidor externo.
+
+1. Defina uma senha (obrigatória no modo rede local) e inicie com `--lan`:
+
+   ```bash
+   FINFLOW_PASSWORD='uma senha forte' finflow serve --lan    # ou FINFLOW_LAN=1
+   ```
+
+   No Windows (PowerShell): `$env:FINFLOW_PASSWORD = 'uma senha forte'; finflow serve --lan`. Sem `FINFLOW_PASSWORD`, o `--lan` se recusa a iniciar.
+2. O terminal e **Configurações → API e IA** mostram os endereços da rede (`http://192.168.x.x:3333`) e um QR code. Abra no celular conectado ao mesmo Wi-Fi e entre com a senha.
+3. Instale como app: no Android (Chrome), menu **⋮ → Instalar app**; no iPhone (Safari), **Compartilhar → Adicionar à Tela de Início**. O app guarda só a interface; os dados continuam no computador, que precisa estar ligado com o FinFlow aberto.
+
+Sem `--lan`, o servidor escuta só em `127.0.0.1` (acessível apenas no próprio computador).
+
+### Assistente (Pergunte ao FinFlow)
+
+O assistente responde perguntas como “Posso fazer uma viagem?” consultando sua projeção, limites, compromissos e metas, e lê a foto (ou o PDF) de um comprovante para preencher um lançamento. Ele usa a API do Claude, da Anthropic, com **a sua própria chave**:
+
+- defina `ANTHROPIC_API_KEY` antes de iniciar o FinFlow (`ANTHROPIC_API_KEY=sk-ant-... finflow serve`), ou
+- cole a chave em **Configurações → API e IA**. Ela fica no seu banco local e nunca é devolvida à interface.
+
+**Custo**: o FinFlow é gratuito; o uso da API é cobrado pela Anthropic na sua conta, conforme o volume de perguntas. Sem chave, todo o resto funciona, inclusive o simulador “Posso comprar?” e as calculadoras.
+
+**Privacidade**: só as mensagens do assistente (com os dados que ele consultar para responder) e os comprovantes que você enviar vão para a API do Claude. Qualquer escrita (registrar despesa, criar compromisso, guardar numa meta, adicionar desejo) vira uma proposta que só é salva depois que você confirma na tela. O histórico da conversa fica no seu navegador.
 
 ## Compilar do código-fonte
 
@@ -95,7 +133,7 @@ O `.env` é opcional (`cp .env.example .env`); o SQLite funciona sem configuraç
 
 | Camada | Tecnologia |
 | --- | --- |
-| Binário único (`cmd/finflow`) | Go 1.26 (`net/http`, Cobra), API REST + Web embutida + CLI + MCP (stdio) |
+| Binário único (`cmd/finflow`) | Go 1.26 (`net/http`, Cobra), API REST + Web embutida + CLI + MCP (stdio e HTTP) + assistente (API do Claude) |
 | Banco de dados (`internal/db`) | **SQLite** embutido (`modernc.org/sqlite`, pure Go, zero CGO/Docker) por padrão; **PostgreSQL** opcional (`pgx/v5`) via `DATABASE_URL` |
 | Planilhas (`internal/spreadsheet`) | `excelize/v2` para `.xlsx`; leitores de CSV e OFX |
 | Web (`apps/web`) | React 19, Vite 8, Tailwind v4, Radix UI, TanStack Query, React Hook Form |
@@ -169,7 +207,7 @@ pnpm release              # pacotes das 6 plataformas em dist/release/
 - **Tipo de gasto**: categorias de despesa são `FIXED`, `CUTTABLE` ou `VARIABLE` (subcategoria sem valor herda do pai). Fixo + Cortável formam as **Saídas**; Variável e despesas sem categoria formam o **Diário**. **Performance** = Entradas − (Saídas + Diário).
 - **Faixas de saldo** (padrão, configuráveis): verde escuro ≥ R$ 2.000, verde claro ≥ R$ 1.000, amarelo ≥ R$ 0, vermelho claro ≥ −R$ 500, vermelho abaixo disso.
 
-O contrato completo da v2 (modelos, insights, projeção, planilhas) está em [docs/product-v2-contract.md](docs/product-v2-contract.md).
+O contrato completo da v2 (modelos, insights, projeção, planilhas) está em [docs/product-v2-contract.md](docs/product-v2-contract.md); os recursos da v3 (tags, assinaturas, alertas, investimentos, dívidas, patrimônio, MCP via HTTP, rede local, assistente e calculadoras) em [docs/product-v3-contract.md](docs/product-v3-contract.md). As mudanças por versão estão no [CHANGELOG.md](CHANGELOG.md).
 
 ### API (resumo)
 
@@ -184,6 +222,14 @@ Além de contas, cartões, faturas, transações, categorias, orçamentos e meta
 | Insights | `GET /api/insights/overview`, `/projection?days=90`, `/year?year=2026`, `/commitments` |
 | Planilhas | `GET /api/spreadsheet/export.xlsx?year=2026`, `GET /api/spreadsheet/template.xlsx`, `POST /api/import/preview`, `POST /api/import/commit` |
 | Exportação do extrato | `GET /api/transactions/export?format=csv\|ofx\|xlsx` (mesmos filtros do extrato) |
+| Tags | `GET/POST /api/tags`, `PATCH/DELETE /api/tags/{id}`, `GET /api/insights/tags` |
+| Assinaturas e alertas | `GET /api/insights/subscriptions` (+ `/{key}/track`, `/{key}/dismiss`), `GET /api/alerts`, `POST /api/alerts/{id}/dismiss` |
+| Fluxo de caixa e “posso comprar?” | `GET /api/insights/cashflow?months=3&basis=CASH\|ACCRUAL`, `POST /api/insights/can-afford` |
+| Investimentos | `GET/POST /api/investments`, `PATCH/DELETE /api/investments/{id}`, `POST .../{id}/value\|contribution\|redeem`, `GET /api/investments/summary` |
+| Dívidas | `GET/POST /api/loans`, `PATCH/DELETE /api/loans/{id}`, `POST /api/loans/{id}/pay`, `GET /api/loans/strategy?extraCents=0` |
+| Patrimônio | `GET /api/insights/net-worth?months=12` |
+| Assistente | `GET /api/ai/status`, `PUT /api/ai/key`, `POST /api/ai/chat` (SSE), `POST /api/ai/receipt` |
+| MCP e sistema | `POST /api/mcp`, `GET /api/system/info` |
 
 - **CSV**: separador `;`, vírgula decimal e BOM UTF-8, para abrir direto no Excel em português.
 - **OFX 1.02**: aceito por planilhas e apps financeiros.
@@ -217,6 +263,13 @@ finflow importar planilha.xlsx --conta nubank [--simular]
 finflow projecao [--dias 30]
 finflow fixas
 finflow insights [--mes 11 --ano 2026]
+finflow assinaturas                        # assinaturas detectadas no histórico
+finflow alertas                            # alertas e dicas do momento
+finflow posso 2400 celular --parcelas 10 --cartao ultravioleta   # cabe na projeção?
+finflow investimentos                      # posições, rentabilidade e alocação
+finflow dividas                            # dívidas e estratégia de quitação
+finflow patrimonio                         # evolução do patrimônio mês a mês
+finflow serve --lan                        # acesso pela rede local (exige FINFLOW_PASSWORD)
 finflow status
 ```
 
@@ -224,9 +277,9 @@ Contas, cartões, categorias e metas aceitam nome parcial sem diferenciar maiús
 
 ### Autenticação
 
-Por padrão, em uso local sem `FINFLOW_PASSWORD`, a API roda em modo aberto. O `serve` escuta em todas as interfaces; antes de expor a API na rede:
+Por padrão, em uso local sem `FINFLOW_PASSWORD`, a API roda em modo aberto e o `serve` escuta só em `127.0.0.1`. Para abrir na rede local, use `finflow serve --lan` (ou `FINFLOW_LAN=1`), que exige senha:
 
-1. Defina `FINFLOW_PASSWORD` no `.env` com uma senha forte (e opcionalmente `FINFLOW_AUTH_SECRET` e `FINFLOW_API_TOKEN`). Para aceitar só conexões locais, use `finflow serve --host 127.0.0.1` (ou `API_HOST`).
+1. Defina `FINFLOW_PASSWORD` no `.env` com uma senha forte (e opcionalmente `FINFLOW_AUTH_SECRET` e `FINFLOW_API_TOKEN`, um token fixo para scripts, MCP via HTTP e a API pessoal).
 2. Na interface web, uma tela de login passa a ser exigida automaticamente e armazena um token de sessão assinado (HMAC-SHA256, válido por 30 dias).
 3. Na CLI e no MCP remotos, defina `FINFLOW_TOKEN` (ou `FINFLOW_PASSWORD`) ou passe `--token`.
 4. O webhook do Telegram (`/api/telegram/webhook`) continua acessível mediante validação do cabeçalho `x-telegram-bot-api-secret-token`.
@@ -248,7 +301,17 @@ O servidor MCP roda como subcomando do mesmo binário (`finflow mcp`) e funciona
 
 No Windows, algo como `"C:/Users/<você>/AppData/Local/FinFlow/finflow.exe"` (destino do `install.ps1`); no macOS/Linux, `~/.local/bin/finflow` expandido para o caminho absoluto.
 
-Tools de leitura: `get_summary`, `get_cashflow`, `get_category_spending`, `get_upcoming_bills`, `list_accounts`, `list_cards`, `list_card_invoices`, `list_transactions`, `list_categories`, `list_budgets`, `list_goals`, `get_insights`, `get_projection`, `get_year_overview`, `list_recurring`. Escrita: `create_expense`, `create_income`, `create_card_expense`, `transfer`, `pay_invoice`, `set_budget`, `contribute_goal`, `create_recurring`, `export_transactions`. Os valores são em centavos.
+Tools de leitura: `get_summary`, `get_cashflow`, `get_category_spending`, `get_upcoming_bills`, `list_accounts`, `list_cards`, `list_card_invoices`, `list_transactions`, `list_categories`, `list_budgets`, `list_goals`, `get_insights`, `get_projection`, `get_year_overview`, `list_recurring`, `list_tags`, `get_subscriptions`, `get_alerts`, `can_afford`, `get_cashflow_basis`, `list_investments`, `get_investment_summary`, `list_loans`, `get_debt_strategy`, `get_net_worth_history`. Escrita: `create_expense`, `create_income`, `create_card_expense`, `transfer`, `pay_invoice`, `set_budget`, `contribute_goal`, `create_recurring`, `export_transactions`. Os valores são em centavos.
+
+#### MCP via HTTP
+
+Com o `serve` rodando, as mesmas tools ficam em `POST /api/mcp` (Streamable HTTP, JSON-RPC 2.0), protegido pelo mesmo Bearer da API. Use como token o `FINFLOW_API_TOKEN` (recomendado) ou a `FINFLOW_PASSWORD`; em modo aberto, sem senha, o cabeçalho é dispensado. No Claude Code:
+
+```bash
+claude mcp add --transport http finflow http://localhost:3333/api/mcp --header "Authorization: Bearer <token>"
+```
+
+Outros clientes MCP com transporte HTTP usam a mesma URL e cabeçalho. **Configurações → API e IA** mostra os trechos prontos (stdio e HTTP) e a URL da API. O mesmo token dá acesso à **API pessoal** (`/api/*`, resumo abaixo) para scripts e automações.
 
 ### Bot do Telegram
 
@@ -276,7 +339,8 @@ internal/
   httpapi/            rotas /api/*, CORS, auth, recover, limite de corpo, timeouts e SPA embutida
   client/             backend unificado (local in-process ou HTTP remoto)
   cli/                comandos Cobra e renderização de tabelas/barras no terminal
-  mcp/                servidor MCP JSON-RPC 2.0 sobre stdio
+  mcp/                servidor MCP JSON-RPC 2.0 (stdio e HTTP em /api/mcp)
+  ai/                 assistente com a API do Claude (chave do usuário)
   webui/              embedding de apps/web/dist via go:embed
   testutil/           bancos isolados para testes (SQLite em memória + PostgreSQL opcional)
 apps/web/             interface React 19 + Vite 8 + Tailwind v4 (e a landing em /inicio)

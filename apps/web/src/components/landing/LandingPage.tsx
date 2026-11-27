@@ -5,38 +5,44 @@ import {
   ArrowUpRight,
   AudioLines,
   Bell,
+  BellRing,
   CalendarClock,
   Check,
   CheckCheck,
   ChevronRight,
   CreditCard,
   Download,
-  Gauge,
   Github,
   HardDrive,
   Heart,
+  Landmark,
   LayoutDashboard,
   LockKeyhole,
   Menu,
   Plus,
+  Repeat,
   Scissors,
   Send,
   ShieldCheck,
-  Sparkles,
+  Tags,
   Target,
+  TrendingDown,
   TrendingUp,
   Umbrella,
   Wallet,
   Wand2,
+  Wifi,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { AssistantSection } from "./AssistantSection";
 import { Brand } from "./Brand";
 import { DemoDashboard } from "./DemoDashboard";
 import { DownloadSection } from "./DownloadSection";
 import { repoUrl } from "./download";
 import { GoalCalculator } from "./GoalCalculator";
 import { money } from "./money";
+import { PlanningSection } from "./PlanningSection";
 import { ProjectionPreview } from "./ProjectionPreview";
 import { SpreadsheetSection } from "./SpreadsheetSection";
 import { ThemeToggle } from "./ThemeToggle";
@@ -657,6 +663,16 @@ function MobileExperience() {
           <p className="ff-fineprint">
             Prévia ilustrativa. A interface se adapta à tela do celular.
           </p>
+          <div className="ff-mobile-lan">
+            <Wifi size={19} aria-hidden="true" />
+            <div>
+              <strong>No celular, pela rede de casa</strong>
+              <p>
+                Inicie com <code>finflow serve --lan</code>, abra pelo QR code das configurações e
+                instale como app na tela inicial. Os dados continuam no seu computador, sem nuvem.
+              </p>
+            </div>
+          </div>
           <div className="ff-mobile-telegram">
             <div>
               <Send size={18} />
@@ -711,6 +727,16 @@ function CardPreview() {
 function BudgetPreview() {
   return (
     <div className="ff-budget-preview">
+      <div className="ff-spend-today">
+        <div>
+          <span>Você pode gastar hoje</span>
+          <strong>{money(8600)}</strong>
+        </div>
+        <p>
+          <TrendingDown size={14} aria-hidden="true" />
+          Ritmo 8% abaixo do mesmo período de outubro
+        </p>
+      </div>
       {[
         {
           title: "Alimentação",
@@ -801,9 +827,24 @@ const moreFeatures = [
     text: "Contas fixas e parcelas dos próximos meses, separadas entre a pagar e a receber.",
   },
   {
-    icon: Gauge,
-    title: "Ritmo do mês",
-    text: "Quanto você gastou até hoje comparado ao mesmo período do mês passado.",
+    icon: Repeat,
+    title: "Assinaturas detectadas",
+    text: "Cobranças que se repetem no histórico aparecem sozinhas, com aviso quando o preço sobe.",
+  },
+  {
+    icon: BellRing,
+    title: "Alertas e dicas",
+    text: "Limite apertando, fatura vencendo ou saldo que vai ficar negativo: o que pede atenção primeiro.",
+  },
+  {
+    icon: Tags,
+    title: "Tags",
+    text: "Marque lançamentos como viagem ou reforma e veja quanto cada assunto custou.",
+  },
+  {
+    icon: Landmark,
+    title: "Fluxo de caixa",
+    text: "O mês pelo regime de caixa, com o cartão no mês em que a fatura vence, ou pela data da compra.",
   },
   {
     icon: Scissors,
@@ -875,10 +916,11 @@ function DailyFeatures() {
             <span className="ff-feature-icon">
               <Wallet size={20} aria-hidden="true" />
             </span>
-            <h3>Seu limite, no seu ritmo.</h3>
+            <h3>Quanto dá para gastar hoje.</h3>
             <p>
-              Defina um limite mensal e veja se o mês está mais rápido que o anterior. Cores por
-              categoria ajudam a decidir, sem fazer conta de cabeça.
+              Com um limite mensal, o FinFlow divide o que sobra pelos dias que faltam e compara o
+              ritmo com o mês anterior. Cores por categoria ajudam a decidir, sem fazer conta de
+              cabeça.
             </p>
           </div>
           <BudgetPreview />
@@ -939,106 +981,6 @@ function HowItWorks() {
   );
 }
 
-const prompts = [
-  {
-    question: "Quanto ainda posso gastar esta semana?",
-    answer:
-      "Neste exemplo, restam R$ 360 no seu orçamento de alimentação do mês. Para uma semana tranquila, você pode planejar até R$ 90 nessa categoria.",
-    label: "Consultar orçamento",
-    value: "R$ 360 disponíveis",
-  },
-  {
-    question: "Adicione 35 reais de almoço.",
-    answer:
-      "Almoço de R$ 35,00 registrado em Alimentação. O orçamento do mês foi atualizado. Mais um gasto que não ficou para depois.",
-    label: "Registrar uma despesa",
-    value: "R$ 35,00 em Alimentação",
-  },
-  {
-    question: "Me ajude a entender meus gastos.",
-    answer:
-      "Neste exemplo, Alimentação está dentro do planejado. Lazer já usou 82% do orçamento, e Transporte está perto do limite. Vale acompanhar essas duas categorias.",
-    label: "Olhar o mês com clareza",
-    value: "3 categorias analisadas",
-  },
-] as const;
-
-function AIAssistant() {
-  const [selected, setSelected] = useState(0);
-  const sample = prompts[selected] ?? prompts[0];
-  return (
-    <section className="ff-section ff-container" id="assistente">
-      <div className="ff-ai-panel">
-        <div className="ff-ai-copy">
-          <span className="ff-eyebrow">
-            <Sparkles size={16} />
-            MAIS CONVERSA. MENOS FORMULÁRIOS.
-          </span>
-          <h2>Às vezes, você só quer perguntar.</h2>
-          <p>
-            “Quanto gastei com alimentação?” Uma conversa pode ajudar a entender o mês. Veja
-            exemplos de como o FinFlow pode apresentar suas informações a um assistente compatível.
-          </p>
-          <ul className="ff-ai-benefits">
-            <li>
-              <Check size={16} />
-              Perguntas do dia a dia, em linguagem simples.
-            </li>
-            <li>
-              <Check size={16} />
-              Você decide o que quer consultar ou registrar.
-            </li>
-          </ul>
-          <p className="ff-fineprint">
-            Os exemplos são ilustrativos. O FinFlow inclui um servidor MCP e uma linha de comando; o
-            recurso depende de um assistente compatível configurado por você.
-          </p>
-        </div>
-        <div className="ff-ai-chat">
-          <div className="ff-chat-heading">
-            <span className="ff-chat-avatar">
-              <Sparkles size={17} />
-            </span>
-            <div>
-              <strong>Seu assistente financeiro</strong>
-              <small>simulação local</small>
-            </div>
-          </div>
-          <fieldset className="ff-prompt-options" aria-label="Exemplos de conversa">
-            {prompts.map((p, i) => (
-              <button
-                key={p.label}
-                type="button"
-                aria-pressed={selected === i}
-                onClick={() => setSelected(i)}
-              >
-                {p.label}
-              </button>
-            ))}
-          </fieldset>
-          <div className="ff-chat-message ff-chat-outgoing">{sample.question}</div>
-          <div className="ff-ai-answer" aria-live="polite">
-            <span className="ff-ai-answer-icon">
-              <Sparkles size={15} />
-            </span>
-            <div>
-              <p>{sample.answer}</p>
-              <span className="ff-ai-answer-result">
-                <Check size={13} />
-                {sample.value}
-              </span>
-            </div>
-          </div>
-          <div className="ff-ai-chat-footer">
-            <LockKeyhole size={13} />
-            Você está explorando dados ilustrativos.
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 function Privacy() {
   return (
     <section className="ff-section ff-privacy ff-container" id="seguranca">
@@ -1050,8 +992,8 @@ function Privacy() {
           Seus dados. Suas escolhas.
         </h2>
         <p>
-          O FinFlow roda no seu computador. Sem conta, sem cadastro e sem enviar seus dados
-          financeiros para servidor nenhum.
+          O FinFlow roda no seu computador. Sem conta, sem cadastro e sem nuvem. Se você ativar o
+          assistente, só as perguntas que fizer a ele vão para a API do Claude.
         </p>
         <a className="ff-text-link" href="#baixar">
           Baixar o FinFlow
@@ -1063,7 +1005,7 @@ function Privacy() {
           {
             icon: HardDrive,
             title: "Um arquivo no seu computador",
-            text: "Tudo fica num banco SQLite local. Para fazer backup, basta copiar o arquivo. Nada vai para a nuvem.",
+            text: "Tudo fica num banco SQLite local. Para fazer backup, basta copiar o arquivo. Nem o celular precisa de nuvem: ele acessa pela rede de casa.",
           },
           {
             icon: LockKeyhole,
@@ -1097,12 +1039,24 @@ const questions = [
     a: "Sim. O FinFlow é gratuito e de código aberto. Não há cadastro, mensalidade ou pedido de cartão: você baixa o programa e usa no seu computador.",
   },
   {
+    q: "Preciso pagar pela IA?",
+    a: "O FinFlow é grátis. O assistente usa a sua própria chave da API do Claude, cobrada pela Anthropic conforme o uso. Todo o resto funciona sem chave nenhuma, inclusive o simulador “Posso comprar?” e as calculadoras.",
+  },
+  {
     q: "Onde ficam os meus dados?",
     a: "Num arquivo SQLite no seu computador, na pasta de configuração do usuário (AppData no Windows, Application Support no macOS, ~/.config no Linux). Nada é enviado para a nuvem. Para fazer backup, copie esse arquivo.",
   },
   {
+    q: "Meus dados vão para a nuvem?",
+    a: "Não. Lançamentos, contas e planilhas ficam no seu computador. A única exceção são as perguntas que você fizer ao assistente, se ativá-lo: elas são enviadas à API do Claude para gerar a resposta.",
+  },
+  {
     q: "Preciso instalar alguma coisa?",
     a: "Não. O FinFlow é um único arquivo para Windows, macOS ou Linux. Abra o programa e use pelo navegador em localhost:3333. Não precisa de Docker nem de banco de dados à parte.",
+  },
+  {
+    q: "Funciona no celular?",
+    a: "Sim, pela rede de casa. Inicie o FinFlow no computador com o modo de rede local, abra o endereço ou o QR code no celular e instale como app na tela inicial. Os dados continuam no seu computador.",
   },
   {
     q: "Consigo trazer a planilha que já uso?",
@@ -1118,7 +1072,7 @@ const questions = [
   },
   {
     q: "O que acontece com os valores que eu testar aqui?",
-    a: "Os controles da prévia e da calculadora funcionam só no seu navegador. Os valores voltam ao início quando você recarrega a página. A preferência de tema é salva no navegador, quando ele permite.",
+    a: "Os controles da prévia, do assistente de exemplo e da calculadora funcionam só no seu navegador. Os valores voltam ao início quando você recarrega a página. A preferência de tema é salva no navegador, quando ele permite.",
   },
 ];
 
@@ -1172,7 +1126,9 @@ function Footer() {
         </div>
         <div className="ff-footer-links">
           <a href="#recursos">Recursos</a>
+          <a href="#assistente">Assistente</a>
           <a href="#planilhas">Planilhas</a>
+          <a href="#patrimonio">Patrimônio</a>
           <a href="#mobile">No celular</a>
           <a href="#como-funciona">Como funciona</a>
           <a href="#seguranca">Privacidade</a>
@@ -1204,11 +1160,12 @@ export function LandingPage({ accountHref }: { accountHref?: string }) {
       <main id="ff-content">
         <Hero />
         <DailyFeatures />
+        <AssistantSection />
         <SpreadsheetSection />
+        <PlanningSection />
         <HowItWorks />
         <MobileExperience />
         <GoalCalculator />
-        <AIAssistant />
         <Privacy />
         <DownloadSection />
         <FAQ />
