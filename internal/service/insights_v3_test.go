@@ -127,6 +127,7 @@ func TestSubscriptionsService(t *testing.T) {
 		svcs := New(store.New(database), nil)
 		acc := mustAcc(t, svcs, "Conta", 100000)
 		streaming := mustCat(t, svcs, domain.CreateCategoryInput{Name: "Streaming", Kind: domain.CategoryExpense, SpendType: ptrTo(domain.SpendCuttable)})
+		groceries := mustCat(t, svcs, domain.CreateCategoryInput{Name: "Supermercado", Kind: domain.CategoryExpense, SpendType: ptrTo(domain.SpendVariable)})
 		today := domain.TodayString()
 		for i := 2; i >= 0; i-- {
 			date := domain.AddMonthsToDateString(today, -i)
@@ -136,6 +137,10 @@ func TestSubscriptionsService(t *testing.T) {
 			}
 			_ = tx
 			mustExpense(t, svcs, acc.ID, "Spotify", 2190, date)
+			// Compra variável que cai todo mês com valor parecido não é assinatura.
+			if _, err := svcs.CreateTransaction(ctx, domain.CreateTransactionInput{Type: domain.TxExpense, Description: "Mercado — compra do mês", AmountCents: 78000, Date: date, AccountID: acc.ID, CategoryID: &groceries.ID}); err != nil {
+				t.Fatal(err)
+			}
 		}
 		view, err := svcs.Subscriptions(ctx)
 		if err != nil || len(view.Items) != 2 || view.MonthlyTotalCents != 5590+2190 {

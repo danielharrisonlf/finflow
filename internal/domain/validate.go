@@ -83,6 +83,9 @@ func ValidateCreateCategory(in CreateCategoryInput) []ValidationIssue {
 			issues = append(issues, ValidationIssue{Path: "spendType", Message: "tipo de gasto só se aplica a categorias de despesa"})
 		}
 	}
+	if in.DREGroup != nil && !in.DREGroup.Valid() {
+		issues = append(issues, dreGroupIssue)
+	}
 	return issues
 }
 
@@ -107,6 +110,9 @@ func ValidateUpdateCategory(in UpdateCategoryInput) []ValidationIssue {
 	}
 	if in.SpendType.Set && in.SpendType.Valid && !in.SpendType.Value.Valid() {
 		issues = append(issues, spendTypeIssue)
+	}
+	if in.DREGroup.Set && in.DREGroup.Valid && !in.DREGroup.Value.Valid() {
+		issues = append(issues, dreGroupIssue)
 	}
 	return issues
 }
@@ -181,6 +187,7 @@ func ValidateCreateCardExpense(in CreateCardExpenseInput) []ValidationIssue {
 		issues = append(issues, ValidationIssue{Path: "notes", Message: "observações até 500 caracteres"})
 	}
 	issues = append(issues, ValidateTagIDs(in.TagIDs)...)
+	issues = append(issues, ValidateSharing(in.PaidByMemberID, in.Splits)...)
 	return issues
 }
 
@@ -222,8 +229,14 @@ func ValidateCreateTransaction(in CreateTransactionInput) []ValidationIssue {
 		issues = append(issues, ValidationIssue{Path: "notes", Message: "observações até 500 caracteres"})
 	}
 	issues = append(issues, ValidateTagIDs(in.TagIDs)...)
+	if (in.PaidByMemberID != nil || len(in.Splits) > 0) && in.Type != TxExpense {
+		issues = append(issues, sharingExpenseIssue)
+	}
+	issues = append(issues, ValidateSharing(in.PaidByMemberID, in.Splits)...)
 	return issues
 }
+
+var sharingExpenseIssue = ValidationIssue{Path: "paidByMemberId", Message: "quem pagou e divisão só se aplicam a despesas"}
 
 func ValidateUpdateTransaction(in UpdateTransactionInput) []ValidationIssue {
 	var issues []ValidationIssue
@@ -250,6 +263,12 @@ func ValidateUpdateTransaction(in UpdateTransactionInput) []ValidationIssue {
 	}
 	if in.TagIDs.Set && in.TagIDs.Valid {
 		issues = append(issues, ValidateTagIDs(in.TagIDs.Value)...)
+	}
+	if in.PaidByMemberID.Set && in.PaidByMemberID.Valid && !IsValidUUID(in.PaidByMemberID.Value) {
+		issues = append(issues, ValidationIssue{Path: "paidByMemberId", Message: "paidByMemberId deve ser UUID válido"})
+	}
+	if in.Splits.Set && in.Splits.Valid {
+		issues = append(issues, ValidateSplits(in.Splits.Value)...)
 	}
 	return issues
 }

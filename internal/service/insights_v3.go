@@ -134,7 +134,19 @@ func (s *Services) detectSubscriptions(ctx context.Context, includeDismissed boo
 	if err != nil {
 		return nil, err
 	}
-	items := domain.DetectSubscriptions(txs, today)
+	// Assinatura é gasto que se repete e dá para cancelar ou que é fixo; compras variáveis que caem
+	// todo mês (mercado, combustível) não entram. Lançamentos sem categoria continuam candidatos.
+	resolve, err := s.spendTypeResolver(ctx)
+	if err != nil {
+		return nil, err
+	}
+	kept := txs[:0]
+	for _, t := range txs {
+		if t.CategoryID == nil || resolve(t.CategoryID) != domain.SpendVariable {
+			kept = append(kept, t)
+		}
+	}
+	items := domain.DetectSubscriptions(kept, today)
 	recurrings, err := s.Store.ListRecurring(ctx)
 	if err != nil {
 		return nil, err

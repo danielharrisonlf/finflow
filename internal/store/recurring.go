@@ -30,12 +30,14 @@ type RecurringRow struct {
 	Active        bool
 	// IsSubscription marca assinaturas (v3 §2).
 	IsSubscription bool
+	// DeactivatedAt é a data em que active virou false (métricas da empresa, v3 fase 2 §5).
+	DeactivatedAt *string
 }
 
 const recurringSelect = `
 	SELECT r.id, r.description, r.kind, r.amount_cents, r.day_of_month,
 	       r.account_id, a.name, r.category_id, c.name, c.icon, c.color,
-	       r.start_date, r.end_date, r.active, r.is_subscription
+	       r.start_date, r.end_date, r.active, r.is_subscription, r.deactivated_at
 	FROM recurring r
 	LEFT JOIN accounts a ON a.id = r.account_id
 	LEFT JOIN categories c ON c.id = r.category_id
@@ -47,11 +49,11 @@ func scanRecurring(scanner interface{ Scan(...any) error }) (RecurringRow, error
 		accountID, accountName, categoryID sql.NullString
 		categoryName, categoryIcon, catCol sql.NullString
 		start                              db.DateText
-		end                                db.NullDateText
+		end, deactivated                   db.NullDateText
 	)
 	err := scanner.Scan(&r.ID, &r.Description, &r.Kind, &r.AmountCents, &r.DayOfMonth,
 		&accountID, &accountName, &categoryID, &categoryName, &categoryIcon, &catCol,
-		&start, &end, &r.Active, &r.IsSubscription)
+		&start, &end, &r.Active, &r.IsSubscription, &deactivated)
 	if err != nil {
 		return r, err
 	}
@@ -63,6 +65,7 @@ func scanRecurring(scanner interface{ Scan(...any) error }) (RecurringRow, error
 	r.CategoryColor = db.NullStringPtr(catCol)
 	r.StartDate = string(start)
 	r.EndDate = end.Ptr()
+	r.DeactivatedAt = deactivated.Ptr()
 	return r, nil
 }
 
@@ -101,10 +104,10 @@ func (s *Store) CreateRecurring(ctx context.Context, r RecurringRow) (string, er
 	_, err := s.DB.Exec(ctx, `
 		INSERT INTO recurring (
 			id, description, kind, amount_cents, day_of_month, account_id, category_id,
-			start_date, end_date, active, is_subscription, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			start_date, end_date, active, is_subscription, deactivated_at, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, id, r.Description, string(r.Kind), r.AmountCents, r.DayOfMonth, r.AccountID, r.CategoryID,
-		r.StartDate, r.EndDate, r.Active, r.IsSubscription, now, now)
+		r.StartDate, r.EndDate, r.Active, r.IsSubscription, r.DeactivatedAt, now, now)
 	return id, err
 }
 
@@ -112,10 +115,10 @@ func (s *Store) UpdateRecurring(ctx context.Context, r *RecurringRow) error {
 	_, err := s.DB.Exec(ctx, `
 		UPDATE recurring
 		SET description = ?, kind = ?, amount_cents = ?, day_of_month = ?, account_id = ?, category_id = ?,
-		    start_date = ?, end_date = ?, active = ?, is_subscription = ?, updated_at = ?
+		    start_date = ?, end_date = ?, active = ?, is_subscription = ?, deactivated_at = ?, updated_at = ?
 		WHERE id = ?
 	`, r.Description, string(r.Kind), r.AmountCents, r.DayOfMonth, r.AccountID, r.CategoryID,
-		r.StartDate, r.EndDate, r.Active, r.IsSubscription, nowStr(), r.ID)
+		r.StartDate, r.EndDate, r.Active, r.IsSubscription, r.DeactivatedAt, nowStr(), r.ID)
 	return err
 }
 

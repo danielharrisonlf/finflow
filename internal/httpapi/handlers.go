@@ -37,7 +37,7 @@ func (s *Server) handleListAccounts(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.ListAccounts(r.Context(), inc)
+	out, err := s.svc(r).ListAccounts(r.Context(), inc)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -51,7 +51,7 @@ func (s *Server) handleGetAccount(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.GetAccount(r.Context(), id)
+	out, err := s.svc(r).GetAccount(r.Context(), id)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -65,7 +65,7 @@ func (s *Server) handleCreateAccount(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.CreateAccount(r.Context(), in)
+	out, err := s.svc(r).CreateAccount(r.Context(), in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -84,7 +84,7 @@ func (s *Server) handleUpdateAccount(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.UpdateAccount(r.Context(), id, in)
+	out, err := s.svc(r).UpdateAccount(r.Context(), id, in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -98,7 +98,7 @@ func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	if err := s.svcs.DeleteAccount(r.Context(), id); err != nil {
+	if err := s.svc(r).DeleteAccount(r.Context(), id); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -117,7 +117,7 @@ func (s *Server) handleListCategories(w http.ResponseWriter, r *http.Request) {
 		}
 		kindPtr = &k
 	}
-	out, err := s.svcs.ListCategories(r.Context(), kindPtr)
+	out, err := s.svc(r).ListCategories(r.Context(), kindPtr)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -131,7 +131,7 @@ func (s *Server) handleCreateCategory(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.CreateCategory(r.Context(), in)
+	out, err := s.svc(r).CreateCategory(r.Context(), in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -150,7 +150,7 @@ func (s *Server) handleUpdateCategory(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.UpdateCategory(r.Context(), id, in)
+	out, err := s.svc(r).UpdateCategory(r.Context(), id, in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -164,7 +164,7 @@ func (s *Server) handleDeleteCategory(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	if err := s.svcs.DeleteCategory(r.Context(), id); err != nil {
+	if err := s.svc(r).DeleteCategory(r.Context(), id); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -179,7 +179,7 @@ func (s *Server) handleListCards(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.ListCards(r.Context(), inc)
+	out, err := s.svc(r).ListCards(r.Context(), inc)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -193,7 +193,7 @@ func (s *Server) handleGetCard(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.GetCard(r.Context(), id)
+	out, err := s.svc(r).GetCard(r.Context(), id)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -207,7 +207,7 @@ func (s *Server) handleCreateCard(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.CreateCard(r.Context(), in)
+	out, err := s.svc(r).CreateCard(r.Context(), in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -226,7 +226,7 @@ func (s *Server) handleUpdateCard(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.UpdateCard(r.Context(), id, in)
+	out, err := s.svc(r).UpdateCard(r.Context(), id, in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -240,7 +240,7 @@ func (s *Server) handleDeleteCard(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	if err := s.svcs.DeleteCard(r.Context(), id); err != nil {
+	if err := s.svc(r).DeleteCard(r.Context(), id); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -258,7 +258,7 @@ func (s *Server) handleAddCardExpense(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.AddCardExpense(r.Context(), id, in)
+	out, err := s.svc(r).AddCardExpense(r.Context(), id, in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -272,7 +272,7 @@ func (s *Server) handleListInvoices(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.ListInvoices(r.Context(), id)
+	out, err := s.svc(r).ListInvoices(r.Context(), id)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -291,7 +291,7 @@ func (s *Server) handleListInvoiceItems(w http.ResponseWriter, r *http.Request) 
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.ListInvoiceItems(r.Context(), cardID, invoiceID)
+	out, err := s.svc(r).ListInvoiceItems(r.Context(), cardID, invoiceID)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -315,7 +315,7 @@ func (s *Server) handlePayInvoice(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.PayInvoice(r.Context(), cardID, invoiceID, in)
+	out, err := s.svc(r).PayInvoice(r.Context(), cardID, invoiceID, in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -414,7 +414,7 @@ func (s *Server) handleListTransactions(w http.ResponseWriter, r *http.Request) 
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.ListTransactions(r.Context(), q)
+	out, err := s.svc(r).ListTransactions(r.Context(), q)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -429,7 +429,7 @@ func (s *Server) handleExportTransactions(w http.ResponseWriter, r *http.Request
 		return
 	}
 	format := r.URL.Query().Get("format")
-	content, contentType, filename, err := s.svcs.ExportTransactions(r.Context(), format, q)
+	content, contentType, filename, err := s.svc(r).ExportTransactions(r.Context(), format, q)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -446,7 +446,7 @@ func (s *Server) handleGetTransaction(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.GetTransaction(r.Context(), id)
+	out, err := s.svc(r).GetTransaction(r.Context(), id)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -460,7 +460,7 @@ func (s *Server) handleCreateTransaction(w http.ResponseWriter, r *http.Request)
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.CreateTransaction(r.Context(), in)
+	out, err := s.svc(r).CreateTransaction(r.Context(), in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -474,7 +474,7 @@ func (s *Server) handleTransfer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.Transfer(r.Context(), in)
+	out, err := s.svc(r).Transfer(r.Context(), in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -493,7 +493,7 @@ func (s *Server) handleUpdateTransaction(w http.ResponseWriter, r *http.Request)
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.UpdateTransaction(r.Context(), id, in)
+	out, err := s.svc(r).UpdateTransaction(r.Context(), id, in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -507,7 +507,7 @@ func (s *Server) handleConfirmTransaction(w http.ResponseWriter, r *http.Request
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.ConfirmTransaction(r.Context(), id)
+	out, err := s.svc(r).ConfirmTransaction(r.Context(), id)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -522,7 +522,7 @@ func (s *Server) handleDeleteTransaction(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	scope := r.URL.Query().Get("scope")
-	if err := s.svcs.DeleteTransaction(r.Context(), id, scope); err != nil {
+	if err := s.svc(r).DeleteTransaction(r.Context(), id, scope); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -537,7 +537,7 @@ func (s *Server) handleListBudgets(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.ListBudgets(r.Context(), q)
+	out, err := s.svc(r).ListBudgets(r.Context(), q)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -551,7 +551,7 @@ func (s *Server) handleUpsertBudget(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.UpsertBudget(r.Context(), in)
+	out, err := s.svc(r).UpsertBudget(r.Context(), in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -565,7 +565,7 @@ func (s *Server) handleDeleteBudget(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	if err := s.svcs.DeleteBudget(r.Context(), id); err != nil {
+	if err := s.svc(r).DeleteBudget(r.Context(), id); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -575,7 +575,7 @@ func (s *Server) handleDeleteBudget(w http.ResponseWriter, r *http.Request) {
 // ───────────────────────── Goals ─────────────────────────
 
 func (s *Server) handleListGoals(w http.ResponseWriter, r *http.Request) {
-	out, err := s.svcs.ListGoals(r.Context())
+	out, err := s.svc(r).ListGoals(r.Context())
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -589,7 +589,7 @@ func (s *Server) handleGetGoal(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.GetGoal(r.Context(), id)
+	out, err := s.svc(r).GetGoal(r.Context(), id)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -603,7 +603,7 @@ func (s *Server) handleCreateGoal(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.CreateGoal(r.Context(), in)
+	out, err := s.svc(r).CreateGoal(r.Context(), in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -622,7 +622,7 @@ func (s *Server) handleUpdateGoal(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.UpdateGoal(r.Context(), id, in)
+	out, err := s.svc(r).UpdateGoal(r.Context(), id, in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -641,7 +641,7 @@ func (s *Server) handleContributeGoal(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.ContributeGoal(r.Context(), id, in)
+	out, err := s.svc(r).ContributeGoal(r.Context(), id, in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -655,7 +655,7 @@ func (s *Server) handleDeleteGoal(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	if err := s.svcs.DeleteGoal(r.Context(), id); err != nil {
+	if err := s.svc(r).DeleteGoal(r.Context(), id); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -670,7 +670,7 @@ func (s *Server) handleDashboardSummary(w http.ResponseWriter, r *http.Request) 
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.DashboardSummary(r.Context(), q)
+	out, err := s.svc(r).DashboardSummary(r.Context(), q)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -684,7 +684,7 @@ func (s *Server) handleDashboardCashflow(w http.ResponseWriter, r *http.Request)
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.DashboardCashflow(r.Context(), q)
+	out, err := s.svc(r).DashboardCashflow(r.Context(), q)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -698,7 +698,7 @@ func (s *Server) handleDashboardCategories(w http.ResponseWriter, r *http.Reques
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.DashboardCategories(r.Context(), q)
+	out, err := s.svc(r).DashboardCategories(r.Context(), q)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -707,7 +707,7 @@ func (s *Server) handleDashboardCategories(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *Server) handleDashboardUpcoming(w http.ResponseWriter, r *http.Request) {
-	out, err := s.svcs.DashboardUpcoming(r.Context())
+	out, err := s.svc(r).DashboardUpcoming(r.Context())
 	if err != nil {
 		writeError(w, r, err)
 		return

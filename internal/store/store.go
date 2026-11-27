@@ -182,7 +182,7 @@ func (s *Store) DeleteAccount(ctx context.Context, id string) error {
 // As categorias saem do store com o spend_type próprio (nil = herda do pai); o tipo
 // efetivo é resolvido no serviço.
 func (s *Store) ListCategories(ctx context.Context, kind *domain.CategoryKind) ([]domain.Category, error) {
-	q := `SELECT id, name, kind, icon, color, parent_id, spend_type FROM categories`
+	q := `SELECT id, name, kind, icon, color, parent_id, spend_type, dre_group FROM categories`
 	var args []any
 	if kind != nil {
 		q += ` WHERE kind = ?`
@@ -200,12 +200,13 @@ func (s *Store) ListCategories(ctx context.Context, kind *domain.CategoryKind) (
 	out := make([]domain.Category, 0)
 	for rows.Next() {
 		var c domain.Category
-		var parentID, spendType sql.NullString
-		if err := rows.Scan(&c.ID, &c.Name, &c.Kind, &c.Icon, &c.Color, &parentID, &spendType); err != nil {
+		var parentID, spendType, dreGroup sql.NullString
+		if err := rows.Scan(&c.ID, &c.Name, &c.Kind, &c.Icon, &c.Color, &parentID, &spendType, &dreGroup); err != nil {
 			return nil, err
 		}
 		c.ParentID = db.NullStringPtr(parentID)
 		c.SpendType = spendTypePtr(spendType)
+		c.DREGroup = dreGroupPtr(dreGroup)
 		out = append(out, c)
 	}
 	return out, rows.Err()
@@ -213,10 +214,10 @@ func (s *Store) ListCategories(ctx context.Context, kind *domain.CategoryKind) (
 
 func (s *Store) FindCategoryByID(ctx context.Context, id string) (*domain.Category, error) {
 	var c domain.Category
-	var parentID, spendType sql.NullString
+	var parentID, spendType, dreGroup sql.NullString
 	err := s.DB.QueryRow(ctx,
-		`SELECT id, name, kind, icon, color, parent_id, spend_type FROM categories WHERE id = ?`, id,
-	).Scan(&c.ID, &c.Name, &c.Kind, &c.Icon, &c.Color, &parentID, &spendType)
+		`SELECT id, name, kind, icon, color, parent_id, spend_type, dre_group FROM categories WHERE id = ?`, id,
+	).Scan(&c.ID, &c.Name, &c.Kind, &c.Icon, &c.Color, &parentID, &spendType, &dreGroup)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -225,7 +226,24 @@ func (s *Store) FindCategoryByID(ctx context.Context, id string) (*domain.Catego
 	}
 	c.ParentID = db.NullStringPtr(parentID)
 	c.SpendType = spendTypePtr(spendType)
+	c.DREGroup = dreGroupPtr(dreGroup)
 	return &c, nil
+}
+
+// dreGroupPtr/dreGroupArg: grupo do DRE próprio da categoria (NULL = heurística / herda).
+func dreGroupPtr(ns sql.NullString) *domain.DREGroup {
+	if !ns.Valid || ns.String == "" {
+		return nil
+	}
+	g := domain.DREGroup(ns.String)
+	return &g
+}
+
+func dreGroupArg(g *domain.DREGroup) any {
+	if g == nil {
+		return nil
+	}
+	return string(*g)
 }
 
 func spendTypePtr(ns sql.NullString) *domain.SpendType {
@@ -259,9 +277,9 @@ func (s *Store) FindCategoryByName(ctx context.Context, name string, kind domain
 func (s *Store) CreateCategory(ctx context.Context, in domain.CreateCategoryInput) (*domain.Category, error) {
 	id := uuid.NewString()
 	_, err := s.DB.Exec(ctx, `
-		INSERT INTO categories (id, name, kind, icon, color, parent_id, spend_type)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, id, in.Name, string(in.Kind), in.Icon, in.Color, in.ParentID, spendTypeArg(in.SpendType))
+		INSERT INTO categories (id, name, kind, icon, color, parent_id, spend_type, dre_group)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, id, in.Name, string(in.Kind), in.Icon, in.Color, in.ParentID, spendTypeArg(in.SpendType), dreGroupArg(in.DREGroup))
 	if err != nil {
 		return nil, err
 	}
@@ -273,15 +291,16 @@ func (s *Store) CreateCategory(ctx context.Context, in domain.CreateCategoryInpu
 		Color:     in.Color,
 		ParentID:  in.ParentID,
 		SpendType: in.SpendType,
+		DREGroup:  in.DREGroup,
 	}, nil
 }
 
 func (s *Store) UpdateCategory(ctx context.Context, c *domain.Category) error {
 	_, err := s.DB.Exec(ctx, `
 		UPDATE categories
-		SET name = ?, kind = ?, icon = ?, color = ?, parent_id = ?, spend_type = ?
+		SET name = ?, kind = ?, icon = ?, color = ?, parent_id = ?, spend_type = ?, dre_group = ?
 		WHERE id = ?
-	`, c.Name, string(c.Kind), c.Icon, c.Color, c.ParentID, spendTypeArg(c.SpendType), c.ID)
+	`, c.Name, string(c.Kind), c.Icon, c.Color, c.ParentID, spendTypeArg(c.SpendType), dreGroupArg(c.DREGroup), c.ID)
 	return err
 }
 
@@ -324,6 +343,9 @@ type CardExpenseLeg struct {
 	InstallmentTotal  *int
 	InvoicePeriod     domain.InvoicePeriod
 	TagIDs            []string // gravadas na mesma transação de banco
+	// PaidByMemberID e Splits (espaço Casa) também na mesma transação de banco.
+	PaidByMemberID *string
+	Splits         []domain.SplitShare
 }
 
 func (s *Store) ListCards(ctx context.Context, includeArchived bool) ([]CardRow, error) {
@@ -464,15 +486,7 @@ func (s *Store) FindInvoicesWithTotals(ctx context.Context, cardID string) ([]In
 }
 
 func (s *Store) FindInvoiceItems(ctx context.Context, invoiceID string) ([]domain.Transaction, error) {
-	rows, err := s.DB.Query(ctx, `
-		SELECT t.id, t.type, t.description, t.amount_cents, t.date, t.status,
-		       t.account_id, a.name, t.card_id, cc.name,
-		       t.category_id, c.name, c.icon, c.color,
-		       t.transfer_group_id, t.installment_number, t.installment_total, t.invoice_id, t.notes, t.recurring_id, t.loan_id
-		FROM transactions t
-		LEFT JOIN accounts a ON a.id = t.account_id
-		LEFT JOIN credit_cards cc ON cc.id = t.card_id
-		LEFT JOIN categories c ON c.id = t.category_id
+	rows, err := s.DB.Query(ctx, txSelectCols+`
 		WHERE t.invoice_id = ?
 		ORDER BY t.date ASC, t.created_at ASC
 	`, invoiceID)
@@ -486,7 +500,7 @@ func (s *Store) FindInvoiceItems(ctx context.Context, invoiceID string) ([]domai
 		return nil, err
 	}
 	_ = rows.Close()
-	return items, s.AttachTags(ctx, items)
+	return items, s.AttachRelations(ctx, items)
 }
 
 func (s *Store) UnpaidCardTotalCents(ctx context.Context, cardID string) (int64, error) {
@@ -533,8 +547,8 @@ func (s *Store) CreateCardExpense(ctx context.Context, cardID string, legs []Car
 				id, type, description, amount_cents, date, status,
 				card_id, category_id, invoice_id,
 				installment_group_id, installment_number, installment_total, notes,
-				created_at, updated_at
-			) VALUES (?, 'CARD_EXPENSE', ?, ?, ?, 'CONFIRMED', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				paid_by_member_id, created_at, updated_at
+			) VALUES (?, 'CARD_EXPENSE', ?, ?, ?, 'CONFIRMED', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`,
 			legID,
 			leg.Description,
@@ -547,6 +561,7 @@ func (s *Store) CreateCardExpense(ctx context.Context, cardID string, legs []Car
 			leg.InstallmentNumber,
 			leg.InstallmentTotal,
 			leg.Notes,
+			leg.PaidByMemberID,
 			now,
 			now,
 		)
@@ -554,6 +569,9 @@ func (s *Store) CreateCardExpense(ctx context.Context, cardID string, legs []Car
 			return 0, err
 		}
 		if err := insertTransactionTags(ctx, tx, legID, leg.TagIDs); err != nil {
+			return 0, err
+		}
+		if err := insertTransactionSplits(ctx, tx, legID, leg.Splits); err != nil {
 			return 0, err
 		}
 	}
@@ -663,7 +681,8 @@ const txSelectCols = `
 	SELECT t.id, t.type, t.description, t.amount_cents, t.date, t.status,
 	       t.account_id, a.name, t.card_id, cc.name,
 	       t.category_id, c.name, c.icon, c.color,
-	       t.transfer_group_id, t.installment_number, t.installment_total, t.invoice_id, t.notes, t.recurring_id, t.loan_id
+	       t.transfer_group_id, t.installment_number, t.installment_total, t.invoice_id, t.notes, t.recurring_id, t.loan_id,
+	       t.paid_by_member_id
 	FROM transactions t
 	LEFT JOIN accounts a ON a.id = t.account_id
 	LEFT JOIN credit_cards cc ON cc.id = t.card_id
@@ -689,12 +708,14 @@ func scanTransaction(scanner interface{ Scan(...any) error }) (domain.Transactio
 		notes        sql.NullString
 		recurringID  sql.NullString
 		loanID       sql.NullString
+		paidBy       sql.NullString
 	)
 	err := scanner.Scan(
 		&t.ID, &t.Type, &t.Description, &t.AmountCents, &dt, &t.Status,
 		&accountID, &accountName, &cardID, &cardName,
 		&categoryID, &categoryName, &categoryIcon, &categoryCol,
 		&transferGID, &instNum, &instTot, &invoiceID, &notes, &recurringID, &loanID,
+		&paidBy,
 	)
 	if err != nil {
 		return t, err
@@ -715,7 +736,9 @@ func scanTransaction(scanner interface{ Scan(...any) error }) (domain.Transactio
 	t.Notes = db.NullStringPtr(notes)
 	t.RecurringID = db.NullStringPtr(recurringID)
 	t.LoanID = db.NullStringPtr(loanID)
+	t.PaidByMemberID = db.NullStringPtr(paidBy)
 	t.Tags = []domain.TagRef{}
+	t.Splits = []domain.TransactionSplit{}
 	return t, nil
 }
 
@@ -752,7 +775,7 @@ func (s *Store) ListTransactions(ctx context.Context, q domain.ListTransactionsQ
 		return nil, 0, err
 	}
 	_ = rows.Close()
-	return items, total, s.AttachTags(ctx, items)
+	return items, total, s.AttachRelations(ctx, items)
 }
 
 func (s *Store) ListAllTransactions(ctx context.Context, q domain.ListTransactionsQuery) ([]domain.Transaction, error) {
@@ -767,7 +790,7 @@ func (s *Store) ListAllTransactions(ctx context.Context, q domain.ListTransactio
 		return nil, err
 	}
 	_ = rows.Close()
-	return items, s.AttachTags(ctx, items)
+	return items, s.AttachRelations(ctx, items)
 }
 
 type TransactionDetail struct {
@@ -795,12 +818,14 @@ func (s *Store) FindTransactionByID(ctx context.Context, id string) (*Transactio
 		notes        sql.NullString
 		recurringID  sql.NullString
 		loanID       sql.NullString
+		paidBy       sql.NullString
 	)
 	err := s.DB.QueryRow(ctx, `
 		SELECT t.id, t.type, t.description, t.amount_cents, t.date, t.status,
 		       t.account_id, a.name, t.card_id, cc.name,
 		       t.category_id, c.name, c.icon, c.color,
-		       t.transfer_group_id, t.installment_group_id, t.installment_number, t.installment_total, t.invoice_id, t.notes, t.recurring_id, t.loan_id
+		       t.transfer_group_id, t.installment_group_id, t.installment_number, t.installment_total, t.invoice_id, t.notes, t.recurring_id, t.loan_id,
+		       t.paid_by_member_id
 		FROM transactions t
 		LEFT JOIN accounts a ON a.id = t.account_id
 		LEFT JOIN credit_cards cc ON cc.id = t.card_id
@@ -811,6 +836,7 @@ func (s *Store) FindTransactionByID(ctx context.Context, id string) (*Transactio
 		&accountID, &accountName, &cardID, &cardName,
 		&categoryID, &categoryName, &categoryIcon, &categoryCol,
 		&transferGID, &instGID, &instNum, &instTot, &invoiceID, &notes, &recurringID, &loanID,
+		&paidBy,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -834,8 +860,10 @@ func (s *Store) FindTransactionByID(ctx context.Context, id string) (*Transactio
 	t.Notes = db.NullStringPtr(notes)
 	t.RecurringID = db.NullStringPtr(recurringID)
 	t.LoanID = db.NullStringPtr(loanID)
+	t.PaidByMemberID = db.NullStringPtr(paidBy)
+	t.Splits = []domain.TransactionSplit{}
 	one := []domain.Transaction{t}
-	if err := s.AttachTags(ctx, one); err != nil {
+	if err := s.AttachRelations(ctx, one); err != nil {
 		return nil, err
 	}
 	return &TransactionDetail{
@@ -1450,6 +1478,8 @@ func (s *Store) UnpaidInvoicesWithTotals(ctx context.Context) ([]UnpaidInvoiceWi
 func (s *Store) ClearAll(ctx context.Context) error {
 	tables := []string{
 		"transactions",
+		"settlements",
+		"members",
 		"loans",
 		"investment_snapshots",
 		"investments",

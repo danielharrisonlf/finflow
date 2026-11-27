@@ -27,8 +27,9 @@ var newAIService = func(svcs *service.Services) *ai.Service {
 const chatWriteTimeout = 15 * time.Minute
 
 func (s *Server) registerAIRoutes(mux *http.ServeMux) {
+	// A chave da API fica no espaço pessoal; o chat e os comprovantes consultam o espaço da requisição.
 	svc := newAIService(s.svcs)
-	mux.HandleFunc("GET /api/ai/status", s.requireAuth(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/ai/status", s.requireAuthGlobal(func(w http.ResponseWriter, r *http.Request) {
 		st, err := svc.Status(r.Context())
 		if err != nil {
 			writeError(w, r, err)
@@ -36,7 +37,7 @@ func (s *Server) registerAIRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, http.StatusOK, st)
 	}))
-	mux.HandleFunc("PUT /api/ai/key", s.requireAuth(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("PUT /api/ai/key", s.requireAuthGlobal(func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			APIKey *string `json:"apiKey"`
 		}
@@ -52,10 +53,10 @@ func (s *Server) registerAIRoutes(mux *http.ServeMux) {
 		writeJSON(w, http.StatusOK, st)
 	}))
 	mux.HandleFunc("POST /api/ai/chat", s.requireAuth(func(w http.ResponseWriter, r *http.Request) {
-		handleAIChat(w, r, svc)
+		handleAIChat(w, r, svc.ForSpace(s.svc(r)))
 	}))
 	mux.HandleFunc("POST /api/ai/receipt", s.requireAuth(func(w http.ResponseWriter, r *http.Request) {
-		handleAIReceipt(w, r, svc)
+		handleAIReceipt(w, r, svc.ForSpace(s.svc(r)))
 	}))
 }
 

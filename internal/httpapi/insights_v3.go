@@ -35,7 +35,7 @@ func (s *Server) registerInsightsV3Routes(mux *http.ServeMux) {
 // ───────────────────────── Tags ─────────────────────────
 
 func (s *Server) handleListTags(w http.ResponseWriter, r *http.Request) {
-	out, err := s.svcs.ListTags(r.Context())
+	out, err := s.svc(r).ListTags(r.Context())
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -49,7 +49,7 @@ func (s *Server) handleCreateTag(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.CreateTag(r.Context(), in)
+	out, err := s.svc(r).CreateTag(r.Context(), in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -68,7 +68,7 @@ func (s *Server) handleUpdateTag(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.UpdateTag(r.Context(), id, in)
+	out, err := s.svc(r).UpdateTag(r.Context(), id, in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -82,7 +82,7 @@ func (s *Server) handleDeleteTag(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	if err := s.svcs.DeleteTag(r.Context(), id); err != nil {
+	if err := s.svc(r).DeleteTag(r.Context(), id); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -95,7 +95,7 @@ func (s *Server) handleInsightsTags(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.InsightsTags(r.Context(), q)
+	out, err := s.svc(r).InsightsTags(r.Context(), q)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -106,7 +106,7 @@ func (s *Server) handleInsightsTags(w http.ResponseWriter, r *http.Request) {
 // ───────────────────────── Assinaturas ─────────────────────────
 
 func (s *Server) handleSubscriptions(w http.ResponseWriter, r *http.Request) {
-	out, err := s.svcs.Subscriptions(r.Context())
+	out, err := s.svc(r).Subscriptions(r.Context())
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -115,7 +115,7 @@ func (s *Server) handleSubscriptions(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleTrackSubscription(w http.ResponseWriter, r *http.Request) {
-	out, err := s.svcs.TrackSubscription(r.Context(), r.PathValue("key"))
+	out, err := s.svc(r).TrackSubscription(r.Context(), r.PathValue("key"))
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -124,7 +124,7 @@ func (s *Server) handleTrackSubscription(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleDismissSubscription(w http.ResponseWriter, r *http.Request) {
-	if err := s.svcs.DismissSubscription(r.Context(), r.PathValue("key")); err != nil {
+	if err := s.svc(r).DismissSubscription(r.Context(), r.PathValue("key")); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -134,7 +134,7 @@ func (s *Server) handleDismissSubscription(w http.ResponseWriter, r *http.Reques
 // ───────────────────────── Alertas ─────────────────────────
 
 func (s *Server) handleAlerts(w http.ResponseWriter, r *http.Request) {
-	out, err := s.svcs.Alerts(r.Context())
+	out, err := s.svc(r).Alerts(r.Context())
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -143,7 +143,7 @@ func (s *Server) handleAlerts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDismissAlert(w http.ResponseWriter, r *http.Request) {
-	if err := s.svcs.DismissAlert(r.Context(), r.PathValue("id")); err != nil {
+	if err := s.svc(r).DismissAlert(r.Context(), r.PathValue("id")); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -167,7 +167,7 @@ func (s *Server) handleInsightsCashflow(w http.ResponseWriter, r *http.Request) 
 	if months != nil {
 		q.Months = *months
 	}
-	out, err := s.svcs.InsightsCashflow(r.Context(), q)
+	out, err := s.svc(r).InsightsCashflow(r.Context(), q)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -181,7 +181,7 @@ func (s *Server) handleCanAfford(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.CanAfford(r.Context(), in)
+	out, err := s.svc(r).CanAfford(r.Context(), in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -200,7 +200,7 @@ func (s *Server) handleInvoiceBreakdown(w http.ResponseWriter, r *http.Request) 
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.InvoiceBreakdown(r.Context(), cardID, invoiceID)
+	out, err := s.svc(r).InvoiceBreakdown(r.Context(), cardID, invoiceID)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -211,7 +211,7 @@ func (s *Server) handleInvoiceBreakdown(w http.ResponseWriter, r *http.Request) 
 // ───────────────────────── Transferências inteligentes ─────────────────────────
 
 func (s *Server) handleTransferCandidates(w http.ResponseWriter, r *http.Request) {
-	out, err := s.svcs.TransferCandidates(r.Context())
+	out, err := s.svc(r).TransferCandidates(r.Context())
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -225,7 +225,7 @@ func (s *Server) handleMergeTransfer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.MergeTransfer(r.Context(), in)
+	out, err := s.svc(r).MergeTransfer(r.Context(), in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -241,7 +241,7 @@ func (s *Server) handlePreviewLink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.PreviewLink(r.Context(), in)
+	out, err := s.svc(r).PreviewLink(r.Context(), in)
 	if err != nil {
 		writeError(w, r, err)
 		return

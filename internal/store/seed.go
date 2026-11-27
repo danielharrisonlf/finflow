@@ -334,7 +334,7 @@ func Seed(ctx context.Context, s *Store) (bool, error) {
 	}
 
 	if err := s.SaveSettingValues(ctx, map[string]string{
-		SettingMonthlyLimit: "650000",
+		SettingMonthlyLimit: "850000",
 		SettingSpendPlan:    `{"fixedPct":50,"cuttablePct":10,"variablePct":40}`,
 	}); err != nil {
 		return false, err

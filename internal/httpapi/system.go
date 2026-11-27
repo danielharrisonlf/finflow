@@ -39,7 +39,7 @@ func (s *Server) handleMCP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, service.BadRequest("não foi possível ler o corpo da requisição"))
 		return
 	}
-	resp, ok := mcp.NewServer(&client.LocalBackend{Svcs: s.svcs}).HandleJSONRPC(r.Context(), body)
+	resp, ok := mcp.NewServer(&client.LocalBackend{Svcs: s.svc(r)}).HandleJSONRPC(r.Context(), body)
 	if !ok {
 		w.WriteHeader(http.StatusAccepted)
 		return

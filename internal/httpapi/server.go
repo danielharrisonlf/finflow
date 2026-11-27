@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
@@ -17,6 +18,7 @@ import (
 
 	"finflow/internal/domain"
 	"finflow/internal/service"
+	"finflow/internal/spaces"
 )
 
 // MaxBodyBytes é o tamanho máximo aceito no corpo de uma requisição (1 MiB).
@@ -30,16 +32,27 @@ type ServerOptions struct {
 	Version string
 	LAN     bool
 	Port    int
+	// Spaces é o registro de espaços (v3 fase 2); nil = só o espaço pessoal (svcs).
+	Spaces *spaces.Registry
 }
 
 type Server struct {
+	// svcs são os serviços do espaço pessoal: auth, telegram e sistema não dependem do espaço.
 	svcs    *service.Services
+	spaces  *spaces.Registry
 	opts    ServerOptions
 	handler http.Handler
 }
 
+// SpaceHeader escolhe o espaço da requisição (ausente = pessoal); em links (?token=) vale ?space=.
+const SpaceHeader = "X-FinFlow-Space"
+
 func NewServer(svcs *service.Services, opts ServerOptions) *Server {
-	s := &Server{svcs: svcs, opts: opts}
+	reg := opts.Spaces
+	if reg == nil {
+		reg = spaces.Single(svcs)
+	}
+	s := &Server{svcs: reg.Base(), spaces: reg, opts: opts}
 	mux := http.NewServeMux()
 
 	// Auth (public)
@@ -129,10 +142,11 @@ func NewServer(svcs *service.Services, opts ServerOptions) *Server {
 	mux.HandleFunc("GET /api/insights/year", s.requireAuth(s.handleInsightsYear))
 	mux.HandleFunc("GET /api/insights/commitments", s.requireAuth(s.handleInsightsCommitments))
 
-	// Telegram
+	// Telegram (sempre o espaço pessoal)
 	mux.HandleFunc("POST /api/telegram/webhook", s.handleTelegramWebhook)
-	mux.HandleFunc("GET /api/telegram/status", s.requireAuth(s.handleTelegramStatus))
+	mux.HandleFunc("GET /api/telegram/status", s.requireAuthGlobal(s.handleTelegramStatus))
 
+	s.registerSpacesRoutes(mux)
 	s.registerSpreadsheetRoutes(mux)
 	s.registerAIRoutes(mux)
 	s.registerWealthRoutes(mux)
@@ -202,7 +216,7 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 			}
 			w.Header().Set("Vary", "Origin")
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Api-Token")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Api-Token, "+SpaceHeader)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS")
 		}
 		if r.Method == http.MethodOptions {
@@ -259,7 +273,27 @@ func extractRequestToken(r *http.Request) string {
 	return ""
 }
 
+// requireAuth protege as rotas que dependem do espaço: depois da autenticação, resolve o espaço do
+// cabeçalho X-FinFlow-Space (ou ?space=) e guarda os serviços dele no contexto (404 se não existir).
 func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
+	return s.requireAuthGlobal(func(w http.ResponseWriter, r *http.Request) {
+		slug := requestSpace(r)
+		if slug == "" || slug == domain.DefaultSpaceSlug {
+			next(w, r)
+			return
+		}
+		svcs, err := s.spaces.Services(r.Context(), slug)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		next(w, r.WithContext(context.WithValue(r.Context(), spaceCtxKey{}, svcs)))
+	})
+}
+
+// requireAuthGlobal protege rotas que não dependem do espaço (espaços, sistema, telegram, chave
+// do assistente): um cabeçalho de espaço inválido não as derruba.
+func (s *Server) requireAuthGlobal(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if s.svcs.Auth.IsRequired() {
 			if !s.svcs.Auth.VerifyToken(extractRequestToken(r)) {
@@ -269,6 +303,24 @@ func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 		}
 		next(w, r)
 	}
+}
+
+type spaceCtxKey struct{}
+
+// requestSpace lê o slug do espaço da requisição (cabeçalho; em downloads por link, ?space=).
+func requestSpace(r *http.Request) string {
+	if h := strings.TrimSpace(r.Header.Get(SpaceHeader)); h != "" {
+		return strings.ToLower(h)
+	}
+	return strings.ToLower(strings.TrimSpace(r.URL.Query().Get("space")))
+}
+
+// svc devolve os serviços do espaço da requisição (resolvido em requireAuth; padrão: pessoal).
+func (s *Server) svc(r *http.Request) *service.Services {
+	if svcs, ok := r.Context().Value(spaceCtxKey{}).(*service.Services); ok {
+		return svcs
+	}
+	return s.svcs
 }
 
 func (s *Server) spaHandler(webFS fs.FS) http.Handler {

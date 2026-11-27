@@ -23,6 +23,7 @@ import (
 	"finflow/internal/httpapi"
 	"finflow/internal/mcp"
 	"finflow/internal/service"
+	"finflow/internal/spaces"
 	"finflow/internal/store"
 	"finflow/internal/webui"
 
@@ -32,6 +33,21 @@ import (
 type rootOpts struct {
 	apiURL string
 	token  string
+	// space é o espaço escolhido com --espaco (padrão: FINFLOW_SPACE ou pessoal).
+	space string
+}
+
+// spaceSlug devolve o espaço escolhido (--espaco, senão FINFLOW_SPACE); vazio = pessoal.
+func (o *rootOpts) spaceSlug() string {
+	slug := strings.TrimSpace(o.space)
+	if slug == "" {
+		slug = strings.TrimSpace(os.Getenv("FINFLOW_SPACE"))
+	}
+	slug = strings.ToLower(slug)
+	if slug == domain.DefaultSpaceSlug {
+		return ""
+	}
+	return slug
 }
 
 var txTypeLabel = map[domain.TransactionType]string{
@@ -84,10 +100,11 @@ func NewRootCmd() *cobra.Command {
 	root.SetFlagErrorFunc(flagError)
 	root.PersistentFlags().StringVar(&opts.apiURL, "api", "", "URL da API remota (se omitido e sem FINFLOW_API_URL, acessa o banco local direto)")
 	root.PersistentFlags().StringVar(&opts.token, "token", "", "Token ou senha da API remota (padrão: FINFLOW_TOKEN ou FINFLOW_PASSWORD)")
+	root.PersistentFlags().StringVar(&opts.space, "espaco", "", "Espaço (slug) a usar, ex.: casa ou empresa (padrão: FINFLOW_SPACE ou pessoal)")
 
 	root.AddCommand(
 		cmdServe(),
-		cmdSeed(),
+		cmdSeed(opts),
 		cmdMCP(opts),
 		cmdSaldo(opts),
 		cmdResumo(opts),
@@ -113,6 +130,9 @@ func NewRootCmd() *cobra.Command {
 		cmdInvestimentos(opts),
 		cmdDividas(opts),
 		cmdPatrimonio(opts),
+		cmdEspacos(opts),
+		cmdDivisao(opts),
+		cmdEmpresa(opts),
 	)
 	return root
 }
@@ -136,13 +156,42 @@ func openBackendLogged(ctx context.Context, opts *rootOpts, logTo io.Writer, cmd
 	if remote == "" {
 		remote = strings.TrimSpace(os.Getenv("FINFLOW_API_URL"))
 	}
+	slug := opts.spaceSlug()
 	if remote != "" {
-		return client.NewHTTPClient(remote, opts.token), "API: " + remote, func() {}, nil
+		label := "API: " + remote
+		if slug != "" {
+			label += " · espaço " + slug
+		}
+		return client.NewHTTPClient(remote, opts.token).WithSpace(slug), label, func() {}, nil
 	}
+	local, err := openLocal(ctx, logTo, cmdName)
+	if err != nil {
+		return nil, "", nil, err
+	}
+	svcs, err := local.services(ctx, slug)
+	if err != nil {
+		local.close()
+		return nil, "", nil, err
+	}
+	label := fmt.Sprintf("local %s (%s)", local.db.Dialect, local.db.Target)
+	if slug != "" {
+		label += " · espaço " + slug
+	}
+	return &client.LocalBackend{Svcs: svcs}, label, local.close, nil
+}
+
+// localData é o banco pessoal aberto com o registro de espaços (modo local da CLI).
+type localData struct {
+	db  *db.DB
+	reg *spaces.Registry
+}
+
+// openLocal abre o banco pessoal (Migrate + Bootstrap) e o registro de espaços da mesma pasta.
+func openLocal(ctx context.Context, logTo io.Writer, cmdName string) (*localData, error) {
 	cfg := config.Load()
 	database, err := db.Open(ctx, cfg.DatabaseURL, cfg.DBPath)
 	if err != nil {
-		return nil, "", nil, err
+		return nil, err
 	}
 	if logTo != nil {
 		logDatabase(logTo, cmdName, database)
@@ -150,11 +199,25 @@ func openBackendLogged(ctx context.Context, opts *rootOpts, logTo io.Writer, cmd
 	st := store.New(database)
 	if err := store.Bootstrap(ctx, st); err != nil {
 		_ = database.Close()
-		return nil, "", nil, err
+		return nil, err
 	}
-	svcs := service.New(st, nil)
-	label := fmt.Sprintf("local %s (%s)", database.Dialect, database.Target)
-	return &client.LocalBackend{Svcs: svcs}, label, func() { _ = database.Close() }, nil
+	reg := spaces.New(service.New(st, nil), spaces.OptionsFor(database))
+	return &localData{db: database, reg: reg}, nil
+}
+
+// services devolve os serviços do espaço (vazio = pessoal), com uma dica quando o slug não existe.
+func (l *localData) services(ctx context.Context, slug string) (*service.Services, error) {
+	svcs, err := l.reg.Services(ctx, slug)
+	var appErr *service.AppError
+	if errors.As(err, &appErr) && appErr.Status == http.StatusNotFound {
+		return nil, fmt.Errorf("espaço %q não encontrado — veja `finflow espacos`", slug)
+	}
+	return svcs, err
+}
+
+func (l *localData) close() {
+	_ = l.reg.Close()
+	_ = l.db.Close()
 }
 
 func money(cents int64, signed bool) string {
@@ -268,6 +331,9 @@ func cmdServe() *cobra.Command {
 			}
 
 			svcs := service.New(st, nil)
+			// Espaços (v3 fase 2): bancos SQLite na mesma pasta, abertos sob demanda e fechados no fim.
+			reg := spaces.New(svcs, spaces.OptionsFor(database))
+			defer reg.Close()
 			webFS, hasWeb := webui.DistFS(cfg.WebDir)
 			apiServer := httpapi.NewServer(svcs, httpapi.ServerOptions{
 				WebOrigin: cfg.WebOrigin,
@@ -275,6 +341,7 @@ func cmdServe() *cobra.Command {
 				Version:   Version,
 				LAN:       lan,
 				Port:      cfg.Port,
+				Spaces:    reg,
 			})
 
 			addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
@@ -327,11 +394,14 @@ func cmdServe() *cobra.Command {
 	return cmd
 }
 
-func cmdSeed() *cobra.Command {
+func cmdSeed(opts *rootOpts) *cobra.Command {
 	return &cobra.Command{
 		Use:   "seed",
-		Short: "Popula o banco com dados de exemplo (idempotente)",
+		Short: "Popula o banco com dados de exemplo (idempotente; --espaco casa/empresa usa a demo do tipo do espaço)",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if slug := opts.spaceSlug(); slug != "" {
+				return seedSpace(cmd, slug)
+			}
 			out := cmd.OutOrStdout()
 			cfg := config.Load()
 			database, err := db.Open(cmd.Context(), cfg.DatabaseURL, cfg.DBPath)

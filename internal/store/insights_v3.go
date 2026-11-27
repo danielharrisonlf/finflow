@@ -164,7 +164,7 @@ func (s *Store) TransferCandidateTxs(ctx context.Context, since string) (expense
 		return nil, nil, err
 	}
 	_ = rows.Close()
-	if err := s.AttachTags(ctx, all); err != nil {
+	if err := s.AttachRelations(ctx, all); err != nil {
 		return nil, nil, err
 	}
 	for _, t := range all {

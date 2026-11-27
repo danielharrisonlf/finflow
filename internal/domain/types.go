@@ -224,6 +224,8 @@ type Category struct {
 	Color     string       `json:"color"`
 	ParentID  *string      `json:"parentId"`
 	SpendType *SpendType   `json:"spendType"`
+	// DREGroup é o grupo efetivo no DRE (próprio, heurística pelo nome, herdado ou padrão do tipo).
+	DREGroup *DREGroup `json:"dreGroup"`
 }
 
 // CreateCategoryInput.SpendType omitido: VARIABLE em despesa raiz; subcategoria herda do pai.
@@ -234,6 +236,7 @@ type CreateCategoryInput struct {
 	Color     string       `json:"color"`
 	ParentID  *string      `json:"parentId,omitempty"`
 	SpendType *SpendType   `json:"spendType,omitempty"`
+	DREGroup  *DREGroup    `json:"dreGroup,omitempty"`
 }
 
 // UpdateCategoryInput.SpendType null volta a herdar do pai (ou VARIABLE sem pai).
@@ -244,6 +247,8 @@ type UpdateCategoryInput struct {
 	Color     Optional[string]       `json:"color"`
 	ParentID  Optional[string]       `json:"parentId"`
 	SpendType Optional[SpendType]    `json:"spendType"`
+	// DREGroup null volta à heurística pelo nome.
+	DREGroup Optional[DREGroup] `json:"dreGroup"`
 }
 
 // ───────────────────────── Cards & Invoices ─────────────────────────
@@ -303,6 +308,9 @@ type CreateCardExpenseInput struct {
 	Notes        *string `json:"notes,omitempty"`
 	// TagIDs é aplicado a todas as parcelas.
 	TagIDs []string `json:"tagIds,omitempty"`
+	// PaidByMemberID e Splits (espaço Casa) valem para todas as parcelas.
+	PaidByMemberID *string            `json:"paidByMemberId,omitempty"`
+	Splits         []TransactionSplit `json:"splits,omitempty"`
 }
 
 // UnmarshalJSON aplica o padrão de 1 parcela só quando "installments" está ausente.
@@ -359,6 +367,10 @@ type Transaction struct {
 	LoanID            *string           `json:"loanId"`
 	// Tags sempre presente (array vazio quando não há tags).
 	Tags []TagRef `json:"tags"`
+	// PaidByMemberID e Splits: divisão de despesas do espaço Casa (Splits sempre presente; vazio =
+	// divisão igual entre os membros).
+	PaidByMemberID *string            `json:"paidByMemberId"`
+	Splits         []TransactionSplit `json:"splits"`
 }
 
 type CreateTransactionInput struct {
@@ -371,6 +383,9 @@ type CreateTransactionInput struct {
 	CategoryID  *string           `json:"categoryId,omitempty"`
 	Notes       *string           `json:"notes,omitempty"`
 	TagIDs      []string          `json:"tagIds,omitempty"`
+	// PaidByMemberID e Splits só valem para despesas (espaço Casa).
+	PaidByMemberID *string            `json:"paidByMemberId,omitempty"`
+	Splits         []TransactionSplit `json:"splits,omitempty"`
 }
 
 // UpdateTransactionInput.TagIDs substitui o conjunto de tags (null ou [] remove todas).
@@ -383,6 +398,9 @@ type UpdateTransactionInput struct {
 	CategoryID  Optional[string]            `json:"categoryId"`
 	Notes       Optional[string]            `json:"notes"`
 	TagIDs      Optional[[]string]          `json:"tagIds"`
+	// PaidByMemberID null limpa; Splits null ou [] volta à divisão igual.
+	PaidByMemberID Optional[string]             `json:"paidByMemberId"`
+	Splits         Optional[[]TransactionSplit] `json:"splits"`
 }
 
 type ListTransactionsQuery struct {
@@ -484,6 +502,8 @@ type Recurring struct {
 	NextDate      *string      `json:"nextDate"`
 	// IsSubscription marca assinaturas (acompanhadas a partir da detecção, v3 §2).
 	IsSubscription bool `json:"isSubscription"`
+	// DeactivatedAt é a data em que active virou false (churn das métricas da empresa).
+	DeactivatedAt *string `json:"deactivatedAt"`
 }
 
 type CreateRecurringInput struct {

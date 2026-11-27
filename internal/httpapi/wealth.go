@@ -34,7 +34,7 @@ func (s *Server) registerWealthRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/mcp", s.handleMCPMethodNotAllowed)
 	mux.HandleFunc("DELETE /api/mcp", s.handleMCPMethodNotAllowed)
 
-	mux.HandleFunc("GET /api/system/info", s.requireAuth(s.handleSystemInfo))
+	mux.HandleFunc("GET /api/system/info", s.requireAuthGlobal(s.handleSystemInfo))
 }
 
 // ───────────────────────── Investimentos ─────────────────────────
@@ -45,7 +45,7 @@ func (s *Server) handleListInvestments(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.ListInvestments(r.Context(), inc)
+	out, err := s.svc(r).ListInvestments(r.Context(), inc)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -54,7 +54,7 @@ func (s *Server) handleListInvestments(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleInvestmentSummary(w http.ResponseWriter, r *http.Request) {
-	out, err := s.svcs.InvestmentSummary(r.Context())
+	out, err := s.svc(r).InvestmentSummary(r.Context())
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -68,7 +68,7 @@ func (s *Server) handleCreateInvestment(w http.ResponseWriter, r *http.Request) 
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.CreateInvestment(r.Context(), in)
+	out, err := s.svc(r).CreateInvestment(r.Context(), in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -87,7 +87,7 @@ func (s *Server) handleUpdateInvestment(w http.ResponseWriter, r *http.Request) 
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.UpdateInvestment(r.Context(), id, in)
+	out, err := s.svc(r).UpdateInvestment(r.Context(), id, in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -101,7 +101,7 @@ func (s *Server) handleDeleteInvestment(w http.ResponseWriter, r *http.Request) 
 		writeError(w, r, err)
 		return
 	}
-	if err := s.svcs.DeleteInvestment(r.Context(), id); err != nil {
+	if err := s.svc(r).DeleteInvestment(r.Context(), id); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -119,7 +119,7 @@ func (s *Server) handleInvestmentValue(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.UpdateInvestmentValue(r.Context(), id, in)
+	out, err := s.svc(r).UpdateInvestmentValue(r.Context(), id, in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -128,11 +128,11 @@ func (s *Server) handleInvestmentValue(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleInvestmentContribution(w http.ResponseWriter, r *http.Request) {
-	s.handleInvestmentMovement(w, r, s.svcs.ContributeInvestment)
+	s.handleInvestmentMovement(w, r, s.svc(r).ContributeInvestment)
 }
 
 func (s *Server) handleInvestmentRedeem(w http.ResponseWriter, r *http.Request) {
-	s.handleInvestmentMovement(w, r, s.svcs.RedeemInvestment)
+	s.handleInvestmentMovement(w, r, s.svc(r).RedeemInvestment)
 }
 
 func (s *Server) handleInvestmentMovement(w http.ResponseWriter, r *http.Request, move func(ctx context.Context, id string, in domain.InvestmentMovementInput) (domain.Investment, error)) {
@@ -157,7 +157,7 @@ func (s *Server) handleInvestmentMovement(w http.ResponseWriter, r *http.Request
 // ───────────────────────── Empréstimos ─────────────────────────
 
 func (s *Server) handleListLoans(w http.ResponseWriter, r *http.Request) {
-	out, err := s.svcs.ListLoans(r.Context())
+	out, err := s.svc(r).ListLoans(r.Context())
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -175,7 +175,7 @@ func (s *Server) handleDebtStrategy(w http.ResponseWriter, r *http.Request) {
 		}
 		extra = v
 	}
-	out, err := s.svcs.DebtStrategy(r.Context(), extra)
+	out, err := s.svc(r).DebtStrategy(r.Context(), extra)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -189,7 +189,7 @@ func (s *Server) handleCreateLoan(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.CreateLoan(r.Context(), in)
+	out, err := s.svc(r).CreateLoan(r.Context(), in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -208,7 +208,7 @@ func (s *Server) handleUpdateLoan(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.UpdateLoan(r.Context(), id, in)
+	out, err := s.svc(r).UpdateLoan(r.Context(), id, in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -222,7 +222,7 @@ func (s *Server) handleDeleteLoan(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	if err := s.svcs.DeleteLoan(r.Context(), id); err != nil {
+	if err := s.svc(r).DeleteLoan(r.Context(), id); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -240,7 +240,7 @@ func (s *Server) handlePayLoan(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.PayLoan(r.Context(), id, in)
+	out, err := s.svc(r).PayLoan(r.Context(), id, in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -260,7 +260,7 @@ func (s *Server) handleNetWorthHistory(w http.ResponseWriter, r *http.Request) {
 	if months != nil {
 		n = *months
 	}
-	out, err := s.svcs.NetWorthHistory(r.Context(), n)
+	out, err := s.svc(r).NetWorthHistory(r.Context(), n)
 	if err != nil {
 		writeError(w, r, err)
 		return

@@ -52,8 +52,26 @@ type Config struct {
 
 // Service concentra o Assistente.
 type Service struct {
+	// svcs guarda a chave da API (settings do espaço pessoal); data é o espaço consultado pelas
+	// ferramentas e pela leitura de comprovantes (nil = o próprio svcs).
 	svcs *service.Services
+	data *service.Services
 	cfg  Config
+}
+
+// ForSpace devolve o Assistente consultando os dados de outro espaço (v3 fase 2); a chave da API
+// continua a do espaço pessoal.
+func (s *Service) ForSpace(data *service.Services) *Service {
+	c := *s
+	c.data = data
+	return &c
+}
+
+func (s *Service) dataSvcs() *service.Services {
+	if s.data != nil {
+		return s.data
+	}
+	return s.svcs
 }
 
 func NewService(svcs *service.Services, cfg Config) *Service {

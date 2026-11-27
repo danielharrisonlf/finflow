@@ -109,7 +109,7 @@ func toolSpecs() []toolSpec {
 				if err != nil {
 					return nil, err
 				}
-				return t.s.svcs.DashboardSummary(ctx, a.query())
+				return t.s.dataSvcs().DashboardSummary(ctx, a.query())
 			},
 		},
 		{
@@ -122,7 +122,7 @@ func toolSpecs() []toolSpec {
 				if err != nil {
 					return nil, err
 				}
-				return t.s.svcs.InsightsOverview(ctx, a.query())
+				return t.s.dataSvcs().InsightsOverview(ctx, a.query())
 			},
 		},
 		{
@@ -142,7 +142,7 @@ func toolSpecs() []toolSpec {
 				if a.Days != nil {
 					days = *a.Days
 				}
-				p, err := t.s.svcs.InsightsProjection(ctx, days)
+				p, err := t.s.dataSvcs().InsightsProjection(ctx, days)
 				if err != nil {
 					return nil, err
 				}
@@ -159,7 +159,7 @@ func toolSpecs() []toolSpec {
 				if err != nil {
 					return nil, err
 				}
-				return t.s.svcs.DashboardCashflow(ctx, a.query())
+				return t.s.dataSvcs().DashboardCashflow(ctx, a.query())
 			},
 		},
 		{
@@ -190,7 +190,7 @@ func toolSpecs() []toolSpec {
 				if a.Basis != nil {
 					q.Basis = *a.Basis
 				}
-				return t.s.svcs.InsightsCashflow(ctx, q)
+				return t.s.dataSvcs().InsightsCashflow(ctx, q)
 			},
 		},
 		{
@@ -203,7 +203,7 @@ func toolSpecs() []toolSpec {
 				if err != nil {
 					return nil, err
 				}
-				return t.s.svcs.DashboardCategories(ctx, a.query())
+				return t.s.dataSvcs().DashboardCategories(ctx, a.query())
 			},
 		},
 		{
@@ -216,7 +216,7 @@ func toolSpecs() []toolSpec {
 				if err != nil {
 					return nil, err
 				}
-				return t.s.svcs.ListBudgets(ctx, a.query())
+				return t.s.dataSvcs().ListBudgets(ctx, a.query())
 			},
 		},
 		{
@@ -225,7 +225,7 @@ func toolSpecs() []toolSpec {
 			label:       "Consultando suas metas",
 			props:       map[string]any{},
 			run: func(ctx context.Context, t *toolEnv, _ json.RawMessage) (any, error) {
-				return t.s.svcs.ListGoals(ctx)
+				return t.s.dataSvcs().ListGoals(ctx)
 			},
 		},
 		{
@@ -234,7 +234,7 @@ func toolSpecs() []toolSpec {
 			label:       "Consultando suas contas",
 			props:       map[string]any{},
 			run: func(ctx context.Context, t *toolEnv, _ json.RawMessage) (any, error) {
-				return t.s.svcs.ListAccounts(ctx, false)
+				return t.s.dataSvcs().ListAccounts(ctx, false)
 			},
 		},
 		{
@@ -243,7 +243,7 @@ func toolSpecs() []toolSpec {
 			label:       "Consultando seus cartões",
 			props:       map[string]any{},
 			run: func(ctx context.Context, t *toolEnv, _ json.RawMessage) (any, error) {
-				return t.s.svcs.ListCards(ctx, false)
+				return t.s.dataSvcs().ListCards(ctx, false)
 			},
 		},
 		{
@@ -258,7 +258,7 @@ func toolSpecs() []toolSpec {
 				if err != nil {
 					return nil, err
 				}
-				return t.s.svcs.ListCategories(ctx, a.Kind)
+				return t.s.dataSvcs().ListCategories(ctx, a.Kind)
 			},
 		},
 		{
@@ -298,7 +298,7 @@ func toolSpecs() []toolSpec {
 				if a.Page != nil {
 					q.Page = *a.Page
 				}
-				return t.s.svcs.ListTransactions(ctx, q)
+				return t.s.dataSvcs().ListTransactions(ctx, q)
 			},
 		},
 		{
@@ -307,7 +307,7 @@ func toolSpecs() []toolSpec {
 			label:       "Consultando seus compromissos",
 			props:       map[string]any{},
 			run: func(ctx context.Context, t *toolEnv, _ json.RawMessage) (any, error) {
-				return t.s.svcs.ListRecurring(ctx)
+				return t.s.dataSvcs().ListRecurring(ctx)
 			},
 		},
 		{
@@ -332,7 +332,7 @@ func toolSpecs() []toolSpec {
 			label:       "Procurando suas assinaturas",
 			props:       map[string]any{},
 			run: func(ctx context.Context, t *toolEnv, _ json.RawMessage) (any, error) {
-				return t.s.svcs.Subscriptions(ctx)
+				return t.s.dataSvcs().Subscriptions(ctx)
 			},
 		},
 		{
@@ -341,11 +341,11 @@ func toolSpecs() []toolSpec {
 			label:       "Consultando seus investimentos",
 			props:       map[string]any{},
 			run: func(ctx context.Context, t *toolEnv, _ json.RawMessage) (any, error) {
-				items, err := t.s.svcs.ListInvestments(ctx, false)
+				items, err := t.s.dataSvcs().ListInvestments(ctx, false)
 				if err != nil {
 					return nil, err
 				}
-				summary, err := t.s.svcs.InvestmentSummary(ctx)
+				summary, err := t.s.dataSvcs().InvestmentSummary(ctx)
 				if err != nil {
 					return nil, err
 				}
@@ -358,7 +358,7 @@ func toolSpecs() []toolSpec {
 			label:       "Consultando seus empréstimos",
 			props:       map[string]any{},
 			run: func(ctx context.Context, t *toolEnv, _ json.RawMessage) (any, error) {
-				return t.s.svcs.ListLoans(ctx)
+				return t.s.dataSvcs().ListLoans(ctx)
 			},
 		},
 		{
@@ -654,7 +654,7 @@ func runCanAfford(ctx context.Context, t *toolEnv, raw json.RawMessage) (any, er
 	if err != nil {
 		return nil, err
 	}
-	return t.s.svcs.CanAfford(ctx, in)
+	return t.s.dataSvcs().CanAfford(ctx, in)
 }
 
 // ───────────────────────── Propostas ─────────────────────────
@@ -670,7 +670,7 @@ func (t *toolEnv) categoryName(ctx context.Context, id *string, kind domain.Cate
 	if id == nil {
 		return "", nil
 	}
-	cats, err := t.s.svcs.ListCategories(ctx, &kind)
+	cats, err := t.s.dataSvcs().ListCategories(ctx, &kind)
 	if err != nil {
 		return "", err
 	}
@@ -722,7 +722,7 @@ func runProposeTransaction(ctx context.Context, t *toolEnv, raw json.RawMessage)
 	if err := issuesError(domain.ValidateCreateTransaction(in)); err != nil {
 		return nil, err
 	}
-	acc, err := t.s.svcs.GetAccount(ctx, in.AccountID)
+	acc, err := t.s.dataSvcs().GetAccount(ctx, in.AccountID)
 	if err != nil {
 		return nil, err
 	}
@@ -757,7 +757,7 @@ func runProposeRecurring(ctx context.Context, t *toolEnv, raw json.RawMessage) (
 	}
 	accName := ""
 	if in.AccountID != nil {
-		acc, err := t.s.svcs.GetAccount(ctx, *in.AccountID)
+		acc, err := t.s.dataSvcs().GetAccount(ctx, *in.AccountID)
 		if err != nil {
 			return nil, err
 		}
@@ -804,7 +804,7 @@ func runProposeGoalContribution(ctx context.Context, t *toolEnv, raw json.RawMes
 	if !domain.IsValidUUID(a.GoalID) {
 		return nil, service.BadRequest("goalId deve ser o id de uma meta (consulte list_goals)")
 	}
-	goal, err := t.s.svcs.GetGoal(ctx, a.GoalID)
+	goal, err := t.s.dataSvcs().GetGoal(ctx, a.GoalID)
 	if err != nil {
 		return nil, err
 	}

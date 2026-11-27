@@ -3,6 +3,7 @@ package domain
 import (
 	"fmt"
 	"sort"
+	"strings"
 )
 
 // ───────────────────────── Alertas e dicas ─────────────────────────
@@ -182,8 +183,14 @@ func BuildAlerts(in AlertInput) []Alert {
 
 	for _, s := range in.Subscriptions {
 		if s.PriceChangePct != nil && *s.PriceChangePct >= 5 {
-			add(AlertSubscriptionPriceUp, s.Key, SeverityWarning, "Assinatura mais cara: "+s.Description,
-				fmt.Sprintf("A última cobrança de %s foi %s, %v%% acima da média anterior.", s.Description, FormatBRL(s.LastCents), *s.PriceChangePct),
+			// Já acompanhada como compromisso é uma conta fixa (luz, internet); senão, assinatura detectada.
+			title := "Assinatura mais cara: "
+			if s.RecurringID != nil {
+				title = "Conta mais cara: "
+			}
+			pct := strings.Replace(fmt.Sprintf("%.1f", *s.PriceChangePct), ".", ",", 1)
+			add(AlertSubscriptionPriceUp, s.Key, SeverityWarning, title+s.Description,
+				fmt.Sprintf("A última cobrança de %s foi %s, %s%% acima da média anterior.", s.Description, FormatBRL(s.LastCents), pct),
 				"/compromissos", s.LastDate)
 		}
 		if s.Occurrences == 3 && s.RecurringID == nil {

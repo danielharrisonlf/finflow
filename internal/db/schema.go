@@ -73,6 +73,22 @@ var addedColumns = []addedColumn{
 		sqliteDDL:   `image_url TEXT`,
 		postgresDDL: `image_url TEXT`,
 	},
+	// v3 fase 2 (espaços): divisão de despesas, grupo do DRE e data de desativação das recorrências.
+	{
+		table: "transactions", column: "paid_by_member_id",
+		sqliteDDL:   `paid_by_member_id TEXT REFERENCES members(id) ON DELETE SET NULL`,
+		postgresDDL: `paid_by_member_id UUID REFERENCES members(id) ON DELETE SET NULL`,
+	},
+	{
+		table: "categories", column: "dre_group",
+		sqliteDDL:   `dre_group TEXT CHECK (dre_group IN ('REVENUE', 'DEDUCTIONS', 'COSTS', 'OPEX', 'FINANCIAL', 'OTHER'))`,
+		postgresDDL: `dre_group TEXT CHECK (dre_group IN ('REVENUE', 'DEDUCTIONS', 'COSTS', 'OPEX', 'FINANCIAL', 'OTHER'))`,
+	},
+	{
+		table: "recurring", column: "deactivated_at",
+		sqliteDDL:   `deactivated_at TEXT`,
+		postgresDDL: `deactivated_at DATE`,
+	},
 }
 
 // addColumnIfMissing usa ADD COLUMN IF NOT EXISTS no PostgreSQL; o SQLite não tem essa
@@ -279,6 +295,29 @@ var sqliteSchema = []string{
 		PRIMARY KEY (transaction_id, tag_id)
 	)`,
 	`CREATE INDEX IF NOT EXISTS idx_transaction_tags_tag_id ON transaction_tags(tag_id)`,
+	`CREATE TABLE IF NOT EXISTS members (
+		id TEXT PRIMARY KEY,
+		name TEXT NOT NULL,
+		color TEXT NOT NULL,
+		created_at TEXT NOT NULL
+	)`,
+	`CREATE TABLE IF NOT EXISTS transaction_splits (
+		transaction_id TEXT NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+		member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+		share_bp INTEGER NOT NULL,
+		PRIMARY KEY (transaction_id, member_id)
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_transaction_splits_member_id ON transaction_splits(member_id)`,
+	`CREATE TABLE IF NOT EXISTS settlements (
+		id TEXT PRIMARY KEY,
+		from_member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+		to_member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+		amount_cents INTEGER NOT NULL,
+		date TEXT NOT NULL,
+		transfer_group_id TEXT,
+		created_at TEXT NOT NULL
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_settlements_date ON settlements(date)`,
 }
 
 // Índices que dependem das colunas de addedColumns (aplicados depois delas).
@@ -287,6 +326,7 @@ var sqlitePostSchema = []string{
 	`CREATE INDEX IF NOT EXISTS idx_transactions_loan_id ON transactions(loan_id)`,
 	// No máximo uma reserva de emergência não arquivada.
 	`CREATE UNIQUE INDEX IF NOT EXISTS idx_goals_single_reserve ON goals(kind) WHERE kind = 'RESERVE' AND archived = 0`,
+	`CREATE INDEX IF NOT EXISTS idx_transactions_paid_by_member_id ON transactions(paid_by_member_id)`,
 }
 
 var postgresSchema = []string{
@@ -474,10 +514,34 @@ var postgresSchema = []string{
 		PRIMARY KEY (transaction_id, tag_id)
 	)`,
 	`CREATE INDEX IF NOT EXISTS idx_transaction_tags_tag_id ON transaction_tags(tag_id)`,
+	`CREATE TABLE IF NOT EXISTS members (
+		id UUID PRIMARY KEY,
+		name TEXT NOT NULL,
+		color TEXT NOT NULL,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	)`,
+	`CREATE TABLE IF NOT EXISTS transaction_splits (
+		transaction_id UUID NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+		member_id UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+		share_bp INTEGER NOT NULL,
+		PRIMARY KEY (transaction_id, member_id)
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_transaction_splits_member_id ON transaction_splits(member_id)`,
+	`CREATE TABLE IF NOT EXISTS settlements (
+		id UUID PRIMARY KEY,
+		from_member_id UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+		to_member_id UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+		amount_cents BIGINT NOT NULL,
+		date DATE NOT NULL,
+		transfer_group_id UUID,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_settlements_date ON settlements(date)`,
 }
 
 var postgresPostSchema = []string{
 	`CREATE INDEX IF NOT EXISTS idx_transactions_recurring_id ON transactions(recurring_id)`,
 	`CREATE INDEX IF NOT EXISTS idx_transactions_loan_id ON transactions(loan_id)`,
 	`CREATE UNIQUE INDEX IF NOT EXISTS idx_goals_single_reserve ON goals(kind) WHERE kind = 'RESERVE' AND archived = FALSE`,
+	`CREATE INDEX IF NOT EXISTS idx_transactions_paid_by_member_id ON transactions(paid_by_member_id)`,
 }

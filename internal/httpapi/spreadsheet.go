@@ -54,7 +54,7 @@ func (s *Server) handleSpreadsheetExport(w http.ResponseWriter, r *http.Request)
 		writeError(w, r, err)
 		return
 	}
-	content, filename, err := s.svcs.ExportYearWorkbook(r.Context(), year)
+	content, filename, err := s.svc(r).ExportYearWorkbook(r.Context(), year)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -63,7 +63,7 @@ func (s *Server) handleSpreadsheetExport(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleSpreadsheetTemplate(w http.ResponseWriter, r *http.Request) {
-	content, filename, err := s.svcs.ImportTemplate()
+	content, filename, err := s.svc(r).ImportTemplate()
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -129,7 +129,7 @@ func (s *Server) handleImportPreview(w http.ResponseWriter, r *http.Request) {
 	if accountID != "" {
 		in.AccountID = &accountID
 	}
-	out, err := s.svcs.ImportPreview(r.Context(), in)
+	out, err := s.svc(r).ImportPreview(r.Context(), in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -143,7 +143,7 @@ func (s *Server) handleImportCommit(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out, err := s.svcs.ImportCommit(r.Context(), in)
+	out, err := s.svc(r).ImportCommit(r.Context(), in)
 	if err != nil {
 		writeError(w, r, err)
 		return

@@ -41,6 +41,7 @@ type Backend interface {
 	PlanningBackend
 	WealthBackend
 	InsightsV3Backend
+	SpacesBackend
 	TelegramStatus(ctx context.Context) (domain.TelegramStatus, error)
 	AuthStatus(ctx context.Context) (domain.AuthStatus, error)
 }
@@ -135,7 +136,9 @@ func (e *APIError) Error() string {
 type HTTPClient struct {
 	baseURL string
 	token   string
-	http    *http.Client
+	// space vai no cabeçalho X-FinFlow-Space (vazio = espaço pessoal).
+	space string
+	http  *http.Client
 }
 
 func NewHTTPClient(baseURL, token string) *HTTPClient {
@@ -181,6 +184,9 @@ func (c *HTTPClient) doRaw(ctx context.Context, method, path, contentType string
 	req.Header.Set("Content-Type", contentType)
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
+	if c.space != "" {
+		req.Header.Set("X-FinFlow-Space", c.space)
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {

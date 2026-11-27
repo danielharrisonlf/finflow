@@ -279,7 +279,8 @@ func allTools() []toolDef {
 		}, "description", "kind", "amountCents", "dayOfMonth")},
 	}
 	tools = append(tools, insightsV3Tools()...)
-	return append(tools, wealthTools()...)
+	tools = append(tools, wealthTools()...)
+	return append(tools, spacesTools()...)
 }
 
 func (s *Server) accountByRef(ctx context.Context, ref string) (domain.Account, error) {
@@ -683,7 +684,9 @@ func (s *Server) callTool(ctx context.Context, name string, rawArgs json.RawMess
 		var handled bool
 		if data, handled, err = s.callInsightsV3Tool(ctx, name, rawArgs); !handled {
 			if data, handled, err = s.callWealthTool(ctx, name, rawArgs); !handled {
-				return errResult("tool desconhecida: " + name)
+				if data, handled, err = s.callSpacesTool(ctx, name, rawArgs); !handled {
+					return errResult("tool desconhecida: " + name)
+				}
 			}
 		}
 	}

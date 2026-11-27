@@ -97,7 +97,7 @@ type receiptRaw struct {
 }
 
 func (s *Service) categoryList(ctx context.Context) ([]domain.Category, string, error) {
-	cats, err := s.svcs.ListCategories(ctx, nil)
+	cats, err := s.dataSvcs().ListCategories(ctx, nil)
 	if err != nil {
 		return nil, "", err
 	}

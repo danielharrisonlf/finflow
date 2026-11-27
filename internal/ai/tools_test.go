@@ -6,7 +6,11 @@ import (
 	"strings"
 	"testing"
 
+	"finflow/internal/db"
 	"finflow/internal/domain"
+	"finflow/internal/service"
+	"finflow/internal/store"
+	"finflow/internal/testutil"
 )
 
 func TestToolSpecsDeterministicAndStrictCompatible(t *testing.T) {
@@ -112,5 +116,26 @@ func TestReadToolsAndProposals(t *testing.T) {
 	contrib := props[1].data
 	if contrib["payload"].(map[string]any)["goalId"] != goal.ID || !strings.Contains(contrib["summary"].(string), "Resgate de R$ 50,00") {
 		t.Fatalf("aporte: %+v", contrib)
+	}
+}
+
+func TestForSpaceUsesSpaceDataAndPersonalKey(t *testing.T) {
+	ctx := context.Background()
+	svc, _ := newTestService(t, nil, true)
+	other := service.New(store.New(testutil.Open(t, db.DialectSQLite)), nil)
+	if _, err := other.CreateAccount(ctx, domain.CreateAccountInput{Name: "Conta da casa", Type: domain.AccountChecking}); err != nil {
+		t.Fatal(err)
+	}
+	spaced := svc.ForSpace(other)
+	out, isErr := spaced.runTool(ctx, "list_accounts", json.RawMessage(`{}`), (&recorder{}).emit)
+	if isErr || !strings.Contains(out, "Conta da casa") {
+		t.Fatalf("ferramenta no espaço: %s", out)
+	}
+	if out, _ := svc.runTool(ctx, "list_accounts", json.RawMessage(`{}`), (&recorder{}).emit); strings.Contains(out, "Conta da casa") {
+		t.Fatalf("o serviço original não deveria mudar: %s", out)
+	}
+	st, err := spaced.Status(ctx)
+	if err != nil || !st.Configured {
+		t.Fatalf("a chave continua a do espaço pessoal: %+v %v", st, err)
 	}
 }
