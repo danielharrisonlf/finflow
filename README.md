@@ -284,3 +284,7 @@ packages/contracts/   schemas Zod usados pelo frontend
 scripts/              build, release (6 plataformas) e instaladores install.sh / install.ps1
 .github/workflows/    CI e release por tag (v*)
 ```
+
+## Licença
+
+[MIT](LICENSE) — use, modifique e redistribua à vontade, mantendo o aviso de copyright.

@@ -1,6 +1,7 @@
 {
   "name": "finflow",
   "private": true,
+  "license": "MIT",
   "version": "0.1.0",
   "description": "FinFlow — controle financeiro pessoal (Go binário único + React web)",
   "packageManager": "pnpm@10.11.1",
