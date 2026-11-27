@@ -14,6 +14,9 @@ type InsightsPace struct {
 	DiffCents               int64  `json:"diffCents"`
 	DayOfMonth              int    `json:"dayOfMonth"`
 	Status                  string `json:"status"` // "BELOW" | "SAME" | "ABOVE"
+	// v3 §4: série acumulada dia a dia e gasto projetado para o mês.
+	Series              []PacePoint `json:"series"`
+	ProjectedMonthCents int64       `json:"projectedMonthCents"`
 }
 
 type MonthlyLimitView struct {
@@ -81,6 +84,8 @@ type InsightsOverview struct {
 	NetWorthCents  int64            `json:"netWorthCents"`
 	Reserve        ReserveView      `json:"reserve"`
 	CutSuggestions []CutSuggestion  `json:"cutSuggestions"`
+	// SpendToday é sempre relativo a hoje (mês corrente), qualquer que seja o mês consultado.
+	SpendToday SpendToday `json:"spendToday"`
 }
 
 type YearMonthOverview struct {
@@ -117,10 +122,11 @@ type CommitmentMonth struct {
 	RecurringExpenseCents int64 `json:"recurringExpenseCents"`
 	RecurringIncomeCents  int64 `json:"recurringIncomeCents"`
 	InstallmentsCents     int64 `json:"installmentsCents"`
+	LoansCents            int64 `json:"loansCents"` // parcelas de empréstimos que vencem no mês
 }
 
 type CommitmentItem struct {
-	Kind              string  `json:"kind"`      // "RECURRING" | "INSTALLMENT"
+	Kind              string  `json:"kind"`      // "RECURRING" | "INSTALLMENT" | "LOAN"
 	Direction         string  `json:"direction"` // "PAY" | "RECEIVE"
 	Description       string  `json:"description"`
 	DueDate           string  `json:"dueDate"`
@@ -130,6 +136,7 @@ type CommitmentItem struct {
 	InstallmentNumber *int    `json:"installmentNumber"`
 	InstallmentTotal  *int    `json:"installmentTotal"`
 	CardName          *string `json:"cardName"`
+	LoanID            *string `json:"loanId"`
 }
 
 type CommitmentTotals struct {

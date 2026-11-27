@@ -88,9 +88,11 @@ func TestInternalErrorDoesNotLeak(t *testing.T) {
 
 func spaFS() fs.FS {
 	return fstest.MapFS{
-		"index.html":         {Data: []byte("<!doctype html><title>FinFlow</title>")},
-		"assets/app-abc.js":  {Data: []byte("console.log('ok')")},
-		"assets/app-abc.css": {Data: []byte("body{}")},
+		"index.html":           {Data: []byte("<!doctype html><title>FinFlow</title>")},
+		"assets/app-abc.js":    {Data: []byte("console.log('ok')")},
+		"assets/app-abc.css":   {Data: []byte("body{}")},
+		"manifest.webmanifest": {Data: []byte(`{"name":"FinFlow"}`)},
+		"sw.js":                {Data: []byte("self.addEventListener('fetch',()=>{})")},
 	}
 }
 
@@ -114,6 +116,8 @@ func TestSPAFallbackAndMissingAssets(t *testing.T) {
 		{"/favicon.ico", 404, "", ""},
 		{"/rota/arquivo.png", 404, "", ""},
 		{"/api/nao-existe", 404, "application/json", "rota não encontrada"},
+		{"/manifest.webmanifest", 200, "application/manifest+json", "FinFlow"},
+		{"/sw.js", 200, "javascript", "addEventListener"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.path, func(t *testing.T) {
@@ -129,6 +133,9 @@ func TestSPAFallbackAndMissingAssets(t *testing.T) {
 			}
 			if !strings.Contains(res.Body.String(), tc.wantBody) {
 				t.Fatalf("corpo = %q", res.Body.String())
+			}
+			if tc.path == "/sw.js" && res.Header().Get("Cache-Control") != "no-cache" {
+				t.Fatalf("sw.js Cache-Control = %q", res.Header().Get("Cache-Control"))
 			}
 		})
 	}

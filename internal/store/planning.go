@@ -69,17 +69,23 @@ type CategoryRuleRow struct {
 	CategoryName string
 	CategoryKind domain.CategoryKind
 	Priority     int
+	TagID        *string // tag aplicada junto com a categoria (v3)
+	TagName      *string
 }
 
 const ruleSelect = `
-	SELECT r.id, r.pattern, r.category_id, c.name, c.kind, r.priority
+	SELECT r.id, r.pattern, r.category_id, c.name, c.kind, r.priority, r.tag_id, g.name
 	FROM category_rules r
 	JOIN categories c ON c.id = r.category_id
+	LEFT JOIN tags g ON g.id = r.tag_id
 `
 
 func scanRule(scanner interface{ Scan(...any) error }) (CategoryRuleRow, error) {
 	var r CategoryRuleRow
-	err := scanner.Scan(&r.ID, &r.Pattern, &r.CategoryID, &r.CategoryName, &r.CategoryKind, &r.Priority)
+	var tagID, tagName sql.NullString
+	err := scanner.Scan(&r.ID, &r.Pattern, &r.CategoryID, &r.CategoryName, &r.CategoryKind, &r.Priority, &tagID, &tagName)
+	r.TagID = db.NullStringPtr(tagID)
+	r.TagName = db.NullStringPtr(tagName)
 	return r, err
 }
 
@@ -123,8 +129,14 @@ func (s *Store) CreateCategoryRule(ctx context.Context, pattern, categoryID stri
 
 func (s *Store) UpdateCategoryRule(ctx context.Context, r *CategoryRuleRow) error {
 	_, err := s.DB.Exec(ctx, `
-		UPDATE category_rules SET pattern = ?, category_id = ?, priority = ? WHERE id = ?
-	`, r.Pattern, r.CategoryID, r.Priority, r.ID)
+		UPDATE category_rules SET pattern = ?, category_id = ?, priority = ?, tag_id = ? WHERE id = ?
+	`, r.Pattern, r.CategoryID, r.Priority, r.TagID, r.ID)
+	return err
+}
+
+// SetCategoryRuleTag define (ou limpa, com nil) a tag aplicada pela regra.
+func (s *Store) SetCategoryRuleTag(ctx context.Context, id string, tagID *string) error {
+	_, err := s.DB.Exec(ctx, `UPDATE category_rules SET tag_id = ? WHERE id = ?`, tagID, id)
 	return err
 }
 
@@ -195,18 +207,20 @@ type WishItemRow struct {
 	Notes      *string
 	Priority   int
 	Status     domain.WishStatus
+	ImageURL   *string
 }
 
-const wishSelect = `SELECT id, name, price_cents, url, notes, priority, status FROM wishlist`
+const wishSelect = `SELECT id, name, price_cents, url, notes, priority, status, image_url FROM wishlist`
 
 func scanWish(scanner interface{ Scan(...any) error }) (WishItemRow, error) {
 	var r WishItemRow
-	var url, notes sql.NullString
-	if err := scanner.Scan(&r.ID, &r.Name, &r.PriceCents, &url, &notes, &r.Priority, &r.Status); err != nil {
+	var url, notes, image sql.NullString
+	if err := scanner.Scan(&r.ID, &r.Name, &r.PriceCents, &url, &notes, &r.Priority, &r.Status, &image); err != nil {
 		return r, err
 	}
 	r.URL = db.NullStringPtr(url)
 	r.Notes = db.NullStringPtr(notes)
+	r.ImageURL = db.NullStringPtr(image)
 	return r, nil
 }
 
@@ -257,17 +271,17 @@ func (s *Store) CreateWishItem(ctx context.Context, r WishItemRow) (string, erro
 	id := uuid.NewString()
 	now := nowStr()
 	_, err := s.DB.Exec(ctx, `
-		INSERT INTO wishlist (id, name, price_cents, url, notes, priority, status, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, id, r.Name, r.PriceCents, r.URL, r.Notes, r.Priority, string(r.Status), now, now)
+		INSERT INTO wishlist (id, name, price_cents, url, notes, priority, status, image_url, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, id, r.Name, r.PriceCents, r.URL, r.Notes, r.Priority, string(r.Status), r.ImageURL, now, now)
 	return id, err
 }
 
 func (s *Store) UpdateWishItem(ctx context.Context, r *WishItemRow) error {
 	_, err := s.DB.Exec(ctx, `
-		UPDATE wishlist SET name = ?, price_cents = ?, url = ?, notes = ?, priority = ?, status = ?, updated_at = ?
+		UPDATE wishlist SET name = ?, price_cents = ?, url = ?, notes = ?, priority = ?, status = ?, image_url = ?, updated_at = ?
 		WHERE id = ?
-	`, r.Name, r.PriceCents, r.URL, r.Notes, r.Priority, string(r.Status), nowStr(), r.ID)
+	`, r.Name, r.PriceCents, r.URL, r.Notes, r.Priority, string(r.Status), r.ImageURL, nowStr(), r.ID)
 	return err
 }
 

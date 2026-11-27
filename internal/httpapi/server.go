@@ -25,6 +25,11 @@ const MaxBodyBytes int64 = 1 << 20
 type ServerOptions struct {
 	WebOrigin string
 	WebFS     fs.FS
+	// Version, LAN e Port alimentam GET /api/system/info (versão do binário, modo rede local e
+	// porta usada para montar as URLs da LAN).
+	Version string
+	LAN     bool
+	Port    int
 }
 
 type Server struct {
@@ -129,6 +134,9 @@ func NewServer(svcs *service.Services, opts ServerOptions) *Server {
 	mux.HandleFunc("GET /api/telegram/status", s.requireAuth(s.handleTelegramStatus))
 
 	s.registerSpreadsheetRoutes(mux)
+	s.registerAIRoutes(mux)
+	s.registerWealthRoutes(mux)
+	s.registerInsightsV3Routes(mux)
 
 	// Healthcheck
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, _ *http.Request) {
@@ -279,6 +287,14 @@ func (s *Server) spaHandler(webFS fs.FS) http.Handler {
 			stat, statErr := f.Stat()
 			_ = f.Close()
 			if statErr == nil && !stat.IsDir() {
+				// PWA: o manifest precisa do MIME certo (o registro do Windows não conhece .webmanifest) e o
+				// service worker não pode ficar em cache, senão uma versão nova do app nunca é instalada.
+				switch {
+				case path.Ext(clean) == ".webmanifest":
+					w.Header().Set("Content-Type", "application/manifest+json")
+				case clean == "sw.js":
+					w.Header().Set("Cache-Control", "no-cache")
+				}
 				fileServer.ServeHTTP(w, r)
 				return
 			}

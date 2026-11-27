@@ -180,6 +180,7 @@ func ValidateCreateCardExpense(in CreateCardExpenseInput) []ValidationIssue {
 	if in.Notes != nil && runeLen(*in.Notes) > 500 {
 		issues = append(issues, ValidationIssue{Path: "notes", Message: "observações até 500 caracteres"})
 	}
+	issues = append(issues, ValidateTagIDs(in.TagIDs)...)
 	return issues
 }
 
@@ -220,6 +221,7 @@ func ValidateCreateTransaction(in CreateTransactionInput) []ValidationIssue {
 	if in.Notes != nil && runeLen(*in.Notes) > 500 {
 		issues = append(issues, ValidationIssue{Path: "notes", Message: "observações até 500 caracteres"})
 	}
+	issues = append(issues, ValidateTagIDs(in.TagIDs)...)
 	return issues
 }
 
@@ -245,6 +247,9 @@ func ValidateUpdateTransaction(in UpdateTransactionInput) []ValidationIssue {
 	}
 	if in.Notes.Set && in.Notes.Valid && runeLen(in.Notes.Value) > 500 {
 		issues = append(issues, ValidationIssue{Path: "notes", Message: "observações até 500 caracteres"})
+	}
+	if in.TagIDs.Set && in.TagIDs.Valid {
+		issues = append(issues, ValidateTagIDs(in.TagIDs.Value)...)
 	}
 	return issues
 }
@@ -492,8 +497,13 @@ func ValidateCreateCategoryRule(in CreateCategoryRuleInput) []ValidationIssue {
 	if in.Priority != nil && (*in.Priority < -MaxRulePriority || *in.Priority > MaxRulePriority) {
 		issues = append(issues, rulePriorityIssue)
 	}
+	if in.TagID != nil && !IsValidUUID(*in.TagID) {
+		issues = append(issues, ruleTagIssue)
+	}
 	return issues
 }
+
+var ruleTagIssue = ValidationIssue{Path: "tagId", Message: "tagId deve ser UUID válido"}
 
 func ValidateUpdateCategoryRule(in UpdateCategoryRuleInput) []ValidationIssue {
 	var issues []ValidationIssue
@@ -505,6 +515,9 @@ func ValidateUpdateCategoryRule(in UpdateCategoryRuleInput) []ValidationIssue {
 	}
 	if in.Priority.Set && (!in.Priority.Valid || in.Priority.Value < -MaxRulePriority || in.Priority.Value > MaxRulePriority) {
 		issues = append(issues, rulePriorityIssue)
+	}
+	if in.TagID.Set && in.TagID.Valid && !IsValidUUID(in.TagID.Value) {
+		issues = append(issues, ruleTagIssue)
 	}
 	return issues
 }
@@ -538,7 +551,19 @@ func ValidateCreateWishItem(in CreateWishItemInput) []ValidationIssue {
 	if in.Priority != nil && (*in.Priority < 0 || *in.Priority > MaxWishPriority) {
 		issues = append(issues, wishPriorityIssue)
 	}
+	if in.ImageURL != nil && !validWishImageURL(*in.ImageURL) {
+		issues = append(issues, wishImageIssue)
+	}
 	return issues
+}
+
+var wishImageIssue = ValidationIssue{Path: "imageUrl", Message: "imageUrl deve ser uma URL http(s) de até 1000 caracteres"}
+
+func validWishImageURL(v string) bool {
+	if runeLen(v) > 1000 {
+		return false
+	}
+	return v == "" || ValidateLinkPreview(LinkPreviewInput{URL: v}) == nil
 }
 
 func ValidateUpdateWishItem(in UpdateWishItemInput) []ValidationIssue {
@@ -560,6 +585,9 @@ func ValidateUpdateWishItem(in UpdateWishItemInput) []ValidationIssue {
 	}
 	if in.Status.Set && (!in.Status.Valid || !in.Status.Value.Valid()) {
 		issues = append(issues, ValidationIssue{Path: "status", Message: "status deve ser LISTED, BOUGHT ou ARCHIVED"})
+	}
+	if in.ImageURL.Set && in.ImageURL.Valid && !validWishImageURL(in.ImageURL.Value) {
+		issues = append(issues, wishImageIssue)
 	}
 	return issues
 }
@@ -609,6 +637,9 @@ func ValidateTransactionFilters(q ListTransactionsQuery) []ValidationIssue {
 	}
 	if q.Search != nil && runeLen(*q.Search) > MaxQuerySearchChars {
 		issues = append(issues, ValidationIssue{Path: "search", Message: "busca muito longa"})
+	}
+	if q.TagID != nil && !IsValidUUID(*q.TagID) {
+		issues = append(issues, ValidationIssue{Path: "tagId", Message: "UUID inválido"})
 	}
 	return issues
 }

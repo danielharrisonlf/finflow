@@ -323,6 +323,7 @@ type CardExpenseLeg struct {
 	InstallmentNumber *int
 	InstallmentTotal  *int
 	InvoicePeriod     domain.InvoicePeriod
+	TagIDs            []string // gravadas na mesma transação de banco
 }
 
 func (s *Store) ListCards(ctx context.Context, includeArchived bool) ([]CardRow, error) {
@@ -467,7 +468,7 @@ func (s *Store) FindInvoiceItems(ctx context.Context, invoiceID string) ([]domai
 		SELECT t.id, t.type, t.description, t.amount_cents, t.date, t.status,
 		       t.account_id, a.name, t.card_id, cc.name,
 		       t.category_id, c.name, c.icon, c.color,
-		       t.transfer_group_id, t.installment_number, t.installment_total, t.invoice_id, t.notes, t.recurring_id
+		       t.transfer_group_id, t.installment_number, t.installment_total, t.invoice_id, t.notes, t.recurring_id, t.loan_id
 		FROM transactions t
 		LEFT JOIN accounts a ON a.id = t.account_id
 		LEFT JOIN credit_cards cc ON cc.id = t.card_id
@@ -480,7 +481,12 @@ func (s *Store) FindInvoiceItems(ctx context.Context, invoiceID string) ([]domai
 	}
 	defer rows.Close()
 
-	return scanTransactions(rows)
+	items, err := scanTransactions(rows)
+	if err != nil {
+		return nil, err
+	}
+	_ = rows.Close()
+	return items, s.AttachTags(ctx, items)
 }
 
 func (s *Store) UnpaidCardTotalCents(ctx context.Context, cardID string) (int64, error) {
@@ -521,6 +527,7 @@ func (s *Store) CreateCardExpense(ctx context.Context, cardID string, legs []Car
 		}
 
 		now := nowStr()
+		legID := uuid.NewString()
 		_, err = tx.Exec(ctx, `
 			INSERT INTO transactions (
 				id, type, description, amount_cents, date, status,
@@ -529,7 +536,7 @@ func (s *Store) CreateCardExpense(ctx context.Context, cardID string, legs []Car
 				created_at, updated_at
 			) VALUES (?, 'CARD_EXPENSE', ?, ?, ?, 'CONFIRMED', ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`,
-			uuid.NewString(),
+			legID,
 			leg.Description,
 			-abs64(leg.AmountCents),
 			leg.Date,
@@ -544,6 +551,9 @@ func (s *Store) CreateCardExpense(ctx context.Context, cardID string, legs []Car
 			now,
 		)
 		if err != nil {
+			return 0, err
+		}
+		if err := insertTransactionTags(ctx, tx, legID, leg.TagIDs); err != nil {
 			return 0, err
 		}
 	}
@@ -639,6 +649,10 @@ func buildTransactionWhere(dialect db.Dialect, q domain.ListTransactionsQuery) (
 		}
 		args = append(args, pattern)
 	}
+	if q.TagID != nil {
+		clauses = append(clauses, "EXISTS (SELECT 1 FROM transaction_tags tt WHERE tt.transaction_id = t.id AND tt.tag_id = ?)")
+		args = append(args, *q.TagID)
+	}
 	if len(clauses) == 0 {
 		return "", nil
 	}
@@ -649,7 +663,7 @@ const txSelectCols = `
 	SELECT t.id, t.type, t.description, t.amount_cents, t.date, t.status,
 	       t.account_id, a.name, t.card_id, cc.name,
 	       t.category_id, c.name, c.icon, c.color,
-	       t.transfer_group_id, t.installment_number, t.installment_total, t.invoice_id, t.notes, t.recurring_id
+	       t.transfer_group_id, t.installment_number, t.installment_total, t.invoice_id, t.notes, t.recurring_id, t.loan_id
 	FROM transactions t
 	LEFT JOIN accounts a ON a.id = t.account_id
 	LEFT JOIN credit_cards cc ON cc.id = t.card_id
@@ -674,12 +688,13 @@ func scanTransaction(scanner interface{ Scan(...any) error }) (domain.Transactio
 		invoiceID    sql.NullString
 		notes        sql.NullString
 		recurringID  sql.NullString
+		loanID       sql.NullString
 	)
 	err := scanner.Scan(
 		&t.ID, &t.Type, &t.Description, &t.AmountCents, &dt, &t.Status,
 		&accountID, &accountName, &cardID, &cardName,
 		&categoryID, &categoryName, &categoryIcon, &categoryCol,
-		&transferGID, &instNum, &instTot, &invoiceID, &notes, &recurringID,
+		&transferGID, &instNum, &instTot, &invoiceID, &notes, &recurringID, &loanID,
 	)
 	if err != nil {
 		return t, err
@@ -699,6 +714,8 @@ func scanTransaction(scanner interface{ Scan(...any) error }) (domain.Transactio
 	t.InvoiceID = db.NullStringPtr(invoiceID)
 	t.Notes = db.NullStringPtr(notes)
 	t.RecurringID = db.NullStringPtr(recurringID)
+	t.LoanID = db.NullStringPtr(loanID)
+	t.Tags = []domain.TagRef{}
 	return t, nil
 }
 
@@ -731,7 +748,11 @@ func (s *Store) ListTransactions(ctx context.Context, q domain.ListTransactionsQ
 	defer rows.Close()
 
 	items, err := scanTransactions(rows)
-	return items, total, err
+	if err != nil {
+		return nil, 0, err
+	}
+	_ = rows.Close()
+	return items, total, s.AttachTags(ctx, items)
 }
 
 func (s *Store) ListAllTransactions(ctx context.Context, q domain.ListTransactionsQuery) ([]domain.Transaction, error) {
@@ -741,7 +762,12 @@ func (s *Store) ListAllTransactions(ctx context.Context, q domain.ListTransactio
 		return nil, err
 	}
 	defer rows.Close()
-	return scanTransactions(rows)
+	items, err := scanTransactions(rows)
+	if err != nil {
+		return nil, err
+	}
+	_ = rows.Close()
+	return items, s.AttachTags(ctx, items)
 }
 
 type TransactionDetail struct {
@@ -768,12 +794,13 @@ func (s *Store) FindTransactionByID(ctx context.Context, id string) (*Transactio
 		invoiceID    sql.NullString
 		notes        sql.NullString
 		recurringID  sql.NullString
+		loanID       sql.NullString
 	)
 	err := s.DB.QueryRow(ctx, `
 		SELECT t.id, t.type, t.description, t.amount_cents, t.date, t.status,
 		       t.account_id, a.name, t.card_id, cc.name,
 		       t.category_id, c.name, c.icon, c.color,
-		       t.transfer_group_id, t.installment_group_id, t.installment_number, t.installment_total, t.invoice_id, t.notes, t.recurring_id
+		       t.transfer_group_id, t.installment_group_id, t.installment_number, t.installment_total, t.invoice_id, t.notes, t.recurring_id, t.loan_id
 		FROM transactions t
 		LEFT JOIN accounts a ON a.id = t.account_id
 		LEFT JOIN credit_cards cc ON cc.id = t.card_id
@@ -783,7 +810,7 @@ func (s *Store) FindTransactionByID(ctx context.Context, id string) (*Transactio
 		&t.ID, &t.Type, &t.Description, &t.AmountCents, &dt, &t.Status,
 		&accountID, &accountName, &cardID, &cardName,
 		&categoryID, &categoryName, &categoryIcon, &categoryCol,
-		&transferGID, &instGID, &instNum, &instTot, &invoiceID, &notes, &recurringID,
+		&transferGID, &instGID, &instNum, &instTot, &invoiceID, &notes, &recurringID, &loanID,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -806,8 +833,13 @@ func (s *Store) FindTransactionByID(ctx context.Context, id string) (*Transactio
 	t.InvoiceID = db.NullStringPtr(invoiceID)
 	t.Notes = db.NullStringPtr(notes)
 	t.RecurringID = db.NullStringPtr(recurringID)
+	t.LoanID = db.NullStringPtr(loanID)
+	one := []domain.Transaction{t}
+	if err := s.AttachTags(ctx, one); err != nil {
+		return nil, err
+	}
 	return &TransactionDetail{
-		Transaction:        t,
+		Transaction:        one[0],
 		InstallmentGroupID: db.NullStringPtr(instGID),
 	}, nil
 }
@@ -1418,8 +1450,12 @@ func (s *Store) UnpaidInvoicesWithTotals(ctx context.Context) ([]UnpaidInvoiceWi
 func (s *Store) ClearAll(ctx context.Context) error {
 	tables := []string{
 		"transactions",
+		"loans",
+		"investment_snapshots",
+		"investments",
 		"recurring",
 		"category_rules",
+		"tags",
 		"wishlist",
 		"settings",
 		"invoices",

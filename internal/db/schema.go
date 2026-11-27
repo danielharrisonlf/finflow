@@ -52,6 +52,27 @@ var addedColumns = []addedColumn{
 		sqliteDDL:   `kind TEXT NOT NULL DEFAULT 'GOAL' CHECK (kind IN ('GOAL', 'RESERVE'))`,
 		postgresDDL: `kind TEXT NOT NULL DEFAULT 'GOAL' CHECK (kind IN ('GOAL', 'RESERVE'))`,
 	},
+	{
+		table: "transactions", column: "loan_id",
+		sqliteDDL:   `loan_id TEXT REFERENCES loans(id) ON DELETE SET NULL`,
+		postgresDDL: `loan_id UUID REFERENCES loans(id) ON DELETE SET NULL`,
+	},
+	// v3 §1–§9 (tags, assinaturas, prévia de link).
+	{
+		table: "recurring", column: "is_subscription",
+		sqliteDDL:   `is_subscription INTEGER NOT NULL DEFAULT 0`,
+		postgresDDL: `is_subscription BOOLEAN NOT NULL DEFAULT FALSE`,
+	},
+	{
+		table: "category_rules", column: "tag_id",
+		sqliteDDL:   `tag_id TEXT REFERENCES tags(id) ON DELETE SET NULL`,
+		postgresDDL: `tag_id UUID REFERENCES tags(id) ON DELETE SET NULL`,
+	},
+	{
+		table: "wishlist", column: "image_url",
+		sqliteDDL:   `image_url TEXT`,
+		postgresDDL: `image_url TEXT`,
+	},
 }
 
 // addColumnIfMissing usa ADD COLUMN IF NOT EXISTS no PostgreSQL; o SQLite não tem essa
@@ -206,11 +227,64 @@ var sqliteSchema = []string{
 		created_at TEXT NOT NULL,
 		updated_at TEXT NOT NULL
 	)`,
+	`CREATE TABLE IF NOT EXISTS investments (
+		id TEXT PRIMARY KEY,
+		account_id TEXT REFERENCES accounts(id) ON DELETE SET NULL,
+		name TEXT NOT NULL,
+		kind TEXT NOT NULL CHECK (kind IN ('FIXED_INCOME', 'TREASURY', 'STOCKS', 'FII', 'FUNDS', 'CRYPTO', 'PENSION', 'OTHER')),
+		institution TEXT,
+		invested_cents INTEGER NOT NULL DEFAULT 0,
+		current_cents INTEGER NOT NULL DEFAULT 0,
+		notes TEXT,
+		archived INTEGER NOT NULL DEFAULT 0,
+		value_updated_at TEXT,
+		created_at TEXT NOT NULL,
+		updated_at TEXT NOT NULL
+	)`,
+	`CREATE TABLE IF NOT EXISTS investment_snapshots (
+		id TEXT PRIMARY KEY,
+		investment_id TEXT NOT NULL REFERENCES investments(id) ON DELETE CASCADE,
+		date TEXT NOT NULL,
+		value_cents INTEGER NOT NULL,
+		invested_cents INTEGER NOT NULL
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_investment_snapshots_investment_date ON investment_snapshots(investment_id, date)`,
+	`CREATE TABLE IF NOT EXISTS loans (
+		id TEXT PRIMARY KEY,
+		name TEXT NOT NULL,
+		lender TEXT,
+		kind TEXT NOT NULL CHECK (kind IN ('PERSONAL', 'PAYROLL', 'VEHICLE', 'MORTGAGE', 'STUDENT', 'CARD_DEBT', 'OVERDRAFT', 'OTHER')),
+		principal_cents INTEGER NOT NULL,
+		monthly_rate_bp INTEGER NOT NULL DEFAULT 0,
+		installment_cents INTEGER NOT NULL,
+		total_installments INTEGER NOT NULL,
+		paid_installments INTEGER NOT NULL DEFAULT 0,
+		first_due_date TEXT NOT NULL,
+		account_id TEXT REFERENCES accounts(id) ON DELETE SET NULL,
+		category_id TEXT REFERENCES categories(id) ON DELETE SET NULL,
+		active INTEGER NOT NULL DEFAULT 1,
+		notes TEXT,
+		created_at TEXT NOT NULL,
+		updated_at TEXT NOT NULL
+	)`,
+	`CREATE TABLE IF NOT EXISTS tags (
+		id TEXT PRIMARY KEY,
+		name TEXT NOT NULL UNIQUE,
+		color TEXT NOT NULL,
+		created_at TEXT NOT NULL
+	)`,
+	`CREATE TABLE IF NOT EXISTS transaction_tags (
+		transaction_id TEXT NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+		tag_id TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+		PRIMARY KEY (transaction_id, tag_id)
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_transaction_tags_tag_id ON transaction_tags(tag_id)`,
 }
 
 // Índices que dependem das colunas de addedColumns (aplicados depois delas).
 var sqlitePostSchema = []string{
 	`CREATE INDEX IF NOT EXISTS idx_transactions_recurring_id ON transactions(recurring_id)`,
+	`CREATE INDEX IF NOT EXISTS idx_transactions_loan_id ON transactions(loan_id)`,
 	// No máximo uma reserva de emergência não arquivada.
 	`CREATE UNIQUE INDEX IF NOT EXISTS idx_goals_single_reserve ON goals(kind) WHERE kind = 'RESERVE' AND archived = 0`,
 }
@@ -348,9 +422,62 @@ var postgresSchema = []string{
 		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 	)`,
+	`CREATE TABLE IF NOT EXISTS investments (
+		id UUID PRIMARY KEY,
+		account_id UUID REFERENCES accounts(id) ON DELETE SET NULL,
+		name TEXT NOT NULL,
+		kind TEXT NOT NULL CHECK (kind IN ('FIXED_INCOME', 'TREASURY', 'STOCKS', 'FII', 'FUNDS', 'CRYPTO', 'PENSION', 'OTHER')),
+		institution TEXT,
+		invested_cents BIGINT NOT NULL DEFAULT 0,
+		current_cents BIGINT NOT NULL DEFAULT 0,
+		notes TEXT,
+		archived BOOLEAN NOT NULL DEFAULT FALSE,
+		value_updated_at DATE,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	)`,
+	`CREATE TABLE IF NOT EXISTS investment_snapshots (
+		id UUID PRIMARY KEY,
+		investment_id UUID NOT NULL REFERENCES investments(id) ON DELETE CASCADE,
+		date DATE NOT NULL,
+		value_cents BIGINT NOT NULL,
+		invested_cents BIGINT NOT NULL
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_investment_snapshots_investment_date ON investment_snapshots(investment_id, date)`,
+	`CREATE TABLE IF NOT EXISTS loans (
+		id UUID PRIMARY KEY,
+		name TEXT NOT NULL,
+		lender TEXT,
+		kind TEXT NOT NULL CHECK (kind IN ('PERSONAL', 'PAYROLL', 'VEHICLE', 'MORTGAGE', 'STUDENT', 'CARD_DEBT', 'OVERDRAFT', 'OTHER')),
+		principal_cents BIGINT NOT NULL,
+		monthly_rate_bp INTEGER NOT NULL DEFAULT 0,
+		installment_cents BIGINT NOT NULL,
+		total_installments INTEGER NOT NULL,
+		paid_installments INTEGER NOT NULL DEFAULT 0,
+		first_due_date DATE NOT NULL,
+		account_id UUID REFERENCES accounts(id) ON DELETE SET NULL,
+		category_id UUID REFERENCES categories(id) ON DELETE SET NULL,
+		active BOOLEAN NOT NULL DEFAULT TRUE,
+		notes TEXT,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	)`,
+	`CREATE TABLE IF NOT EXISTS tags (
+		id UUID PRIMARY KEY,
+		name TEXT NOT NULL UNIQUE,
+		color TEXT NOT NULL,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	)`,
+	`CREATE TABLE IF NOT EXISTS transaction_tags (
+		transaction_id UUID NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+		tag_id UUID NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+		PRIMARY KEY (transaction_id, tag_id)
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_transaction_tags_tag_id ON transaction_tags(tag_id)`,
 }
 
 var postgresPostSchema = []string{
 	`CREATE INDEX IF NOT EXISTS idx_transactions_recurring_id ON transactions(recurring_id)`,
+	`CREATE INDEX IF NOT EXISTS idx_transactions_loan_id ON transactions(loan_id)`,
 	`CREATE UNIQUE INDEX IF NOT EXISTS idx_goals_single_reserve ON goals(kind) WHERE kind = 'RESERVE' AND archived = FALSE`,
 }

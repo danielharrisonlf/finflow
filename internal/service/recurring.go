@@ -31,6 +31,8 @@ func toRecurring(r store.RecurringRow, realized map[string]bool, today string) d
 		EndDate:       r.EndDate,
 		Active:        r.Active,
 		NextDate:      domain.NextRecurringDate(recurringSchedule(r), r.Active, realized, today),
+
+		IsSubscription: r.IsSubscription,
 	}
 }
 
@@ -112,6 +114,8 @@ func (s *Services) CreateRecurring(ctx context.Context, in domain.CreateRecurrin
 		StartDate:   start,
 		EndDate:     in.EndDate,
 		Active:      true,
+
+		IsSubscription: in.IsSubscription != nil && *in.IsSubscription,
 	})
 	if err != nil {
 		return domain.Recurring{}, err
@@ -156,6 +160,9 @@ func (s *Services) UpdateRecurring(ctx context.Context, id string, in domain.Upd
 	}
 	if in.Active.Set && in.Active.Valid {
 		r.Active = in.Active.Value
+	}
+	if in.IsSubscription.Set {
+		r.IsSubscription = in.IsSubscription.Valid && in.IsSubscription.Value
 	}
 	if issues := domain.ValidateRecurringPeriod(r.StartDate, r.EndDate); len(issues) > 0 {
 		return domain.Recurring{}, ValidationFailed(issues)

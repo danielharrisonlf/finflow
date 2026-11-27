@@ -28,12 +28,14 @@ type RecurringRow struct {
 	StartDate     string
 	EndDate       *string
 	Active        bool
+	// IsSubscription marca assinaturas (v3 §2).
+	IsSubscription bool
 }
 
 const recurringSelect = `
 	SELECT r.id, r.description, r.kind, r.amount_cents, r.day_of_month,
 	       r.account_id, a.name, r.category_id, c.name, c.icon, c.color,
-	       r.start_date, r.end_date, r.active
+	       r.start_date, r.end_date, r.active, r.is_subscription
 	FROM recurring r
 	LEFT JOIN accounts a ON a.id = r.account_id
 	LEFT JOIN categories c ON c.id = r.category_id
@@ -49,7 +51,7 @@ func scanRecurring(scanner interface{ Scan(...any) error }) (RecurringRow, error
 	)
 	err := scanner.Scan(&r.ID, &r.Description, &r.Kind, &r.AmountCents, &r.DayOfMonth,
 		&accountID, &accountName, &categoryID, &categoryName, &categoryIcon, &catCol,
-		&start, &end, &r.Active)
+		&start, &end, &r.Active, &r.IsSubscription)
 	if err != nil {
 		return r, err
 	}
@@ -99,10 +101,10 @@ func (s *Store) CreateRecurring(ctx context.Context, r RecurringRow) (string, er
 	_, err := s.DB.Exec(ctx, `
 		INSERT INTO recurring (
 			id, description, kind, amount_cents, day_of_month, account_id, category_id,
-			start_date, end_date, active, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			start_date, end_date, active, is_subscription, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, id, r.Description, string(r.Kind), r.AmountCents, r.DayOfMonth, r.AccountID, r.CategoryID,
-		r.StartDate, r.EndDate, r.Active, now, now)
+		r.StartDate, r.EndDate, r.Active, r.IsSubscription, now, now)
 	return id, err
 }
 
@@ -110,10 +112,10 @@ func (s *Store) UpdateRecurring(ctx context.Context, r *RecurringRow) error {
 	_, err := s.DB.Exec(ctx, `
 		UPDATE recurring
 		SET description = ?, kind = ?, amount_cents = ?, day_of_month = ?, account_id = ?, category_id = ?,
-		    start_date = ?, end_date = ?, active = ?, updated_at = ?
+		    start_date = ?, end_date = ?, active = ?, is_subscription = ?, updated_at = ?
 		WHERE id = ?
 	`, r.Description, string(r.Kind), r.AmountCents, r.DayOfMonth, r.AccountID, r.CategoryID,
-		r.StartDate, r.EndDate, r.Active, nowStr(), r.ID)
+		r.StartDate, r.EndDate, r.Active, r.IsSubscription, nowStr(), r.ID)
 	return err
 }
 

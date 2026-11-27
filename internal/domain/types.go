@@ -301,6 +301,8 @@ type CreateCardExpenseInput struct {
 	CategoryID   *string `json:"categoryId,omitempty"`
 	Installments int     `json:"installments"`
 	Notes        *string `json:"notes,omitempty"`
+	// TagIDs é aplicado a todas as parcelas.
+	TagIDs []string `json:"tagIds,omitempty"`
 }
 
 // UnmarshalJSON aplica o padrão de 1 parcela só quando "installments" está ausente.
@@ -354,6 +356,9 @@ type Transaction struct {
 	InvoiceID         *string           `json:"invoiceId"`
 	Notes             *string           `json:"notes"`
 	RecurringID       *string           `json:"recurringId"`
+	LoanID            *string           `json:"loanId"`
+	// Tags sempre presente (array vazio quando não há tags).
+	Tags []TagRef `json:"tags"`
 }
 
 type CreateTransactionInput struct {
@@ -365,8 +370,10 @@ type CreateTransactionInput struct {
 	AccountID   string            `json:"accountId"`
 	CategoryID  *string           `json:"categoryId,omitempty"`
 	Notes       *string           `json:"notes,omitempty"`
+	TagIDs      []string          `json:"tagIds,omitempty"`
 }
 
+// UpdateTransactionInput.TagIDs substitui o conjunto de tags (null ou [] remove todas).
 type UpdateTransactionInput struct {
 	Description Optional[string]            `json:"description"`
 	AmountCents Optional[int64]             `json:"amountCents"`
@@ -375,6 +382,7 @@ type UpdateTransactionInput struct {
 	AccountID   Optional[string]            `json:"accountId"`
 	CategoryID  Optional[string]            `json:"categoryId"`
 	Notes       Optional[string]            `json:"notes"`
+	TagIDs      Optional[[]string]          `json:"tagIds"`
 }
 
 type ListTransactionsQuery struct {
@@ -388,6 +396,7 @@ type ListTransactionsQuery struct {
 	Type       *TransactionType
 	Status     *TransactionStatus
 	Search     *string
+	TagID      *string
 }
 
 type Paginated[T any] struct {
@@ -473,17 +482,20 @@ type Recurring struct {
 	EndDate       *string      `json:"endDate"`
 	Active        bool         `json:"active"`
 	NextDate      *string      `json:"nextDate"`
+	// IsSubscription marca assinaturas (acompanhadas a partir da detecção, v3 §2).
+	IsSubscription bool `json:"isSubscription"`
 }
 
 type CreateRecurringInput struct {
-	Description string       `json:"description"`
-	Kind        CategoryKind `json:"kind"`
-	AmountCents int64        `json:"amountCents"`
-	DayOfMonth  int          `json:"dayOfMonth"`
-	AccountID   *string      `json:"accountId,omitempty"`
-	CategoryID  *string      `json:"categoryId,omitempty"`
-	StartDate   *string      `json:"startDate,omitempty"`
-	EndDate     *string      `json:"endDate,omitempty"`
+	Description    string       `json:"description"`
+	Kind           CategoryKind `json:"kind"`
+	AmountCents    int64        `json:"amountCents"`
+	DayOfMonth     int          `json:"dayOfMonth"`
+	AccountID      *string      `json:"accountId,omitempty"`
+	CategoryID     *string      `json:"categoryId,omitempty"`
+	StartDate      *string      `json:"startDate,omitempty"`
+	EndDate        *string      `json:"endDate,omitempty"`
+	IsSubscription *bool        `json:"isSubscription,omitempty"`
 }
 
 type UpdateRecurringInput struct {
@@ -496,6 +508,8 @@ type UpdateRecurringInput struct {
 	StartDate   Optional[string]       `json:"startDate"`
 	EndDate     Optional[string]       `json:"endDate"`
 	Active      Optional[bool]         `json:"active"`
+	// IsSubscription null volta a false.
+	IsSubscription Optional[bool] `json:"isSubscription"`
 }
 
 type PostRecurringInput struct {
@@ -557,18 +571,23 @@ type CategoryRule struct {
 	CategoryID   string `json:"categoryId"`
 	CategoryName string `json:"categoryName"`
 	Priority     int    `json:"priority"`
+	// TagID é a tag aplicada junto com a categoria (v3 §1).
+	TagID   *string `json:"tagId"`
+	TagName *string `json:"tagName"`
 }
 
 type CreateCategoryRuleInput struct {
-	Pattern    string `json:"pattern"`
-	CategoryID string `json:"categoryId"`
-	Priority   *int   `json:"priority,omitempty"`
+	Pattern    string  `json:"pattern"`
+	CategoryID string  `json:"categoryId"`
+	Priority   *int    `json:"priority,omitempty"`
+	TagID      *string `json:"tagId,omitempty"`
 }
 
 type UpdateCategoryRuleInput struct {
 	Pattern    Optional[string] `json:"pattern"`
 	CategoryID Optional[string] `json:"categoryId"`
 	Priority   Optional[int]    `json:"priority"`
+	TagID      Optional[string] `json:"tagId"`
 }
 
 type ApplyRulesInput struct {
@@ -590,6 +609,7 @@ type WishItem struct {
 	Priority     int        `json:"priority"`
 	Status       WishStatus `json:"status"`
 	AffordableOn *string    `json:"affordableOn"`
+	ImageURL     *string    `json:"imageUrl"`
 }
 
 type CreateWishItemInput struct {
@@ -598,6 +618,7 @@ type CreateWishItemInput struct {
 	URL        *string `json:"url,omitempty"`
 	Notes      *string `json:"notes,omitempty"`
 	Priority   *int    `json:"priority,omitempty"`
+	ImageURL   *string `json:"imageUrl,omitempty"`
 }
 
 type UpdateWishItemInput struct {
@@ -607,6 +628,7 @@ type UpdateWishItemInput struct {
 	Notes      Optional[string]     `json:"notes"`
 	Priority   Optional[int]        `json:"priority"`
 	Status     Optional[WishStatus] `json:"status"`
+	ImageURL   Optional[string]     `json:"imageUrl"`
 }
 
 // ───────────────────────── Dashboard ─────────────────────────

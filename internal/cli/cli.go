@@ -106,7 +106,13 @@ func NewRootCmd() *cobra.Command {
 		cmdProjecao(opts),
 		cmdFixas(opts),
 		cmdInsights(opts),
+		cmdAssinaturas(opts),
+		cmdAlertas(opts),
+		cmdPosso(opts),
 		cmdStatus(opts),
+		cmdInvestimentos(opts),
+		cmdDividas(opts),
+		cmdPatrimonio(opts),
 	)
 	return root
 }
@@ -221,6 +227,7 @@ func cmdServe() *cobra.Command {
 	var port int
 	var host string
 	var autoSeed bool
+	var lan bool
 
 	cmd := &cobra.Command{
 		Use:   "serve",
@@ -231,9 +238,12 @@ func cmdServe() *cobra.Command {
 			if port > 0 {
 				cfg.Port = port
 			}
-			if host != "" {
-				cfg.Host = host
+			// Só esta máquina por padrão; --lan (ou FINFLOW_LAN=1) abre para a rede local e exige senha.
+			lan = lan || lanFromEnv()
+			if err := checkLAN(lan, cfg.Password); err != nil {
+				return err
 			}
+			cfg.Host = resolveBindHost(host, cfg.Host, lan)
 
 			ctx := cmd.Context()
 			database, err := db.Open(ctx, cfg.DatabaseURL, cfg.DBPath)
@@ -262,6 +272,9 @@ func cmdServe() *cobra.Command {
 			apiServer := httpapi.NewServer(svcs, httpapi.ServerOptions{
 				WebOrigin: cfg.WebOrigin,
 				WebFS:     webFS,
+				Version:   Version,
+				LAN:       lan,
+				Port:      cfg.Port,
 			})
 
 			addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
@@ -275,15 +288,18 @@ func cmdServe() *cobra.Command {
 				errCh <- httpSrv.ListenAndServe()
 			}()
 
-			displayHost := cfg.Host
-			if displayHost == "" {
-				displayHost = "localhost"
-			}
-			fmt.Fprintf(out, "FinFlow rodando em http://%s:%d (API: /api, banco: %s -> %s)\n", displayHost, cfg.Port, database.Dialect, database.Target)
+			shownHost := displayHost(cfg.Host)
+			fmt.Fprintf(out, "FinFlow rodando em http://%s:%d (API: /api, banco: %s -> %s)\n", shownHost, cfg.Port, database.Dialect, database.Target)
 			if hasWeb {
-				fmt.Fprintf(out, "Interface web disponível em http://%s:%d\n", displayHost, cfg.Port)
+				fmt.Fprintf(out, "Interface web disponível em http://%s:%d\n", shownHost, cfg.Port)
 			} else {
 				fmt.Fprintln(out, cDim("Interface web não embutida ainda (rode `pnpm build` ou use `pnpm dev:web` em :5273)"))
+			}
+			if lan {
+				fmt.Fprintln(out, cGreen("Modo rede local ativo: abra no celular (mesma rede Wi-Fi) em:"))
+				for _, u := range httpapi.LANURLs(cfg.Port) {
+					fmt.Fprintf(out, "  %s\n", u)
+				}
 			}
 
 			select {
@@ -305,7 +321,8 @@ func cmdServe() *cobra.Command {
 		},
 	}
 	cmd.Flags().IntVar(&port, "port", 0, "porta HTTP (padrão: API_PORT ou 3333)")
-	cmd.Flags().StringVar(&host, "host", "", "endereço de bind (padrão: vazio / todas as interfaces)")
+	cmd.Flags().StringVar(&host, "host", "", "endereço de bind (padrão: API_HOST ou 127.0.0.1, só esta máquina)")
+	cmd.Flags().BoolVar(&lan, "lan", false, "escuta em 0.0.0.0 para abrir no celular pela rede local (exige FINFLOW_PASSWORD; também FINFLOW_LAN=1)")
 	cmd.Flags().BoolVar(&autoSeed, "seed", false, "popula o banco com dados de exemplo se estiver vazio")
 	return cmd
 }
@@ -335,7 +352,7 @@ func cmdSeed() *cobra.Command {
 				fmt.Fprintln(out, "Seed já aplicado (existem contas) — nada a fazer.")
 				return nil
 			}
-			fmt.Fprintln(out, cGreen("✔ Seed concluído: 5 contas, 2 cartões, categorias padrão com tipo de gasto, 6 recorrências, transações de 3 meses, 5 orçamentos, 3 metas (com reserva de emergência), limite mensal, regras e 2 desejos."))
+			fmt.Fprintln(out, cGreen("✔ Seed concluído: 5 contas, 2 cartões, categorias padrão com tipo de gasto, 6 recorrências, transações de 3 meses, 5 orçamentos, 3 metas (com reserva de emergência), limite mensal, regras, 2 desejos, 2 investimentos e 1 financiamento."))
 			return nil
 		},
 	}
@@ -344,7 +361,7 @@ func cmdSeed() *cobra.Command {
 func cmdMCP(opts *rootOpts) *cobra.Command {
 	return &cobra.Command{
 		Use:   "mcp",
-		Short: "Inicia o servidor MCP em stdio (24 tools para agentes de IA)",
+		Short: "Inicia o servidor MCP em stdio (tools para agentes de IA; também em POST /api/mcp no serve)",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			// stdout é exclusivo do protocolo MCP: diagnósticos vão sempre para stderr.
 			b, mode, cleanup, err := openBackendLogged(cmd.Context(), opts, cmd.ErrOrStderr(), "mcp")

@@ -39,6 +39,8 @@ type Backend interface {
 	ExportTransactions(ctx context.Context, format string, q domain.ListTransactionsQuery) (string, error)
 	SpreadsheetBackend
 	PlanningBackend
+	WealthBackend
+	InsightsV3Backend
 	TelegramStatus(ctx context.Context) (domain.TelegramStatus, error)
 	AuthStatus(ctx context.Context) (domain.AuthStatus, error)
 }
@@ -256,6 +258,9 @@ func txQS(q domain.ListTransactionsQuery, format string) string {
 	}
 	if q.Search != nil && *q.Search != "" {
 		v.Set("search", *q.Search)
+	}
+	if q.TagID != nil {
+		v.Set("tagId", *q.TagID)
 	}
 	if format == "" {
 		if q.Page > 0 {

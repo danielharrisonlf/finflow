@@ -399,6 +399,12 @@ func parseTransactionsQuery(r *http.Request) (domain.ListTransactionsQuery, erro
 		}
 		out.Search = &v
 	}
+	if v := q.Get("tagId"); v != "" {
+		if !domain.IsValidUUID(v) {
+			return out, service.ValidationFailed([]domain.ValidationIssue{{Path: "tagId", Message: "UUID inválido"}})
+		}
+		out.TagID = &v
+	}
 	return out, nil
 }
 

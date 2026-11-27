@@ -27,6 +27,9 @@ func bodyLimitFor(r *http.Request) int64 {
 	if r.Method == http.MethodPost && importRoutes[r.URL.Path] {
 		return MaxImportBodyBytes
 	}
+	if r.Method == http.MethodPost && r.URL.Path == "/api/ai/receipt" {
+		return MaxReceiptBodyBytes
+	}
 	return MaxBodyBytes
 }
 

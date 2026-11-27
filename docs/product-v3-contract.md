@@ -136,9 +136,10 @@ em `TRANSFER` (mesmo grupo, categoria nula, descrições mantidas), numa transa�
   fitsOn: string | null;                            // 1ª data em que caberia sem saldo negativo (se verdict NO)
   message: string }                                 // pt-BR
 ```
-Sem `cardId`: saída única do saldo disponível na `date` (default hoje). Com `cardId`: parcelas entram nas faturas
+Sem `cardId`: sai do saldo disponível na `date` (default hoje); com `installments > 1`, uma parcela por mês a partir
+da `date` (carnê/boleto), resto da divisão nas primeiras. Com `cardId`: parcelas entram nas faturas
 seguindo o ciclo do cartão (reutilizar o cálculo de fatura) e saem no vencimento. NO quando o menor saldo fica
-< 0; CAREFUL quando fica abaixo da faixa amarela (`balanceBands.yellow`) ou estoura o limite mensal; YES no resto.
+< 0; CAREFUL quando entra na faixa amarela (abaixo de `balanceBands.lightGreen`) ou estoura o limite mensal; YES no resto.
 
 ## 9. Prévia de link de desejo
 

@@ -19,6 +19,8 @@ type Services struct {
 	TelegramAPI   *TelegramAPIClient
 	Notifications *NotificationsService
 	Telegram      *TelegramService
+	// LinkPreview busca a prévia de links de desejos (SSRF-safe; substituível nos testes).
+	LinkPreview *LinkPreviewer
 }
 
 func New(st *store.Store, httpClient *http.Client) *Services {
@@ -29,6 +31,7 @@ func New(st *store.Store, httpClient *http.Client) *Services {
 		Auth:          NewAuthService(),
 		TelegramAPI:   tgAPI,
 		Notifications: notif,
+		LinkPreview:   NewLinkPreviewer(),
 	}
 	svcs.Telegram = NewTelegramService(svcs)
 	return svcs
@@ -487,6 +490,13 @@ func (s *Services) AddCardExpense(ctx context.Context, cardID string, in domain.
 			return domain.CardExpenseResult{}, err
 		}
 	}
+	if err := s.requireTags(ctx, in.TagIDs); err != nil {
+		return domain.CardExpenseResult{}, err
+	}
+	tagIDs, err := s.withRuleTag(ctx, in.TagIDs, in.Description, domain.CategoryExpense)
+	if err != nil {
+		return domain.CardExpenseResult{}, err
+	}
 	amounts, err := domain.SplitInstallments(in.TotalCents, in.Installments)
 	if err != nil {
 		return domain.CardExpenseResult{}, BadRequest(err.Error())
@@ -514,6 +524,7 @@ func (s *Services) AddCardExpense(ctx context.Context, cardID string, in domain.
 			InstallmentNumber: num,
 			InstallmentTotal:  tot,
 			InvoicePeriod:     domain.AddMonthsToPeriod(basePeriod, i),
+			TagIDs:            tagIDs,
 		}
 	}
 
@@ -672,6 +683,14 @@ func (s *Services) CreateTransaction(ctx context.Context, in domain.CreateTransa
 		}
 		in.CategoryID = suggested
 	}
+	if err := s.requireTags(ctx, in.TagIDs); err != nil {
+		return domain.Transaction{}, err
+	}
+	ruleKind, _ := domain.CategoryKindForTransaction(in.Type)
+	tagIDs, err := s.withRuleTag(ctx, in.TagIDs, in.Description, ruleKind)
+	if err != nil {
+		return domain.Transaction{}, err
+	}
 	created, err := s.Store.CreateTransaction(
 		ctx,
 		in.Type,
@@ -685,6 +704,14 @@ func (s *Services) CreateTransaction(ctx context.Context, in domain.CreateTransa
 	)
 	if err != nil {
 		return domain.Transaction{}, err
+	}
+	if len(tagIDs) > 0 {
+		if err := s.Store.SetTransactionTags(ctx, created.ID, tagIDs); err != nil {
+			return domain.Transaction{}, err
+		}
+		if created, err = s.reloadTransaction(ctx, created.ID); err != nil {
+			return domain.Transaction{}, err
+		}
 	}
 	if in.Type == domain.TxExpense && in.CategoryID != nil && domain.IsInCurrentMonth(in.Date) {
 		catID := *in.CategoryID
@@ -745,11 +772,38 @@ func (s *Services) UpdateTransaction(ctx context.Context, id string, in domain.U
 			tx.Notes = nil
 		}
 	}
+	var tagIDs []string
+	if in.TagIDs.Set && in.TagIDs.Valid {
+		tagIDs = domain.UniqueStrings(in.TagIDs.Value)
+	}
+	if err := s.requireTags(ctx, tagIDs); err != nil {
+		return domain.Transaction{}, err
+	}
 	updated, err := s.Store.UpdateTransaction(ctx, &tx)
 	if err != nil {
 		return domain.Transaction{}, err
 	}
+	if in.TagIDs.Set {
+		if err := s.Store.SetTransactionTags(ctx, id, tagIDs); err != nil {
+			return domain.Transaction{}, err
+		}
+		if updated, err = s.reloadTransaction(ctx, id); err != nil {
+			return domain.Transaction{}, err
+		}
+	}
 	return *updated, nil
+}
+
+// reloadTransaction relê a transação (com as tags) depois de uma alteração.
+func (s *Services) reloadTransaction(ctx context.Context, id string) (*domain.Transaction, error) {
+	detail, err := s.Store.FindTransactionByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if detail == nil {
+		return nil, NotFound("transação não encontrada")
+	}
+	return &detail.Transaction, nil
 }
 
 func (s *Services) ConfirmTransaction(ctx context.Context, id string) (domain.Transaction, error) {

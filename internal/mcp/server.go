@@ -211,7 +211,7 @@ func allTools() []toolDef {
 	exportProps := periodProps()
 	exportProps["format"] = map[string]any{"type": "string", "enum": []string{"csv", "ofx"}}
 
-	return []toolDef{
+	tools := []toolDef{
 		{Name: "get_summary", Description: "Resumo financeiro: saldo consolidado, receitas/despesas/balanço do mês, faturas em aberto e pendências. Valores em centavos.", InputSchema: objSchema(periodProps())},
 		{Name: "get_cashflow", Description: "Fluxo de caixa diário do mês (entradas vs. saídas), em centavos.", InputSchema: objSchema(periodProps())},
 		{Name: "get_category_spending", Description: "Despesas do mês agrupadas por categoria, com percentuais.", InputSchema: objSchema(periodProps())},
@@ -278,6 +278,8 @@ func allTools() []toolDef {
 			"endDate":     map[string]any{"type": "string", "pattern": `^\d{4}-\d{2}-\d{2}$`},
 		}, "description", "kind", "amountCents", "dayOfMonth")},
 	}
+	tools = append(tools, insightsV3Tools()...)
+	return append(tools, wealthTools()...)
 }
 
 func (s *Server) accountByRef(ctx context.Context, ref string) (domain.Account, error) {
@@ -678,7 +680,12 @@ func (s *Server) callTool(ctx context.Context, name string, rawArgs json.RawMess
 			}
 		}
 	default:
-		return errResult("tool desconhecida: " + name)
+		var handled bool
+		if data, handled, err = s.callInsightsV3Tool(ctx, name, rawArgs); !handled {
+			if data, handled, err = s.callWealthTool(ctx, name, rawArgs); !handled {
+				return errResult("tool desconhecida: " + name)
+			}
+		}
 	}
 
 	if err != nil {

@@ -17,6 +17,8 @@ func toCategoryRule(r store.CategoryRuleRow) domain.CategoryRule {
 		CategoryID:   r.CategoryID,
 		CategoryName: r.CategoryName,
 		Priority:     r.Priority,
+		TagID:        r.TagID,
+		TagName:      r.TagName,
 	}
 }
 
@@ -61,6 +63,11 @@ func (s *Services) CreateCategoryRule(ctx context.Context, in domain.CreateCateg
 	if err := s.requireCategory(ctx, in.CategoryID); err != nil {
 		return domain.CategoryRule{}, err
 	}
+	if in.TagID != nil {
+		if err := s.requireTags(ctx, []string{*in.TagID}); err != nil {
+			return domain.CategoryRule{}, err
+		}
+	}
 	priority := 0
 	if in.Priority != nil {
 		priority = *in.Priority
@@ -68,6 +75,11 @@ func (s *Services) CreateCategoryRule(ctx context.Context, in domain.CreateCateg
 	id, err := s.Store.CreateCategoryRule(ctx, strings.TrimSpace(in.Pattern), in.CategoryID, priority)
 	if err != nil {
 		return domain.CategoryRule{}, err
+	}
+	if in.TagID != nil {
+		if err := s.Store.SetCategoryRuleTag(ctx, id, in.TagID); err != nil {
+			return domain.CategoryRule{}, err
+		}
 	}
 	return s.getCategoryRule(ctx, id)
 }
@@ -94,6 +106,14 @@ func (s *Services) UpdateCategoryRule(ctx context.Context, id string, in domain.
 	}
 	if in.Priority.Set && in.Priority.Valid {
 		r.Priority = in.Priority.Value
+	}
+	if in.TagID.Set {
+		r.TagID = optionalString(in.TagID)
+		if r.TagID != nil {
+			if err := s.requireTags(ctx, []string{*r.TagID}); err != nil {
+				return domain.CategoryRule{}, err
+			}
+		}
 	}
 	if err := s.Store.UpdateCategoryRule(ctx, r); err != nil {
 		return domain.CategoryRule{}, err
@@ -124,6 +144,7 @@ func (s *Services) ruleCandidates(ctx context.Context) ([]domain.RuleCandidate, 
 			CategoryID:   r.CategoryID,
 			CategoryKind: r.CategoryKind,
 			Priority:     r.Priority,
+			TagID:        r.TagID,
 		})
 	}
 	return out, nil
@@ -161,19 +182,37 @@ func (s *Services) ApplyCategoryRules(ctx context.Context, in domain.ApplyRulesI
 		return domain.ApplyRulesResult{}, err
 	}
 	assignments := make(map[string]string)
+	tagAssignments := make(map[string][]string)
 	for _, t := range targets {
 		kind, ok := domain.CategoryKindForTransaction(t.Type)
 		if !ok {
 			continue
 		}
-		suggested := domain.MatchCategoryRule(rules, t.Description, kind)
-		if suggested == nil || (t.CategoryID != nil && *t.CategoryID == *suggested) {
+		rule := domain.MatchRule(rules, t.Description, kind)
+		if rule == nil {
 			continue
 		}
-		assignments[t.ID] = *suggested
+		if rule.TagID != nil {
+			tagAssignments[t.ID] = []string{*rule.TagID}
+		}
+		if t.CategoryID != nil && *t.CategoryID == rule.CategoryID {
+			continue
+		}
+		assignments[t.ID] = rule.CategoryID
 	}
 	if err := s.Store.AssignCategories(ctx, assignments); err != nil {
 		return domain.ApplyRulesResult{}, err
 	}
-	return domain.ApplyRulesResult{Updated: len(assignments)}, nil
+	// Tags das regras (v3): conta as transações que só ganharam tag nova, sem mudar de categoria.
+	tagged, err := s.Store.AddTransactionTags(ctx, tagAssignments)
+	if err != nil {
+		return domain.ApplyRulesResult{}, err
+	}
+	updated := len(assignments)
+	for id := range tagged {
+		if _, recategorized := assignments[id]; !recategorized {
+			updated++
+		}
+	}
+	return domain.ApplyRulesResult{Updated: updated}, nil
 }
