@@ -102,6 +102,10 @@ func NewRootCmd() *cobra.Command {
 		cmdMetas(opts),
 		cmdGuardar(opts),
 		cmdExportar(opts),
+		cmdImportar(opts),
+		cmdProjecao(opts),
+		cmdFixas(opts),
+		cmdInsights(opts),
 		cmdStatus(opts),
 	)
 	return root
@@ -138,6 +142,10 @@ func openBackendLogged(ctx context.Context, opts *rootOpts, logTo io.Writer, cmd
 		logDatabase(logTo, cmdName, database)
 	}
 	st := store.New(database)
+	if err := store.Bootstrap(ctx, st); err != nil {
+		_ = database.Close()
+		return nil, "", nil, err
+	}
 	svcs := service.New(st, nil)
 	label := fmt.Sprintf("local %s (%s)", database.Dialect, database.Target)
 	return &client.LocalBackend{Svcs: svcs}, label, func() { _ = database.Close() }, nil
@@ -236,6 +244,9 @@ func cmdServe() *cobra.Command {
 			logDatabase(cmd.ErrOrStderr(), "serve", database)
 
 			st := store.New(database)
+			if err := store.Bootstrap(ctx, st); err != nil {
+				return err
+			}
 			if autoSeed {
 				seeded, err := store.Seed(ctx, st)
 				if err != nil {
@@ -312,7 +323,11 @@ func cmdSeed() *cobra.Command {
 			}
 			defer database.Close()
 
-			seeded, err := store.Seed(cmd.Context(), store.New(database))
+			st := store.New(database)
+			if err := store.Bootstrap(cmd.Context(), st); err != nil {
+				return err
+			}
+			seeded, err := store.Seed(cmd.Context(), st)
 			if err != nil {
 				return err
 			}
@@ -320,7 +335,7 @@ func cmdSeed() *cobra.Command {
 				fmt.Fprintln(out, "Seed já aplicado (existem contas) — nada a fazer.")
 				return nil
 			}
-			fmt.Fprintln(out, cGreen("✔ Seed concluído: 4 contas, 2 cartões, 11 categorias, transações de 3 meses, 5 orçamentos e 3 metas."))
+			fmt.Fprintln(out, cGreen("✔ Seed concluído: 5 contas, 2 cartões, categorias padrão com tipo de gasto, 6 recorrências, transações de 3 meses, 5 orçamentos, 3 metas (com reserva de emergência), limite mensal, regras e 2 desejos."))
 			return nil
 		},
 	}
@@ -329,7 +344,7 @@ func cmdSeed() *cobra.Command {
 func cmdMCP(opts *rootOpts) *cobra.Command {
 	return &cobra.Command{
 		Use:   "mcp",
-		Short: "Inicia o servidor MCP em stdio (19 tools para agentes de IA)",
+		Short: "Inicia o servidor MCP em stdio (24 tools para agentes de IA)",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			// stdout é exclusivo do protocolo MCP: diagnósticos vão sempre para stderr.
 			b, mode, cleanup, err := openBackendLogged(cmd.Context(), opts, cmd.ErrOrStderr(), "mcp")
@@ -993,17 +1008,24 @@ func cmdExportar(opts *rootOpts) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "exportar",
-		Short: "Exporta o extrato em CSV ou OFX",
+		Short: "Exporta o extrato em CSV, OFX ou a planilha anual em xlsx",
+		Long: "Exporta o extrato em CSV ou OFX. Com --formato xlsx gera a planilha anual " +
+			"(Entrada · Saída · Diário · Saldo, Economia, Lançamentos e Categorias) do --ano; " +
+			"com --mes, gera só o extrato do mês em xlsx.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			out := cmd.OutOrStdout()
-			if formato != "csv" && formato != "ofx" {
-				return errors.New("formato deve ser csv ou ofx")
+			if formato != "csv" && formato != "ofx" && formato != "xlsx" {
+				return errors.New("formato deve ser csv, ofx ou xlsx")
 			}
 			b, _, cleanup, err := openBackend(cmd.Context(), opts)
 			if err != nil {
 				return err
 			}
 			defer cleanup()
+
+			if formato == "xlsx" && mes == 0 {
+				return exportYearWorkbook(cmd, b, ano, saida)
+			}
 
 			var q domain.ListTransactionsQuery
 			if mes > 0 {
@@ -1031,7 +1053,7 @@ func cmdExportar(opts *rootOpts) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&formato, "formato", "csv", "csv|ofx")
+	cmd.Flags().StringVar(&formato, "formato", "csv", "csv|ofx|xlsx")
 	cmd.Flags().IntVar(&mes, "mes", 0, "mês (1-12)")
 	cmd.Flags().IntVar(&ano, "ano", 0, "ano")
 	cmd.Flags().StringVar(&saida, "saida", "", "arquivo de saída")

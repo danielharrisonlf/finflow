@@ -141,7 +141,7 @@ func TestLocalQueriesAfterSeed(t *testing.T) {
 	assertContains(t, "faturas", mustRun(t, "faturas", "Inter Gold"),
 		"Período", "Vencimento", "Total")
 	assertContains(t, "orcamentos", mustRun(t, "orcamentos"),
-		"Mercado", "R$ 900,00", "Alimentação", "Assinaturas")
+		"Supermercado", "R$ 900,00", "Restaurantes", "Streaming")
 	assertContains(t, "metas", mustRun(t, "metas"),
 		"Reserva de emergência", "R$ 30.000,00", "Eurotrip 2027", "MacBook Pro")
 	assertContains(t, "status", mustRun(t, "status"),
@@ -249,7 +249,7 @@ func TestLocalGuardarEExportar(t *testing.T) {
 	}
 	assertContains(t, "ofx", string(ofx), "OFX", "STMTTRN")
 
-	mustFail(t, "formato deve ser csv ou ofx", "exportar", "--formato", "pdf", "--saida", filepath.Join(dir, "x.pdf"))
+	mustFail(t, "formato deve ser csv, ofx ou xlsx", "exportar", "--formato", "pdf", "--saida", filepath.Join(dir, "x.pdf"))
 }
 
 func TestLocalErros(t *testing.T) {

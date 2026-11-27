@@ -344,7 +344,7 @@ func runSeedIdempotent(t *testing.T, database *db.DB) {
 		t.Fatalf("second seed should be no-op: seeded=%v err=%v", seededAgain, err)
 	}
 	accs, err := st.ListAccounts(ctx, false)
-	if err != nil || len(accs) != 4 {
-		t.Fatalf("expected 4 accounts, got %d (%v)", len(accs), err)
+	if err != nil || len(accs) != 5 {
+		t.Fatalf("expected 5 accounts, got %d (%v)", len(accs), err)
 	}
 }

@@ -763,7 +763,7 @@ func TestSeedIdempotent(t *testing.T) {
 		}
 		counts := func() string {
 			var parts []string
-			for _, tbl := range []string{"accounts", "categories", "credit_cards", "invoices", "transactions", "budgets", "goals", "goal_contributions"} {
+			for _, tbl := range []string{"accounts", "categories", "credit_cards", "invoices", "transactions", "budgets", "goals", "goal_contributions", "recurring", "category_rules", "wishlist", "settings"} {
 				parts = append(parts, fmt.Sprintf("%s=%d", tbl, countRows(t, s, `SELECT COUNT(*) FROM `+tbl)))
 			}
 			return strings.Join(parts, " ")
@@ -776,7 +776,7 @@ func TestSeedIdempotent(t *testing.T) {
 		if after := counts(); after != before {
 			t.Fatalf("seed não idempotente: antes %s, depois %s", before, after)
 		}
-		if n, _ := s.CountAccounts(ctx); n != 4 {
+		if n, _ := s.CountAccounts(ctx); n != 5 {
 			t.Fatalf("contas do seed = %d", n)
 		}
 

@@ -135,8 +135,11 @@ Definições comuns (mês M):
 - **Gasto** = `EXPENSE` + `CARD_EXPENSE` do mês por data da compra (competência, igual aos orçamentos), incluindo
   pendentes. `INVOICE_PAYMENT` não conta (evita dupla contagem).
 - **Saídas (fixed)** = gasto em categorias `FIXED` + `CUTTABLE`. **Diário (variable)** = `VARIABLE` + sem categoria.
-- **Economia (saved)** = transferências que **entram** em contas `SAVINGS`/`INVESTMENT` no mês + aportes em metas
-  no mês.
+- **Economia (saved)** = transferências de contas líquidas (corrente, carteira, salário) que **entram** em contas
+  `SAVINGS`/`INVESTMENT` no mês. Movimentação entre duas contas de reserva não conta. Aportes em metas só contam
+  quando não existe nenhuma conta de reserva ativa (senão o mesmo dinheiro seria contado duas vezes).
+- **Saldo disponível (líquido)** = contas ativas exceto `SAVINGS`/`INVESTMENT` — é a base da projeção, dos
+  compromissos e da planilha diária exportada ("a conta corrente é passagem; o cofre fica à parte").
 - **Performance** = Entradas − (Saídas + Diário).
 
 ### 3.1 `GET /api/insights/overview?month&year`
@@ -153,8 +156,9 @@ Definições comuns (mês M):
   performance: { incomeCents; fixedCents; variableCents; totalOutCents; savedCents; performanceCents;
                  savingsRatePct: number | null; previousPerformanceCents;
                  verdict: "SAVING" | "POSITIVE" | "TIGHT" | "NEGATIVE_SAVED" | "NEGATIVE"; message: string };
-        // SAVING: saved>0 e performance>=0 · NEGATIVE_SAVED: performance<0 mas saved>0 (ok: guardou)
-        // NEGATIVE: performance<0 e nada guardado (alarme) · TIGHT: 0<=performance<5% das entradas · POSITIVE: resto
+        // NEGATIVE: performance<0 (gastos acima das entradas — alarme, mesmo que tenha guardado)
+        // NEGATIVE_SAVED: performance>=0 mas guardou mais do que sobrou (usou saldo anterior — tudo bem)
+        // SAVING: guardou e ainda sobrou · TIGHT: 0<=performance<5% das entradas · POSITIVE: resto
         // message em pt-BR explicando o veredito
   spendTypes: { spendType: "FIXED" | "CUTTABLE" | "VARIABLE"; totalCents; percent;
                 categories: { categoryId: string | null; name; icon: string | null; color: string | null; totalCents }[] }[];
@@ -177,7 +181,7 @@ Simulação diária a partir de hoje (horizonte interno de 365 dias; `days` limi
 
 ```ts
 {
-  startDate; startBalanceCents;           // soma dos saldos confirmados das contas ativas
+  startDate; startBalanceCents;           // saldo disponível: contas ativas exceto SAVINGS/INVESTMENT
   limitConfigured: boolean;
   days: { date; inCents; outCents; balanceCents;
           band: "DARK_GREEN" | "LIGHT_GREEN" | "YELLOW" | "LIGHT_RED" | "RED";

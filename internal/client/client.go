@@ -37,6 +37,8 @@ type Backend interface {
 	Goals(ctx context.Context) ([]domain.Goal, error)
 	ContributeGoal(ctx context.Context, id string, in domain.ContributeGoalInput) (domain.Goal, error)
 	ExportTransactions(ctx context.Context, format string, q domain.ListTransactionsQuery) (string, error)
+	SpreadsheetBackend
+	PlanningBackend
 	TelegramStatus(ctx context.Context) (domain.TelegramStatus, error)
 	AuthStatus(ctx context.Context) (domain.AuthStatus, error)
 }
@@ -165,11 +167,16 @@ func (c *HTTPClient) do(ctx context.Context, method, path string, body any, out 
 		}
 		reader = bytes.NewReader(b)
 	}
+	return c.doRaw(ctx, method, path, "application/json", reader, out)
+}
+
+// doRaw envia um corpo já serializado (JSON ou multipart) e decodifica a resposta como do.
+func (c *HTTPClient) doRaw(ctx context.Context, method, path, contentType string, reader io.Reader, out any) error {
 	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, reader)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", contentType)
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}

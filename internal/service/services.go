@@ -151,8 +151,59 @@ func (s *Services) DeleteAccount(ctx context.Context, id string) error {
 
 // ───────────────────────── Categories ─────────────────────────
 
+// ListCategories devolve as categorias com o tipo de gasto efetivo (próprio, herdado ou VARIABLE).
 func (s *Services) ListCategories(ctx context.Context, kind *domain.CategoryKind) ([]domain.Category, error) {
-	return s.Store.ListCategories(ctx, kind)
+	all, err := s.Store.ListCategories(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	nodes := categoryNodes(all)
+	out := make([]domain.Category, 0, len(all))
+	for _, c := range all {
+		if kind != nil && c.Kind != *kind {
+			continue
+		}
+		c.SpendType = domain.EffectiveSpendType(c.ID, nodes)
+		out = append(out, c)
+	}
+	return out, nil
+}
+
+func categoryNodes(cats []domain.Category) map[string]domain.CategoryNode {
+	nodes := make(map[string]domain.CategoryNode, len(cats))
+	for _, c := range cats {
+		nodes[c.ID] = domain.CategoryNode{Kind: c.Kind, ParentID: c.ParentID, SpendType: c.SpendType}
+	}
+	return nodes
+}
+
+// categoryView devolve a categoria com o tipo de gasto efetivo.
+func (s *Services) categoryView(ctx context.Context, id string) (domain.Category, error) {
+	all, err := s.Store.ListCategories(ctx, nil)
+	if err != nil {
+		return domain.Category{}, err
+	}
+	nodes := categoryNodes(all)
+	for _, c := range all {
+		if c.ID == id {
+			c.SpendType = domain.EffectiveSpendType(c.ID, nodes)
+			return c, nil
+		}
+	}
+	return domain.Category{}, NotFound("categoria não encontrada")
+}
+
+// normalizeSpendType aplica as regras de armazenamento: receitas não têm tipo de gasto e
+// despesas raiz sem valor ficam VARIABLE (subcategorias sem valor herdam do pai).
+func normalizeSpendType(kind domain.CategoryKind, parentID *string, st *domain.SpendType) *domain.SpendType {
+	if kind != domain.CategoryExpense {
+		return nil
+	}
+	if st == nil && parentID == nil {
+		v := domain.SpendVariable
+		return &v
+	}
+	return st
 }
 
 func (s *Services) CreateCategory(ctx context.Context, in domain.CreateCategoryInput) (domain.Category, error) {
@@ -171,11 +222,12 @@ func (s *Services) CreateCategory(ctx context.Context, in domain.CreateCategoryI
 			return domain.Category{}, err
 		}
 	}
+	in.SpendType = normalizeSpendType(in.Kind, in.ParentID, in.SpendType)
 	created, err := s.Store.CreateCategory(ctx, in)
 	if err != nil {
 		return domain.Category{}, err
 	}
-	return *created, nil
+	return s.categoryView(ctx, created.ID)
 }
 
 func (s *Services) UpdateCategory(ctx context.Context, id string, in domain.UpdateCategoryInput) (domain.Category, error) {
@@ -221,10 +273,22 @@ func (s *Services) UpdateCategory(ctx context.Context, id string, in domain.Upda
 			existing.ParentID = nil
 		}
 	}
+	if in.SpendType.Set {
+		if in.SpendType.Valid && existing.Kind == domain.CategoryIncome {
+			return domain.Category{}, ValidationFailed([]domain.ValidationIssue{{Path: "spendType", Message: "tipo de gasto só se aplica a categorias de despesa"}})
+		}
+		if in.SpendType.Valid {
+			v := in.SpendType.Value
+			existing.SpendType = &v
+		} else {
+			existing.SpendType = nil
+		}
+	}
+	existing.SpendType = normalizeSpendType(existing.Kind, existing.ParentID, existing.SpendType)
 	if err := s.Store.UpdateCategory(ctx, existing); err != nil {
 		return domain.Category{}, err
 	}
-	return *existing, nil
+	return s.categoryView(ctx, existing.ID)
 }
 
 func (s *Services) DeleteCategory(ctx context.Context, id string) error {
@@ -418,6 +482,11 @@ func (s *Services) AddCardExpense(ctx context.Context, cardID string, in domain.
 	if card == nil {
 		return domain.CardExpenseResult{}, NotFound("cartão não encontrado")
 	}
+	if in.CategoryID == nil {
+		if in.CategoryID, err = s.SuggestCategory(ctx, in.Description, domain.CategoryExpense); err != nil {
+			return domain.CardExpenseResult{}, err
+		}
+	}
 	amounts, err := domain.SplitInstallments(in.TotalCents, in.Installments)
 	if err != nil {
 		return domain.CardExpenseResult{}, BadRequest(err.Error())
@@ -594,6 +663,14 @@ func (s *Services) CreateTransaction(ctx context.Context, in domain.CreateTransa
 	}
 	if err := s.requireActiveAccount(ctx, in.AccountID); err != nil {
 		return domain.Transaction{}, err
+	}
+	if in.CategoryID == nil {
+		kind, _ := domain.CategoryKindForTransaction(in.Type)
+		suggested, err := s.SuggestCategory(ctx, in.Description, kind)
+		if err != nil {
+			return domain.Transaction{}, err
+		}
+		in.CategoryID = suggested
 	}
 	created, err := s.Store.CreateTransaction(
 		ctx,
@@ -774,8 +851,8 @@ func (s *Services) ExportTransactions(ctx context.Context, format string, q doma
 	if format == "" {
 		format = "csv"
 	}
-	if format != "csv" && format != "ofx" {
-		return "", "", "", ValidationFailed([]domain.ValidationIssue{{Path: "format", Message: "formato deve ser csv ou ofx"}})
+	if format != "csv" && format != "ofx" && format != "xlsx" {
+		return "", "", "", ValidationFailed([]domain.ValidationIssue{{Path: "format", Message: "formato deve ser csv, ofx ou xlsx"}})
 	}
 	if issues := domain.ValidateTransactionFilters(q); len(issues) > 0 {
 		return "", "", "", ValidationFailed(issues)
@@ -787,6 +864,13 @@ func (s *Services) ExportTransactions(ctx context.Context, format string, q doma
 	stamp := domain.TodayString()
 	if format == "ofx" {
 		return domain.BuildOFX(items), "application/x-ofx", fmt.Sprintf("finflow-extrato-%s.ofx", stamp), nil
+	}
+	if format == "xlsx" {
+		data, err := exportTransactionsXLSX(items)
+		if err != nil {
+			return "", "", "", err
+		}
+		return string(data), XLSXContentType, fmt.Sprintf("finflow-extrato-%s.xlsx", stamp), nil
 	}
 	return domain.BuildCSV(items), "text/csv; charset=utf-8", fmt.Sprintf("finflow-extrato-%s.csv", stamp), nil
 }
@@ -902,6 +986,7 @@ func toGoal(r store.GoalRow) domain.Goal {
 	return domain.Goal{
 		ID:                 r.ID,
 		Name:               r.Name,
+		Kind:               r.Kind,
 		Icon:               r.Icon,
 		Color:              r.Color,
 		TargetCents:        r.TargetCents,
@@ -939,8 +1024,20 @@ func (s *Services) CreateGoal(ctx context.Context, in domain.CreateGoalInput) (d
 	if in.Icon == "" {
 		in.Icon = "piggy-bank"
 	}
+	if in.Kind == "" {
+		in.Kind = domain.GoalKindGoal
+	}
 	if issues := domain.ValidateCreateGoal(in); len(issues) > 0 {
 		return domain.Goal{}, ValidationFailed(issues)
+	}
+	if in.Kind == domain.GoalKindReserve {
+		existing, err := s.Store.FindActiveReserveGoal(ctx)
+		if err != nil {
+			return domain.Goal{}, err
+		}
+		if existing != nil {
+			return domain.Goal{}, Conflict(fmt.Sprintf("já existe uma reserva de emergência ativa (%q)", existing.Name))
+		}
 	}
 	created, err := s.Store.CreateGoal(ctx, in)
 	if err != nil {

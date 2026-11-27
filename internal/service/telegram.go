@@ -391,6 +391,27 @@ func (t *TelegramService) expenseReply(ctx context.Context, amountCents int64, d
 			categoryNote = fmt.Sprintf(` (categoria %q não encontrada — ficou sem categoria)`, html.EscapeString(categoryName))
 		}
 	}
+	if categoryID == nil {
+		// Sem categoria: aplica as regras de automação aqui para poder citar a categoria na resposta.
+		suggested, err := t.svcs.SuggestCategory(ctx, description, domain.CategoryExpense)
+		if err != nil {
+			return "", err
+		}
+		if suggested != nil {
+			cat, err := t.svcs.Store.FindCategoryByID(ctx, *suggested)
+			if err != nil {
+				return "", err
+			}
+			if cat != nil {
+				categoryID = suggested
+				if categoryName != "" {
+					categoryNote = fmt.Sprintf(` (categoria %q não encontrada — classificada em <b>%s</b> pelas regras)`, html.EscapeString(categoryName), html.EscapeString(cat.Name))
+				} else {
+					categoryNote = fmt.Sprintf(" em <b>%s</b>", html.EscapeString(cat.Name))
+				}
+			}
+		}
+	}
 	description = truncateRunes(description, telegramMaxDescription)
 	notes := "lançado via Telegram"
 	if _, err := t.svcs.CreateTransaction(ctx, domain.CreateTransactionInput{

@@ -76,8 +76,17 @@ func ValidateCreateCategory(in CreateCategoryInput) []ValidationIssue {
 	if in.ParentID != nil && !IsValidUUID(*in.ParentID) {
 		issues = append(issues, ValidationIssue{Path: "parentId", Message: "parentId deve ser UUID válido"})
 	}
+	if in.SpendType != nil {
+		if !in.SpendType.Valid() {
+			issues = append(issues, spendTypeIssue)
+		} else if in.Kind == CategoryIncome {
+			issues = append(issues, ValidationIssue{Path: "spendType", Message: "tipo de gasto só se aplica a categorias de despesa"})
+		}
+	}
 	return issues
 }
+
+var spendTypeIssue = ValidationIssue{Path: "spendType", Message: "tipo de gasto deve ser FIXED, CUTTABLE ou VARIABLE"}
 
 func ValidateUpdateCategory(in UpdateCategoryInput) []ValidationIssue {
 	var issues []ValidationIssue
@@ -95,6 +104,9 @@ func ValidateUpdateCategory(in UpdateCategoryInput) []ValidationIssue {
 	}
 	if in.ParentID.Set && in.ParentID.Valid && !IsValidUUID(in.ParentID.Value) {
 		issues = append(issues, ValidationIssue{Path: "parentId", Message: "parentId deve ser UUID válido"})
+	}
+	if in.SpendType.Set && in.SpendType.Valid && !in.SpendType.Value.Valid() {
+		issues = append(issues, spendTypeIssue)
 	}
 	return issues
 }
@@ -276,6 +288,9 @@ func ValidateCreateGoal(in CreateGoalInput) []ValidationIssue {
 	if runeLen(in.Name) < 1 || runeLen(in.Name) > 60 {
 		issues = append(issues, ValidationIssue{Path: "name", Message: "nome deve ter entre 1 e 60 caracteres"})
 	}
+	if in.Kind != "" && !in.Kind.Valid() {
+		issues = append(issues, ValidationIssue{Path: "kind", Message: "tipo de meta deve ser GOAL ou RESERVE"})
+	}
 	if runeLen(in.Icon) < 1 || runeLen(in.Icon) > 40 {
 		issues = append(issues, ValidationIssue{Path: "icon", Message: "ícone inválido"})
 	}
@@ -321,6 +336,230 @@ func ValidateContributeGoal(in ContributeGoalInput) []ValidationIssue {
 	}
 	if in.Note != nil && runeLen(*in.Note) > 120 {
 		issues = append(issues, ValidationIssue{Path: "note", Message: "nota até 120 caracteres"})
+	}
+	return issues
+}
+
+// ───────────────────────── Recorrências ─────────────────────────
+
+var (
+	recurringDescIssue   = ValidationIssue{Path: "description", Message: "descrição deve ter entre 1 e 120 caracteres"}
+	recurringKindIssue   = ValidationIssue{Path: "kind", Message: "tipo deve ser INCOME ou EXPENSE"}
+	recurringAmountIssue = ValidationIssue{Path: "amountCents", Message: "valor deve ser positivo"}
+	recurringDayIssue    = ValidationIssue{Path: "dayOfMonth", Message: "dia do mês deve ser entre 1 e 31"}
+)
+
+func ValidateCreateRecurring(in CreateRecurringInput) []ValidationIssue {
+	var issues []ValidationIssue
+	if runeLen(in.Description) < 1 || runeLen(in.Description) > 120 {
+		issues = append(issues, recurringDescIssue)
+	}
+	if !in.Kind.Valid() {
+		issues = append(issues, recurringKindIssue)
+	}
+	if in.AmountCents <= 0 {
+		issues = append(issues, recurringAmountIssue)
+	}
+	if in.DayOfMonth < 1 || in.DayOfMonth > 31 {
+		issues = append(issues, recurringDayIssue)
+	}
+	if in.AccountID != nil && !IsValidUUID(*in.AccountID) {
+		issues = append(issues, ValidationIssue{Path: "accountId", Message: "accountId deve ser UUID válido"})
+	}
+	if in.CategoryID != nil && !IsValidUUID(*in.CategoryID) {
+		issues = append(issues, ValidationIssue{Path: "categoryId", Message: "categoryId deve ser UUID válido"})
+	}
+	if in.StartDate != nil && !IsValidDateString(*in.StartDate) {
+		issues = append(issues, ValidationIssue{Path: "startDate", Message: "data deve estar no formato YYYY-MM-DD"})
+	}
+	if in.EndDate != nil && !IsValidDateString(*in.EndDate) {
+		issues = append(issues, ValidationIssue{Path: "endDate", Message: "data deve estar no formato YYYY-MM-DD"})
+	}
+	return issues
+}
+
+func ValidateUpdateRecurring(in UpdateRecurringInput) []ValidationIssue {
+	var issues []ValidationIssue
+	if in.Description.Set && (!in.Description.Valid || runeLen(in.Description.Value) < 1 || runeLen(in.Description.Value) > 120) {
+		issues = append(issues, recurringDescIssue)
+	}
+	if in.Kind.Set && (!in.Kind.Valid || !in.Kind.Value.Valid()) {
+		issues = append(issues, recurringKindIssue)
+	}
+	if in.AmountCents.Set && (!in.AmountCents.Valid || in.AmountCents.Value <= 0) {
+		issues = append(issues, recurringAmountIssue)
+	}
+	if in.DayOfMonth.Set && (!in.DayOfMonth.Valid || in.DayOfMonth.Value < 1 || in.DayOfMonth.Value > 31) {
+		issues = append(issues, recurringDayIssue)
+	}
+	if in.AccountID.Set && in.AccountID.Valid && !IsValidUUID(in.AccountID.Value) {
+		issues = append(issues, ValidationIssue{Path: "accountId", Message: "accountId deve ser UUID válido"})
+	}
+	if in.CategoryID.Set && in.CategoryID.Valid && !IsValidUUID(in.CategoryID.Value) {
+		issues = append(issues, ValidationIssue{Path: "categoryId", Message: "categoryId deve ser UUID válido"})
+	}
+	if in.StartDate.Set && (!in.StartDate.Valid || !IsValidDateString(in.StartDate.Value)) {
+		issues = append(issues, ValidationIssue{Path: "startDate", Message: "data deve estar no formato YYYY-MM-DD"})
+	}
+	if in.EndDate.Set && in.EndDate.Valid && !IsValidDateString(in.EndDate.Value) {
+		issues = append(issues, ValidationIssue{Path: "endDate", Message: "data deve estar no formato YYYY-MM-DD"})
+	}
+	if in.Active.Set && !in.Active.Valid {
+		issues = append(issues, ValidationIssue{Path: "active", Message: "active deve ser booleano"})
+	}
+	return issues
+}
+
+// ValidateRecurringPeriod confere o período já mesclado (fim não pode vir antes do início).
+func ValidateRecurringPeriod(startDate string, endDate *string) []ValidationIssue {
+	if endDate != nil && *endDate < startDate {
+		return []ValidationIssue{{Path: "endDate", Message: "data final deve ser igual ou posterior à data inicial"}}
+	}
+	return nil
+}
+
+func ValidatePostRecurring(in PostRecurringInput) []ValidationIssue {
+	var issues []ValidationIssue
+	if in.Date != nil && !IsValidDateString(*in.Date) {
+		issues = append(issues, ValidationIssue{Path: "date", Message: "data deve estar no formato YYYY-MM-DD"})
+	}
+	if in.AmountCents != nil && *in.AmountCents <= 0 {
+		issues = append(issues, ValidationIssue{Path: "amountCents", Message: "valor deve ser positivo"})
+	}
+	if in.AccountID != nil && !IsValidUUID(*in.AccountID) {
+		issues = append(issues, ValidationIssue{Path: "accountId", Message: "accountId deve ser UUID válido"})
+	}
+	return issues
+}
+
+// ───────────────────────── Configurações ─────────────────────────
+
+// ValidateSettings confere as configurações já mescladas com o patch.
+func ValidateSettings(s Settings) []ValidationIssue {
+	var issues []ValidationIssue
+	if s.MonthlyLimitCents != nil && *s.MonthlyLimitCents <= 0 {
+		issues = append(issues, ValidationIssue{Path: "monthlyLimitCents", Message: "limite mensal deve ser positivo"})
+	}
+	if s.ReserveMonths < 1 || s.ReserveMonths > 24 {
+		issues = append(issues, ValidationIssue{Path: "reserveMonths", Message: "meses de reserva deve ser entre 1 e 24"})
+	}
+	if s.ReserveRefillRatePct < 0 || s.ReserveRefillRatePct > 100 {
+		issues = append(issues, ValidationIssue{Path: "reserveRefillRatePct", Message: "percentual deve ser entre 0 e 100"})
+	}
+	b := s.BalanceBands
+	if !(b.DarkGreen > b.LightGreen && b.LightGreen > b.Yellow && b.Yellow > b.LightRed) {
+		issues = append(issues, ValidationIssue{Path: "balanceBands", Message: "faixas devem ser decrescentes: darkGreen > lightGreen > yellow > lightRed"})
+	}
+	if p := s.SpendPlan; p != nil {
+		for _, v := range []float64{p.FixedPct, p.CuttablePct, p.VariablePct} {
+			if v < 0 || v > 100 {
+				issues = append(issues, ValidationIssue{Path: "spendPlan", Message: "percentuais do plano devem ser entre 0 e 100"})
+				break
+			}
+		}
+		if sum := p.FixedPct + p.CuttablePct + p.VariablePct; sum < 99.99 || sum > 100.01 {
+			issues = append(issues, ValidationIssue{Path: "spendPlan", Message: "percentuais do plano devem somar 100"})
+		}
+	}
+	return issues
+}
+
+// ───────────────────────── Regras de categorização ─────────────────────────
+
+const (
+	MaxRulePatternChars = 80
+	MaxRulePriority     = 1000
+)
+
+var (
+	rulePatternIssue  = ValidationIssue{Path: "pattern", Message: "padrão deve ter entre 1 e 80 caracteres"}
+	rulePriorityIssue = ValidationIssue{Path: "priority", Message: "prioridade deve ser entre -1000 e 1000"}
+)
+
+func validRulePattern(p string) bool {
+	n := runeLen(NormalizeText(p))
+	return n >= 1 && runeLen(p) <= MaxRulePatternChars
+}
+
+func ValidateCreateCategoryRule(in CreateCategoryRuleInput) []ValidationIssue {
+	var issues []ValidationIssue
+	if !validRulePattern(in.Pattern) {
+		issues = append(issues, rulePatternIssue)
+	}
+	if !IsValidUUID(in.CategoryID) {
+		issues = append(issues, ValidationIssue{Path: "categoryId", Message: "categoryId deve ser UUID válido"})
+	}
+	if in.Priority != nil && (*in.Priority < -MaxRulePriority || *in.Priority > MaxRulePriority) {
+		issues = append(issues, rulePriorityIssue)
+	}
+	return issues
+}
+
+func ValidateUpdateCategoryRule(in UpdateCategoryRuleInput) []ValidationIssue {
+	var issues []ValidationIssue
+	if in.Pattern.Set && (!in.Pattern.Valid || !validRulePattern(in.Pattern.Value)) {
+		issues = append(issues, rulePatternIssue)
+	}
+	if in.CategoryID.Set && (!in.CategoryID.Valid || !IsValidUUID(in.CategoryID.Value)) {
+		issues = append(issues, ValidationIssue{Path: "categoryId", Message: "categoryId deve ser UUID válido"})
+	}
+	if in.Priority.Set && (!in.Priority.Valid || in.Priority.Value < -MaxRulePriority || in.Priority.Value > MaxRulePriority) {
+		issues = append(issues, rulePriorityIssue)
+	}
+	return issues
+}
+
+// ───────────────────────── Desejos ─────────────────────────
+
+const MaxWishPriority = 100000
+
+var (
+	wishNameIssue     = ValidationIssue{Path: "name", Message: "nome deve ter entre 1 e 80 caracteres"}
+	wishPriceIssue    = ValidationIssue{Path: "priceCents", Message: "preço deve ser positivo"}
+	wishURLIssue      = ValidationIssue{Path: "url", Message: "url até 500 caracteres"}
+	wishNotesIssue    = ValidationIssue{Path: "notes", Message: "observações até 500 caracteres"}
+	wishPriorityIssue = ValidationIssue{Path: "priority", Message: "prioridade deve ser entre 0 e 100000"}
+)
+
+func ValidateCreateWishItem(in CreateWishItemInput) []ValidationIssue {
+	var issues []ValidationIssue
+	if runeLen(in.Name) < 1 || runeLen(in.Name) > 80 {
+		issues = append(issues, wishNameIssue)
+	}
+	if in.PriceCents <= 0 {
+		issues = append(issues, wishPriceIssue)
+	}
+	if in.URL != nil && runeLen(*in.URL) > 500 {
+		issues = append(issues, wishURLIssue)
+	}
+	if in.Notes != nil && runeLen(*in.Notes) > 500 {
+		issues = append(issues, wishNotesIssue)
+	}
+	if in.Priority != nil && (*in.Priority < 0 || *in.Priority > MaxWishPriority) {
+		issues = append(issues, wishPriorityIssue)
+	}
+	return issues
+}
+
+func ValidateUpdateWishItem(in UpdateWishItemInput) []ValidationIssue {
+	var issues []ValidationIssue
+	if in.Name.Set && (!in.Name.Valid || runeLen(in.Name.Value) < 1 || runeLen(in.Name.Value) > 80) {
+		issues = append(issues, wishNameIssue)
+	}
+	if in.PriceCents.Set && (!in.PriceCents.Valid || in.PriceCents.Value <= 0) {
+		issues = append(issues, wishPriceIssue)
+	}
+	if in.URL.Set && in.URL.Valid && runeLen(in.URL.Value) > 500 {
+		issues = append(issues, wishURLIssue)
+	}
+	if in.Notes.Set && in.Notes.Valid && runeLen(in.Notes.Value) > 500 {
+		issues = append(issues, wishNotesIssue)
+	}
+	if in.Priority.Set && (!in.Priority.Valid || in.Priority.Value < 0 || in.Priority.Value > MaxWishPriority) {
+		issues = append(issues, wishPriorityIssue)
+	}
+	if in.Status.Set && (!in.Status.Valid || !in.Status.Value.Valid()) {
+		issues = append(issues, ValidationIssue{Path: "status", Message: "status deve ser LISTED, BOUGHT ou ARCHIVED"})
 	}
 	return issues
 }

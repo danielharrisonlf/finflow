@@ -53,7 +53,7 @@ func TestMCPStdioServer(t *testing.T) {
 		t.Fatalf("expected 5 JSON-RPC responses (notification ignored), got %d:\n%s", len(lines), out.String())
 	}
 
-	// Verify 19 tools listed
+	// Verify 24 tools listed
 	var listResp struct {
 		Result struct {
 			Tools []toolDef `json:"tools"`
@@ -62,8 +62,8 @@ func TestMCPStdioServer(t *testing.T) {
 	if err := json.Unmarshal([]byte(lines[1]), &listResp); err != nil {
 		t.Fatal(err)
 	}
-	if len(listResp.Result.Tools) != 19 {
-		t.Fatalf("expected 19 MCP tools, got %d", len(listResp.Result.Tools))
+	if len(listResp.Result.Tools) != 24 {
+		t.Fatalf("expected 24 MCP tools, got %d", len(listResp.Result.Tools))
 	}
 
 	// Verify create_expense succeeded

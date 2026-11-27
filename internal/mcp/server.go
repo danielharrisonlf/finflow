@@ -259,6 +259,24 @@ func allTools() []toolDef {
 			"note":        map[string]any{"type": "string"},
 		}, "goal", "amountCents")},
 		{Name: "export_transactions", Description: "Exporta o extrato filtrado em CSV ou OFX e devolve o conteúdo do arquivo.", InputSchema: objSchema(exportProps, "format")},
+		{Name: "get_insights", Description: "Visão geral do mês: ritmo de gastos vs. mês anterior, limite mensal, performance (entradas − saídas fixas − diário), economia, gasto por tipo (Fixo/Cortável/Variável), patrimônio, reserva de emergência e onde cortar. Centavos.", InputSchema: objSchema(periodProps())},
+		{Name: "get_projection", Description: "Saldo projetado dia a dia (recorrências, faturas, pendências e gasto diário estimado pelo limite mensal), menor saldo em 30 dias, próxima entrada, quanto dá para guardar agora e resumo de 12 meses. Centavos.", InputSchema: objSchema(map[string]any{
+			"days": map[string]any{"type": "integer", "minimum": 1, "maximum": 365, "description": "dias devolvidos na lista diária; padrão 30"},
+		})},
+		{Name: "get_year_overview", Description: "Resumo dos 12 meses do ano pelo método da planilha diária: entradas, saídas fixas, diário, performance, economia, taxa de economia e saldo no fim de cada mês.", InputSchema: objSchema(map[string]any{
+			"year": map[string]any{"type": "integer", "description": "ano; padrão: ano atual"},
+		})},
+		{Name: "list_recurring", Description: "Lista contas fixas e receitas recorrentes com a próxima ocorrência ainda não lançada.", InputSchema: objSchema(map[string]any{})},
+		{Name: "create_recurring", Description: "Cadastra uma conta fixa (EXPENSE) ou receita recorrente (INCOME) mensal. Valor em centavos.", InputSchema: objSchema(map[string]any{
+			"description": map[string]any{"type": "string", "minLength": 1},
+			"kind":        map[string]any{"type": "string", "enum": []string{"INCOME", "EXPENSE"}},
+			"amountCents": map[string]any{"type": "integer", "minimum": 1, "description": "valor em centavos"},
+			"dayOfMonth":  map[string]any{"type": "integer", "minimum": 1, "maximum": 31, "description": "dia do mês (meses curtos usam o último dia)"},
+			"account":     map[string]any{"type": "string", "description": "nome ou id da conta usada ao lançar"},
+			"category":    map[string]any{"type": "string", "description": "nome da categoria (do mesmo tipo)"},
+			"startDate":   map[string]any{"type": "string", "pattern": `^\d{4}-\d{2}-\d{2}$`, "description": "YYYY-MM-DD; padrão: hoje"},
+			"endDate":     map[string]any{"type": "string", "pattern": `^\d{4}-\d{2}-\d{2}$`},
+		}, "description", "kind", "amountCents", "dayOfMonth")},
 	}
 }
 
@@ -602,6 +620,62 @@ func (s *Server) callTool(ctx context.Context, name string, rawArgs json.RawMess
 				Month: a.Month,
 				Year:  a.Year,
 			})
+		}
+	case "get_insights":
+		var a struct{ Month, Year *int }
+		if err = json.Unmarshal(rawArgs, &a); err == nil {
+			data, err = s.backend.InsightsOverview(ctx, domain.PeriodQuery{Month: a.Month, Year: a.Year})
+		}
+	case "get_projection":
+		var a struct {
+			Days int `json:"days"`
+		}
+		if err = json.Unmarshal(rawArgs, &a); err == nil {
+			if a.Days == 0 {
+				a.Days = 30
+			}
+			data, err = s.backend.InsightsProjection(ctx, a.Days)
+		}
+	case "get_year_overview":
+		var a struct {
+			Year *int `json:"year"`
+		}
+		if err = json.Unmarshal(rawArgs, &a); err == nil {
+			data, err = s.backend.InsightsYear(ctx, a.Year)
+		}
+	case "list_recurring":
+		data, err = s.backend.Recurring(ctx)
+	case "create_recurring":
+		var a struct {
+			Description string              `json:"description"`
+			Kind        domain.CategoryKind `json:"kind"`
+			AmountCents int64               `json:"amountCents"`
+			DayOfMonth  int                 `json:"dayOfMonth"`
+			Account     string              `json:"account"`
+			Category    string              `json:"category"`
+			StartDate   *string             `json:"startDate"`
+			EndDate     *string             `json:"endDate"`
+		}
+		if err = json.Unmarshal(rawArgs, &a); err == nil {
+			in := domain.CreateRecurringInput{
+				Description: a.Description,
+				Kind:        a.Kind,
+				AmountCents: a.AmountCents,
+				DayOfMonth:  a.DayOfMonth,
+				StartDate:   a.StartDate,
+				EndDate:     a.EndDate,
+			}
+			if strings.TrimSpace(a.Account) != "" {
+				var acc domain.Account
+				if acc, err = s.accountByRef(ctx, a.Account); err == nil {
+					in.AccountID = &acc.ID
+				}
+			}
+			if err == nil {
+				if in.CategoryID, err = s.categoryIDByRef(ctx, a.Category, a.Kind); err == nil {
+					data, err = s.backend.CreateRecurring(ctx, in)
+				}
+			}
 		}
 	default:
 		return errResult("tool desconhecida: " + name)

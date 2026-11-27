@@ -111,6 +111,44 @@ func (s TransactionStatus) Valid() bool {
 	return s == TxPending || s == TxConfirmed
 }
 
+// SpendType classifica despesas: Fixo / Cortável / Variável. FIXED + CUTTABLE formam as
+// "Saídas" (custo de vida); VARIABLE (e despesa sem categoria) é o "Diário".
+type SpendType string
+
+const (
+	SpendFixed    SpendType = "FIXED"
+	SpendCuttable SpendType = "CUTTABLE"
+	SpendVariable SpendType = "VARIABLE"
+)
+
+func (t SpendType) Valid() bool {
+	return t == SpendFixed || t == SpendCuttable || t == SpendVariable
+}
+
+// GoalKind distingue metas comuns da reserva de emergência (no máximo uma ativa).
+type GoalKind string
+
+const (
+	GoalKindGoal    GoalKind = "GOAL"
+	GoalKindReserve GoalKind = "RESERVE"
+)
+
+func (k GoalKind) Valid() bool {
+	return k == GoalKindGoal || k == GoalKindReserve
+}
+
+type WishStatus string
+
+const (
+	WishListed   WishStatus = "LISTED"
+	WishBought   WishStatus = "BOUGHT"
+	WishArchived WishStatus = "ARCHIVED"
+)
+
+func (s WishStatus) Valid() bool {
+	return s == WishListed || s == WishBought || s == WishArchived
+}
+
 type BudgetStatus string
 
 const (
@@ -176,29 +214,36 @@ type TransferResult struct {
 
 // ───────────────────────── Categories ─────────────────────────
 
+// Category.SpendType é o tipo de gasto efetivo: o próprio, o herdado do pai ou VARIABLE
+// (despesas); sempre null em receitas.
 type Category struct {
-	ID       string       `json:"id"`
-	Name     string       `json:"name"`
-	Kind     CategoryKind `json:"kind"`
-	Icon     string       `json:"icon"`
-	Color    string       `json:"color"`
-	ParentID *string      `json:"parentId"`
+	ID        string       `json:"id"`
+	Name      string       `json:"name"`
+	Kind      CategoryKind `json:"kind"`
+	Icon      string       `json:"icon"`
+	Color     string       `json:"color"`
+	ParentID  *string      `json:"parentId"`
+	SpendType *SpendType   `json:"spendType"`
 }
 
+// CreateCategoryInput.SpendType omitido: VARIABLE em despesa raiz; subcategoria herda do pai.
 type CreateCategoryInput struct {
-	Name     string       `json:"name"`
-	Kind     CategoryKind `json:"kind"`
-	Icon     string       `json:"icon"`
-	Color    string       `json:"color"`
-	ParentID *string      `json:"parentId,omitempty"`
+	Name      string       `json:"name"`
+	Kind      CategoryKind `json:"kind"`
+	Icon      string       `json:"icon"`
+	Color     string       `json:"color"`
+	ParentID  *string      `json:"parentId,omitempty"`
+	SpendType *SpendType   `json:"spendType,omitempty"`
 }
 
+// UpdateCategoryInput.SpendType null volta a herdar do pai (ou VARIABLE sem pai).
 type UpdateCategoryInput struct {
-	Name     Optional[string]       `json:"name"`
-	Kind     Optional[CategoryKind] `json:"kind"`
-	Icon     Optional[string]       `json:"icon"`
-	Color    Optional[string]       `json:"color"`
-	ParentID Optional[string]       `json:"parentId"`
+	Name      Optional[string]       `json:"name"`
+	Kind      Optional[CategoryKind] `json:"kind"`
+	Icon      Optional[string]       `json:"icon"`
+	Color     Optional[string]       `json:"color"`
+	ParentID  Optional[string]       `json:"parentId"`
+	SpendType Optional[SpendType]    `json:"spendType"`
 }
 
 // ───────────────────────── Cards & Invoices ─────────────────────────
@@ -308,6 +353,7 @@ type Transaction struct {
 	InstallmentTotal  *int              `json:"installmentTotal"`
 	InvoiceID         *string           `json:"invoiceId"`
 	Notes             *string           `json:"notes"`
+	RecurringID       *string           `json:"recurringId"`
 }
 
 type CreateTransactionInput struct {
@@ -373,23 +419,25 @@ type Budget struct {
 // ───────────────────────── Goals ─────────────────────────
 
 type Goal struct {
-	ID                 string  `json:"id"`
-	Name               string  `json:"name"`
-	Icon               string  `json:"icon"`
-	Color              *string `json:"color"`
-	TargetCents        int64   `json:"targetCents"`
-	SavedCents         int64   `json:"savedCents"`
-	Deadline           *string `json:"deadline"`
-	Percent            float64 `json:"percent"`
-	MonthlyNeededCents *int64  `json:"monthlyNeededCents"`
+	ID                 string   `json:"id"`
+	Name               string   `json:"name"`
+	Kind               GoalKind `json:"kind"`
+	Icon               string   `json:"icon"`
+	Color              *string  `json:"color"`
+	TargetCents        int64    `json:"targetCents"`
+	SavedCents         int64    `json:"savedCents"`
+	Deadline           *string  `json:"deadline"`
+	Percent            float64  `json:"percent"`
+	MonthlyNeededCents *int64   `json:"monthlyNeededCents"`
 }
 
 type CreateGoalInput struct {
-	Name        string  `json:"name"`
-	Icon        string  `json:"icon"`
-	Color       *string `json:"color,omitempty"`
-	TargetCents int64   `json:"targetCents"`
-	Deadline    *string `json:"deadline,omitempty"`
+	Name        string   `json:"name"`
+	Kind        GoalKind `json:"kind,omitempty"`
+	Icon        string   `json:"icon"`
+	Color       *string  `json:"color,omitempty"`
+	TargetCents int64    `json:"targetCents"`
+	Deadline    *string  `json:"deadline,omitempty"`
 }
 
 type UpdateGoalInput struct {
@@ -404,6 +452,161 @@ type ContributeGoalInput struct {
 	AmountCents int64   `json:"amountCents"`
 	Date        *string `json:"date,omitempty"`
 	Note        *string `json:"note,omitempty"`
+}
+
+// ───────────────────────── Recurring ─────────────────────────
+
+// Recurring é um compromisso mensal: conta fixa (EXPENSE) ou receita recorrente (INCOME).
+type Recurring struct {
+	ID            string       `json:"id"`
+	Description   string       `json:"description"`
+	Kind          CategoryKind `json:"kind"`
+	AmountCents   int64        `json:"amountCents"`
+	DayOfMonth    int          `json:"dayOfMonth"`
+	AccountID     *string      `json:"accountId"`
+	AccountName   *string      `json:"accountName"`
+	CategoryID    *string      `json:"categoryId"`
+	CategoryName  *string      `json:"categoryName"`
+	CategoryIcon  *string      `json:"categoryIcon"`
+	CategoryColor *string      `json:"categoryColor"`
+	StartDate     string       `json:"startDate"`
+	EndDate       *string      `json:"endDate"`
+	Active        bool         `json:"active"`
+	NextDate      *string      `json:"nextDate"`
+}
+
+type CreateRecurringInput struct {
+	Description string       `json:"description"`
+	Kind        CategoryKind `json:"kind"`
+	AmountCents int64        `json:"amountCents"`
+	DayOfMonth  int          `json:"dayOfMonth"`
+	AccountID   *string      `json:"accountId,omitempty"`
+	CategoryID  *string      `json:"categoryId,omitempty"`
+	StartDate   *string      `json:"startDate,omitempty"`
+	EndDate     *string      `json:"endDate,omitempty"`
+}
+
+type UpdateRecurringInput struct {
+	Description Optional[string]       `json:"description"`
+	Kind        Optional[CategoryKind] `json:"kind"`
+	AmountCents Optional[int64]        `json:"amountCents"`
+	DayOfMonth  Optional[int]          `json:"dayOfMonth"`
+	AccountID   Optional[string]       `json:"accountId"`
+	CategoryID  Optional[string]       `json:"categoryId"`
+	StartDate   Optional[string]       `json:"startDate"`
+	EndDate     Optional[string]       `json:"endDate"`
+	Active      Optional[bool]         `json:"active"`
+}
+
+type PostRecurringInput struct {
+	Date        *string `json:"date,omitempty"`
+	AmountCents *int64  `json:"amountCents,omitempty"`
+	AccountID   *string `json:"accountId,omitempty"`
+}
+
+// ───────────────────────── Settings ─────────────────────────
+
+// BalanceBands são os limites inferiores (centavos) de cada faixa de saldo projetado.
+type BalanceBands struct {
+	DarkGreen  int64 `json:"darkGreen"`
+	LightGreen int64 `json:"lightGreen"`
+	Yellow     int64 `json:"yellow"`
+	LightRed   int64 `json:"lightRed"`
+}
+
+// SpendPlan é o "Seu plano": divisão desejada do gasto entre Fixo, Cortável e Variável.
+type SpendPlan struct {
+	FixedPct    float64 `json:"fixedPct"`
+	CuttablePct float64 `json:"cuttablePct"`
+	VariablePct float64 `json:"variablePct"`
+}
+
+type Settings struct {
+	MonthlyLimitCents    *int64       `json:"monthlyLimitCents"`
+	ReserveMonths        int          `json:"reserveMonths"`
+	HasDependents        bool         `json:"hasDependents"`
+	ReserveRefillRatePct float64      `json:"reserveRefillRatePct"`
+	BalanceBands         BalanceBands `json:"balanceBands"`
+	SpendPlan            *SpendPlan   `json:"spendPlan"`
+}
+
+// BalanceBandsPatch permite alterar só algumas faixas.
+type BalanceBandsPatch struct {
+	DarkGreen  *int64 `json:"darkGreen,omitempty"`
+	LightGreen *int64 `json:"lightGreen,omitempty"`
+	Yellow     *int64 `json:"yellow,omitempty"`
+	LightRed   *int64 `json:"lightRed,omitempty"`
+}
+
+// UpdateSettingsInput é um merge parcial; null em monthlyLimitCents/spendPlan limpa o valor
+// e null em balanceBands volta às faixas padrão.
+type UpdateSettingsInput struct {
+	MonthlyLimitCents    Optional[int64]             `json:"monthlyLimitCents"`
+	ReserveMonths        Optional[int]               `json:"reserveMonths"`
+	HasDependents        Optional[bool]              `json:"hasDependents"`
+	ReserveRefillRatePct Optional[float64]           `json:"reserveRefillRatePct"`
+	BalanceBands         Optional[BalanceBandsPatch] `json:"balanceBands"`
+	SpendPlan            Optional[SpendPlan]         `json:"spendPlan"`
+}
+
+// ───────────────────────── Category rules ─────────────────────────
+
+type CategoryRule struct {
+	ID           string `json:"id"`
+	Pattern      string `json:"pattern"`
+	CategoryID   string `json:"categoryId"`
+	CategoryName string `json:"categoryName"`
+	Priority     int    `json:"priority"`
+}
+
+type CreateCategoryRuleInput struct {
+	Pattern    string `json:"pattern"`
+	CategoryID string `json:"categoryId"`
+	Priority   *int   `json:"priority,omitempty"`
+}
+
+type UpdateCategoryRuleInput struct {
+	Pattern    Optional[string] `json:"pattern"`
+	CategoryID Optional[string] `json:"categoryId"`
+	Priority   Optional[int]    `json:"priority"`
+}
+
+type ApplyRulesInput struct {
+	OnlyUncategorized *bool `json:"onlyUncategorized,omitempty"`
+}
+
+type ApplyRulesResult struct {
+	Updated int `json:"updated"`
+}
+
+// ───────────────────────── Wishlist ─────────────────────────
+
+type WishItem struct {
+	ID           string     `json:"id"`
+	Name         string     `json:"name"`
+	PriceCents   int64      `json:"priceCents"`
+	URL          *string    `json:"url"`
+	Notes        *string    `json:"notes"`
+	Priority     int        `json:"priority"`
+	Status       WishStatus `json:"status"`
+	AffordableOn *string    `json:"affordableOn"`
+}
+
+type CreateWishItemInput struct {
+	Name       string  `json:"name"`
+	PriceCents int64   `json:"priceCents"`
+	URL        *string `json:"url,omitempty"`
+	Notes      *string `json:"notes,omitempty"`
+	Priority   *int    `json:"priority,omitempty"`
+}
+
+type UpdateWishItemInput struct {
+	Name       Optional[string]     `json:"name"`
+	PriceCents Optional[int64]      `json:"priceCents"`
+	URL        Optional[string]     `json:"url"`
+	Notes      Optional[string]     `json:"notes"`
+	Priority   Optional[int]        `json:"priority"`
+	Status     Optional[WishStatus] `json:"status"`
 }
 
 // ───────────────────────── Dashboard ─────────────────────────

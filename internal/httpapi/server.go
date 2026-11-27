@@ -94,9 +94,41 @@ func NewServer(svcs *service.Services, opts ServerOptions) *Server {
 	mux.HandleFunc("GET /api/dashboard/categories", s.requireAuth(s.handleDashboardCategories))
 	mux.HandleFunc("GET /api/dashboard/upcoming", s.requireAuth(s.handleDashboardUpcoming))
 
+	// Recurring (compromissos)
+	mux.HandleFunc("GET /api/recurring", s.requireAuth(s.handleListRecurring))
+	mux.HandleFunc("POST /api/recurring", s.requireAuth(s.handleCreateRecurring))
+	mux.HandleFunc("PATCH /api/recurring/{id}", s.requireAuth(s.handleUpdateRecurring))
+	mux.HandleFunc("DELETE /api/recurring/{id}", s.requireAuth(s.handleDeleteRecurring))
+	mux.HandleFunc("POST /api/recurring/{id}/post", s.requireAuth(s.handlePostRecurring))
+
+	// Settings
+	mux.HandleFunc("GET /api/settings", s.requireAuth(s.handleGetSettings))
+	mux.HandleFunc("PATCH /api/settings", s.requireAuth(s.handleUpdateSettings))
+
+	// Category rules (automações)
+	mux.HandleFunc("GET /api/rules", s.requireAuth(s.handleListRules))
+	mux.HandleFunc("POST /api/rules", s.requireAuth(s.handleCreateRule))
+	mux.HandleFunc("POST /api/rules/apply", s.requireAuth(s.handleApplyRules))
+	mux.HandleFunc("PATCH /api/rules/{id}", s.requireAuth(s.handleUpdateRule))
+	mux.HandleFunc("DELETE /api/rules/{id}", s.requireAuth(s.handleDeleteRule))
+
+	// Wishlist
+	mux.HandleFunc("GET /api/wishlist", s.requireAuth(s.handleListWishlist))
+	mux.HandleFunc("POST /api/wishlist", s.requireAuth(s.handleCreateWishItem))
+	mux.HandleFunc("PATCH /api/wishlist/{id}", s.requireAuth(s.handleUpdateWishItem))
+	mux.HandleFunc("DELETE /api/wishlist/{id}", s.requireAuth(s.handleDeleteWishItem))
+
+	// Insights
+	mux.HandleFunc("GET /api/insights/overview", s.requireAuth(s.handleInsightsOverview))
+	mux.HandleFunc("GET /api/insights/projection", s.requireAuth(s.handleInsightsProjection))
+	mux.HandleFunc("GET /api/insights/year", s.requireAuth(s.handleInsightsYear))
+	mux.HandleFunc("GET /api/insights/commitments", s.requireAuth(s.handleInsightsCommitments))
+
 	// Telegram
 	mux.HandleFunc("POST /api/telegram/webhook", s.handleTelegramWebhook)
 	mux.HandleFunc("GET /api/telegram/status", s.requireAuth(s.handleTelegramStatus))
+
+	s.registerSpreadsheetRoutes(mux)
 
 	// Healthcheck
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, _ *http.Request) {
@@ -196,11 +228,11 @@ func recoverMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// limitBodyMiddleware limita o corpo das requisições a MaxBodyBytes.
+// limitBodyMiddleware limita o corpo das requisições a MaxBodyBytes (rotas de importação: ver bodyLimitFor).
 func limitBodyMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Body != nil {
-			r.Body = http.MaxBytesReader(w, r.Body, MaxBodyBytes)
+			r.Body = http.MaxBytesReader(w, r.Body, bodyLimitFor(r))
 		}
 		next.ServeHTTP(w, r)
 	})
