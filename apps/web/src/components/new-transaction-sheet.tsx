@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as Tabs from "@radix-ui/react-tabs";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { cn } from "../lib/cn";
@@ -13,6 +13,13 @@ import {
   useCreateTransaction,
   useTransfer,
 } from "../lib/queries";
+import {
+  buildSplitPayload,
+  EMPTY_SPLIT,
+  MemberSplitFields,
+  splitFieldSchema,
+  useHomeMembers,
+} from "./member-split";
 import { Button } from "./ui/button";
 import { formatCategoryLabel } from "./ui/category-icon";
 import { Field, Input, Select } from "./ui/field";
@@ -31,6 +38,7 @@ const simpleSchema = z.object({
   date: z.string().min(10),
   pending: z.boolean(),
   tagIds: z.array(z.string()),
+  split: splitFieldSchema,
 });
 type SimpleForm = z.infer<typeof simpleSchema>;
 
@@ -42,6 +50,7 @@ const cardSchema = z.object({
   installments: z.string(),
   date: z.string().min(10),
   tagIds: z.array(z.string()),
+  split: splitFieldSchema,
 });
 type CardForm = z.infer<typeof cardSchema>;
 
@@ -167,6 +176,9 @@ function SimpleTransactionForm({
   const accounts = useAccounts();
   const categories = useCategories(type);
   const mutation = useCreateTransaction();
+  const home = useHomeMembers();
+  const showSplit = home.isHome && type === "EXPENSE";
+  const [splitError, setSplitError] = useState<string>();
 
   const form = useForm<SimpleForm>({
     resolver: zodResolver(simpleSchema),
@@ -178,14 +190,23 @@ function SimpleTransactionForm({
       date: initial?.date ?? todayISO(),
       pending: false,
       tagIds: [],
+      split: EMPTY_SPLIT,
     },
   });
   useInitialCategory(form.setValue, initial?.categoryId, categories.data);
   const tagIds = form.watch("tagIds");
+  const split = form.watch("split");
+  const amountCents = parseBRLInput(form.watch("amount"));
 
   const firstAccount = accounts.data?.[0]?.id ?? "";
 
   const submit = form.handleSubmit(async (values) => {
+    const shared = showSplit ? buildSplitPayload(values.split, home.members, false) : null;
+    if (shared && !shared.ok) {
+      setSplitError(shared.error);
+      return;
+    }
+    setSplitError(undefined);
     await mutation.mutateAsync({
       type,
       description: values.description,
@@ -196,6 +217,7 @@ function SimpleTransactionForm({
       categoryId: values.categoryId || null,
       notes: null,
       tagIds: values.tagIds.length > 0 ? values.tagIds : undefined,
+      ...(shared?.ok ? { paidByMemberId: shared.paidByMemberId, splits: shared.splits } : {}),
     });
     form.reset();
     onDone();
@@ -255,6 +277,15 @@ function SimpleTransactionForm({
           {type === "INCOME" ? "A receber" : "A pagar"}
         </label>
       </div>
+      {showSplit ? (
+        <MemberSplitFields
+          value={split}
+          onChange={(v) => form.setValue("split", v, { shouldDirty: true })}
+          members={home.members}
+          amountCents={amountCents}
+          error={splitError}
+        />
+      ) : null}
       <TagPicker
         value={tagIds}
         onChange={(ids) => form.setValue("tagIds", ids, { shouldDirty: true })}
@@ -278,6 +309,8 @@ function CardExpenseForm({
   const cards = useCards();
   const categories = useCategories("EXPENSE");
   const mutation = useCreateCardExpense();
+  const home = useHomeMembers();
+  const [splitError, setSplitError] = useState<string>();
 
   const form = useForm<CardForm>({
     resolver: zodResolver(cardSchema),
@@ -289,12 +322,21 @@ function CardExpenseForm({
       installments: String(initial?.installments ?? 1),
       date: initial?.date ?? todayISO(),
       tagIds: [],
+      split: EMPTY_SPLIT,
     },
   });
   useInitialCategory(form.setValue, initial?.categoryId, categories.data);
   const tagIds = form.watch("tagIds");
+  const split = form.watch("split");
+  const amountCents = parseBRLInput(form.watch("amount"));
 
   const submit = form.handleSubmit(async (values) => {
+    const shared = home.isHome ? buildSplitPayload(values.split, home.members, false) : null;
+    if (shared && !shared.ok) {
+      setSplitError(shared.error);
+      return;
+    }
+    setSplitError(undefined);
     await mutation.mutateAsync({
       cardId: values.cardId,
       description: values.description,
@@ -304,6 +346,7 @@ function CardExpenseForm({
       installments: Number(values.installments),
       notes: null,
       tagIds: values.tagIds.length > 0 ? values.tagIds : undefined,
+      ...(shared?.ok ? { paidByMemberId: shared.paidByMemberId, splits: shared.splits } : {}),
     });
     form.reset();
     onDone();
@@ -357,6 +400,15 @@ function CardExpenseForm({
           <Input type="date" {...form.register("date")} />
         </Field>
       </div>
+      {home.isHome ? (
+        <MemberSplitFields
+          value={split}
+          onChange={(v) => form.setValue("split", v, { shouldDirty: true })}
+          members={home.members}
+          amountCents={amountCents}
+          error={splitError}
+        />
+      ) : null}
       <TagPicker
         value={tagIds}
         onChange={(ids) => form.setValue("tagIds", ids, { shouldDirty: true })}

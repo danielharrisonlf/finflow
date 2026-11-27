@@ -1,4 +1,11 @@
-import type { Category, CategoryKind, CategoryRule, SpendType, Tag } from "@finflow/contracts";
+import type {
+  Category,
+  CategoryKind,
+  CategoryRule,
+  DreGroup,
+  SpendType,
+  Tag,
+} from "@finflow/contracts";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as Tabs from "@radix-ui/react-tabs";
 import { Hash, Pencil, Plus, Tags, Trash2, Wand2 } from "lucide-react";
@@ -40,6 +47,18 @@ import {
   useUpdateRule,
   useUpdateTag,
 } from "../lib/queries";
+import { useActiveSpace } from "../lib/use-active-space";
+
+/** Grupos do DRE (espaço Empresa, v3 fase 2 §5). */
+const DRE_GROUP_LABEL: Record<DreGroup, string> = {
+  REVENUE: "Receitas",
+  DEDUCTIONS: "Deduções",
+  COSTS: "Custos",
+  OPEX: "Despesas operacionais",
+  FINANCIAL: "Financeiras",
+  OTHER: "Outros",
+};
+const DRE_GROUPS = Object.keys(DRE_GROUP_LABEL) as DreGroup[];
 
 const tabCls =
   "min-h-10 flex-1 cursor-pointer rounded-(--radius-control) px-4 text-sm text-app-muted transition-colors data-[state=active]:bg-app-soft data-[state=active]:font-medium data-[state=active]:text-app-text sm:flex-none";
@@ -265,8 +284,12 @@ function CategorySection({
                 <CategoryIcon icon={cat.icon} color={cat.color} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-app-text">{cat.name}</p>
-                  {parent ? (
-                    <p className="truncate text-xs text-app-muted">Subcategoria de {parent.name}</p>
+                  {parent || cat.dreGroup ? (
+                    <p className="truncate text-xs text-app-muted">
+                      {parent ? `Subcategoria de ${parent.name}` : ""}
+                      {parent && cat.dreGroup ? " · " : ""}
+                      {cat.dreGroup ? `DRE: ${DRE_GROUP_LABEL[cat.dreGroup] ?? cat.dreGroup}` : ""}
+                    </p>
                   ) : null}
                 </div>
                 {spend ? (
@@ -319,6 +342,8 @@ const categoryFormSchema = z.object({
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "cor hexadecimal inválida"),
   parentId: z.string(),
   spendType: z.string(),
+  /** "" = automático (heurística de nome no servidor). */
+  dreGroup: z.string(),
 });
 type CategoryFormValues = z.infer<typeof categoryFormSchema>;
 
@@ -335,6 +360,7 @@ function CategorySheet({
 }) {
   const create = useCreateCategory();
   const update = useUpdateCategory();
+  const isBusiness = useActiveSpace().kind === "BUSINESS";
 
   const form = useForm<CategoryFormValues>({
     resolver: zodResolver(categoryFormSchema),
@@ -345,6 +371,7 @@ function CategorySheet({
       color: "#fb923c",
       parentId: "",
       spendType: "VARIABLE",
+      dreGroup: "",
     },
   });
 
@@ -357,6 +384,7 @@ function CategorySheet({
         color: editing.color,
         parentId: editing.parentId ?? "",
         spendType: editing.spendType ?? (editing.parentId ? "" : "VARIABLE"),
+        dreGroup: editing.dreGroup ?? "",
       });
     } else if (open) {
       form.reset({
@@ -366,6 +394,7 @@ function CategorySheet({
         color: "#fb923c",
         parentId: "",
         spendType: "VARIABLE",
+        dreGroup: "",
       });
     }
   }, [editing, open, form]);
@@ -392,6 +421,13 @@ function CategorySheet({
         values.kind === "INCOME"
           ? null
           : ((values.spendType || (values.parentId ? null : "VARIABLE")) as SpendType | null),
+      // só no espaço Empresa; vazio = "Automático" (o servidor decide pelo nome). Na edição o vazio
+      // vai como null, que faz o servidor voltar à heurística.
+      ...(isBusiness && values.dreGroup
+        ? { dreGroup: values.dreGroup as DreGroup }
+        : isBusiness && editing
+          ? { dreGroup: null }
+          : {}),
     };
     if (editing) {
       await update.mutateAsync({ id: editing.id, ...payload });
@@ -453,6 +489,22 @@ function CategorySheet({
                 ? SPEND_TYPE_META[selectedSpend as SpendType]?.hint
                 : "Usa o mesmo tipo da categoria principal."}{" "}
               Fixo e Cortável entram nas Saídas; Variável, no Diário.
+            </span>
+          </Field>
+        ) : null}
+
+        {isBusiness ? (
+          <Field label="Grupo no DRE">
+            <Select {...form.register("dreGroup")} data-testid="category-dre-group">
+              <option value="">Automático (pelo nome)</option>
+              {DRE_GROUPS.map((g) => (
+                <option key={g} value={g}>
+                  {DRE_GROUP_LABEL[g]}
+                </option>
+              ))}
+            </Select>
+            <span className="text-xs text-app-muted">
+              Em que linha do DRE os lançamentos desta categoria entram.
             </span>
           </Field>
         ) : null}

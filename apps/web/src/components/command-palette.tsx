@@ -12,7 +12,8 @@ import { useNavigate } from "react-router-dom";
 import { cn } from "../lib/cn";
 import { formatDate, formatSignedBRL } from "../lib/format";
 import { useTransactionSearch } from "../lib/queries";
-import { ALL_NAV_ITEMS } from "./layout/nav";
+import { useActiveSpace } from "../lib/use-active-space";
+import { navItemsFor } from "./layout/nav";
 
 interface PaletteItem {
   id: string;
@@ -60,6 +61,7 @@ export function CommandPalette({
   const listRef = useRef<HTMLDivElement>(null);
   const term = useDebounced(query.trim(), 200);
   const search = useTransactionSearch(open ? term : "");
+  const { kind } = useActiveSpace();
 
   useEffect(() => {
     if (open) {
@@ -102,7 +104,7 @@ export function CommandPalette({
         run: go("/projecao#posso-comprar"),
       },
     ];
-    const pages: PaletteItem[] = ALL_NAV_ITEMS.map((item) => ({
+    const pages: PaletteItem[] = navItemsFor(kind).map((item) => ({
       id: `page-${item.to}`,
       group: "Páginas",
       label: item.label,
@@ -132,7 +134,7 @@ export function CommandPalette({
           })
         : [];
     return [...actions.filter(matches), ...pages.filter(matches), ...found];
-  }, [query, term, search.data, navigate, onOpenChange, onNewTransaction]);
+  }, [query, term, search.data, kind, navigate, onOpenChange, onNewTransaction]);
 
   useEffect(() => {
     setActive((i) => Math.min(i, Math.max(0, items.length - 1)));

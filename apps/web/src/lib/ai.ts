@@ -1,4 +1,5 @@
-import { ApiError, api, clearAuthToken, getAuthToken } from "./api";
+import { ApiError, api, clearAuthToken, getAuthToken, handleUnknownSpace } from "./api";
+import { getActiveSpace, spaceHeaders } from "./space";
 
 // Cliente do Assistente (v3 §15). O chat usa SSE sobre fetch + ReadableStream (EventSource não envia
 // o header Authorization nem faz POST).
@@ -51,12 +52,13 @@ export interface AiStatus {
   model: string;
 }
 
+/** Autorização + espaço ativo (o chat e a chave seguem o espaço como qualquer outra rota). */
 function authHeaders(): Record<string, string> {
   const token = getAuthToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...spaceHeaders() };
 }
 
-async function toApiError(response: Response): Promise<ApiError> {
+async function toApiError(response: Response, path: string): Promise<ApiError> {
   if (response.status === 401) {
     clearAuthToken();
     window.dispatchEvent(new Event("finflow:unauthorized"));
@@ -73,6 +75,7 @@ async function toApiError(response: Response): Promise<ApiError> {
   } catch {
     // corpo não-JSON
   }
+  handleUnknownSpace(response.status, path, message);
   return new ApiError(message, response.status, issues);
 }
 
@@ -122,7 +125,7 @@ export async function streamChat(
     body: JSON.stringify({ messages }),
     signal,
   });
-  if (!response.ok) throw await toApiError(response);
+  if (!response.ok) throw await toApiError(response, "/ai/chat");
   if (!response.body) throw new ApiError("Resposta sem corpo", response.status);
 
   const reader = response.body.getReader();
@@ -151,7 +154,7 @@ export async function saveAiKey(apiKey: string | null): Promise<AiStatus> {
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ apiKey }),
   });
-  if (!response.ok) throw await toApiError(response);
+  if (!response.ok) throw await toApiError(response, "/ai/key");
   return (await response.json()) as AiStatus;
 }
 
@@ -194,12 +197,18 @@ export interface UiMessage {
   local?: boolean;
 }
 
-const HISTORY_KEY = "finflow_assistant_history";
 const HISTORY_LIMIT = 80;
+
+/** Uma conversa por espaço: o histórico de um espaço não pode virar contexto de outro. */
+function historyKey(): string {
+  const space = getActiveSpace();
+  // O espaço pessoal mantém a chave antiga para não perder conversas de versões anteriores.
+  return space === "pessoal" ? "finflow_assistant_history" : `finflow_assistant_history:${space}`;
+}
 
 export function loadHistory(): UiMessage[] {
   try {
-    const raw = window.localStorage.getItem(HISTORY_KEY);
+    const raw = window.localStorage.getItem(historyKey());
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
@@ -219,7 +228,7 @@ export function loadHistory(): UiMessage[] {
 export function saveHistory(messages: UiMessage[]): void {
   try {
     const toStore = messages.slice(-HISTORY_LIMIT).map(({ streaming: _streaming, ...m }) => m);
-    window.localStorage.setItem(HISTORY_KEY, JSON.stringify(toStore));
+    window.localStorage.setItem(historyKey(), JSON.stringify(toStore));
   } catch {
     // storage indisponível ou cheio: o chat segue só em memória
   }
@@ -227,7 +236,7 @@ export function saveHistory(messages: UiMessage[]): void {
 
 export function clearHistory(): void {
   try {
-    window.localStorage.removeItem(HISTORY_KEY);
+    window.localStorage.removeItem(historyKey());
   } catch {
     // storage indisponível
   }

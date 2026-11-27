@@ -5,6 +5,8 @@ import type {
   ApplyRulesResult,
   AuthStatus,
   Budget,
+  BusinessDre,
+  BusinessMetrics,
   CanAffordInput,
   CanAffordResult,
   Card,
@@ -24,7 +26,9 @@ import type {
   CreateGoalInput,
   CreateInvestmentInput,
   CreateLoanInput,
+  CreateMemberInput,
   CreateRecurringInput,
+  CreateSpaceInput,
   CreateTagInput,
   CreateTransactionInput,
   CreateWishItemInput,
@@ -46,6 +50,8 @@ import type {
   Loan,
   LoginInput,
   LoginResponse,
+  Member,
+  MemberBalances,
   MergeTransferInput,
   NetWorthPoint,
   Paginated,
@@ -55,6 +61,10 @@ import type {
   Projection,
   Recurring,
   Settings,
+  SettleMembersInput,
+  Space,
+  SpacesOverview,
+  SpaceTotals,
   Subscriptions,
   SystemInfo,
   Tag,
@@ -69,6 +79,7 @@ import type {
   UpdateInvestmentInput,
   UpdateInvestmentValueInput,
   UpdateLoanInput,
+  UpdateMemberInput,
   UpdateRecurringInput,
   UpdateSettingsInput,
   UpdateTagInput,
@@ -645,3 +656,124 @@ export const usePayLoan = () =>
   useInvalidatingMutation(({ id, ...input }: PayLoanInput & { id: string }) =>
     api.post<Transaction>(`/loans/${id}/pay`, input),
   );
+
+// ───────────────────────── v3 fase 2: espaços ─────────────────────────
+// A lista de espaços e a visão unificada não dependem do espaço ativo, mas vão com o cabeçalho
+// como qualquer chamada; trocar de espaço limpa o cache inteiro (main.tsx).
+
+const PERSONAL_SPACE: Space = {
+  slug: "pessoal",
+  name: "Pessoal",
+  kind: "PERSONAL",
+  color: "#34d399",
+  isDefault: true,
+};
+
+/** Lista de espaços; sem catálogo (ou backend antigo) = só o pessoal. */
+export const useSpaces = () =>
+  useQuery({
+    queryKey: ["spaces"],
+    queryFn: async () => {
+      const list = asArray<Space>(await api.get<unknown>("/spaces")).filter(
+        (s) => typeof s?.slug === "string",
+      );
+      return list.some((s) => s.slug === PERSONAL_SPACE.slug) ? list : [PERSONAL_SPACE, ...list];
+    },
+    staleTime: 60_000,
+  });
+
+const emptyTotals = (t?: Partial<SpaceTotals> | null): SpaceTotals => ({
+  balanceCents: t?.balanceCents ?? 0,
+  netWorthCents: t?.netWorthCents ?? 0,
+  monthIncomeCents: t?.monthIncomeCents ?? 0,
+  monthOutCents: t?.monthOutCents ?? 0,
+  monthResultCents: t?.monthResultCents ?? 0,
+});
+
+export const useSpacesOverview = () =>
+  useQuery({
+    queryKey: ["spaces", "overview"],
+    queryFn: async (): Promise<SpacesOverview> => {
+      const res = await api.get<Partial<SpacesOverview> | null>("/spaces/overview");
+      return {
+        spaces: asArray<SpacesOverview["spaces"][number]>(res?.spaces).map((s) => ({
+          ...s,
+          ...emptyTotals(s),
+        })),
+        totals: emptyTotals(res?.totals),
+      };
+    },
+  });
+
+/** Criar espaço não mexe nos dados do espaço atual: só recarrega a lista. */
+export const useCreateSpace = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateSpaceInput) => api.post<Space>("/spaces", input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["spaces"] }),
+  });
+};
+
+// casa: membros e divisão
+
+export const useMembers = (enabled = true) =>
+  useQuery({
+    queryKey: ["members"],
+    queryFn: async () => asArray<Member>(await api.get<unknown>("/members")),
+    enabled,
+  });
+
+export const useMemberBalances = (p: Period) =>
+  useQuery({
+    queryKey: ["members", "balances", p],
+    queryFn: async (): Promise<MemberBalances> => {
+      const res = await api.get<Partial<MemberBalances> | null>(`/members/balances${periodQS(p)}`);
+      return { members: asArray(res?.members), settlements: asArray(res?.settlements) };
+    },
+  });
+
+export const useCreateMember = () =>
+  useInvalidatingMutation((input: CreateMemberInput) => api.post<Member>("/members", input));
+
+export const useUpdateMember = () =>
+  useInvalidatingMutation(({ id, ...input }: UpdateMemberInput & { id: string }) =>
+    api.patch<Member>(`/members/${id}`, input),
+  );
+
+export const useDeleteMember = () =>
+  useInvalidatingMutation((id: string) => api.delete<void>(`/members/${id}`));
+
+export const useSettleMembers = () =>
+  useInvalidatingMutation((input: SettleMembersInput) =>
+    api.post<unknown>("/members/settle", input),
+  );
+
+// empresa: métricas e DRE
+
+export const useBusinessMetrics = (p: Period) =>
+  useQuery({
+    queryKey: ["business", "metrics", p],
+    queryFn: async (): Promise<BusinessMetrics> => {
+      const res = await api.get<Partial<BusinessMetrics> | null>(`/business/metrics${periodQS(p)}`);
+      return {
+        mrrCents: res?.mrrCents ?? 0,
+        arrCents: res?.arrCents ?? 0,
+        newMrrCents: res?.newMrrCents ?? 0,
+        churnedMrrCents: res?.churnedMrrCents ?? 0,
+        churnPct: res?.churnPct ?? null,
+        burnCents: res?.burnCents ?? 0,
+        runwayMonths: res?.runwayMonths ?? null,
+        cashCents: res?.cashCents ?? 0,
+      };
+    },
+  });
+
+export const useBusinessDre = (year: number) =>
+  useQuery({
+    queryKey: ["business", "dre", year],
+    queryFn: async (): Promise<BusinessDre | null> => {
+      const res = await api.get<Partial<BusinessDre> | null>(`/business/dre?year=${year}`);
+      if (!res?.totals) return null;
+      return { months: asArray(res.months), totals: res.totals };
+    },
+  });

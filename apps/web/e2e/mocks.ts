@@ -28,7 +28,178 @@ export const ids = {
   loanCar: uuid(46),
   loanPersonal: uuid(47),
   invoice: uuid(30),
+  memberAna: uuid(60),
+  memberBruno: uuid(61),
 };
+
+// ───────────────────────── v3 fase 2: espaços ─────────────────────────
+
+export const spaceFixtures = {
+  spaces: [
+    {
+      slug: "pessoal",
+      name: "Pessoal",
+      kind: "PERSONAL",
+      color: "#34d399",
+      createdAt: "2026-01-01T00:00:00Z",
+      isDefault: true,
+    },
+    {
+      slug: "casa",
+      name: "Casa",
+      kind: "HOME",
+      color: "#38bdf8",
+      createdAt: "2026-11-01T00:00:00Z",
+      isDefault: false,
+    },
+    {
+      slug: "empresa",
+      name: "Minha empresa",
+      kind: "BUSINESS",
+      color: "#a78bfa",
+      createdAt: "2026-11-02T00:00:00Z",
+      isDefault: false,
+    },
+  ],
+  /** Saldo geral do dashboard por espaço (prova que a troca refaz as consultas). */
+  balanceBySpace: { pessoal: 1_234_567, casa: 456_789, empresa: 3_040_000 } as Record<
+    string,
+    number
+  >,
+  overview: {
+    spaces: [
+      {
+        slug: "pessoal",
+        name: "Pessoal",
+        kind: "PERSONAL",
+        balanceCents: 1_234_567,
+        netWorthCents: 4_100_000,
+        monthIncomeCents: 985_000,
+        monthOutCents: 431_250,
+        monthResultCents: 553_750,
+      },
+      {
+        slug: "casa",
+        name: "Casa",
+        kind: "HOME",
+        balanceCents: 456_789,
+        netWorthCents: 456_789,
+        monthIncomeCents: 0,
+        monthOutCents: 300_000,
+        monthResultCents: -300_000,
+      },
+      {
+        slug: "empresa",
+        name: "Minha empresa",
+        kind: "BUSINESS",
+        balanceCents: 3_040_000,
+        netWorthCents: 3_040_000,
+        monthIncomeCents: 1_400_000,
+        monthOutCents: 1_720_000,
+        monthResultCents: -320_000,
+      },
+    ],
+    totals: {
+      balanceCents: 4_731_356,
+      netWorthCents: 7_596_789,
+      monthIncomeCents: 2_385_000,
+      monthOutCents: 2_451_250,
+      monthResultCents: -66_250,
+    },
+  },
+  members: [
+    { id: ids.memberAna, name: "Ana", color: "#38bdf8" },
+    { id: ids.memberBruno, name: "Bruno", color: "#f472b6" },
+  ],
+  balances: {
+    members: [
+      {
+        memberId: ids.memberAna,
+        name: "Ana",
+        paidCents: 300_000,
+        owedCents: 150_000,
+        balanceCents: 150_000,
+      },
+      {
+        memberId: ids.memberBruno,
+        name: "Bruno",
+        paidCents: 0,
+        owedCents: 150_000,
+        balanceCents: -150_000,
+      },
+    ],
+    settlements: [
+      { fromMemberId: ids.memberBruno, toMemberId: ids.memberAna, amountCents: 150_000 },
+    ],
+  },
+  metrics: {
+    mrrCents: 1_250_000,
+    arrCents: 15_000_000,
+    newMrrCents: 150_000,
+    churnedMrrCents: 50_000,
+    churnPct: 4.2,
+    burnCents: 320_000,
+    runwayMonths: 9.5,
+    cashCents: 3_040_000,
+  },
+};
+
+/** DRE determinístico: receita cresce 50 mil por mês; resultado negativo no começo do ano. */
+export function businessDre() {
+  const months = Array.from({ length: 12 }, (_, i) => {
+    const revenueCents = 1_000_000 + i * 50_000;
+    const deductionsCents = Math.round(revenueCents * 0.06);
+    const netRevenueCents = revenueCents - deductionsCents;
+    const costsCents = 300_000;
+    const grossProfitCents = netRevenueCents - costsCents;
+    const opexCents = 800_000;
+    const operatingResultCents = grossProfitCents - opexCents;
+    const financialCents = -10_000;
+    const netResultCents = operatingResultCents + financialCents;
+    return {
+      month: i + 1,
+      revenueCents,
+      deductionsCents,
+      netRevenueCents,
+      costsCents,
+      grossProfitCents,
+      opexCents,
+      operatingResultCents,
+      financialCents,
+      netResultCents,
+      marginPct: Math.round((netResultCents / netRevenueCents) * 1000) / 10,
+    };
+  });
+  const sum = (key: keyof (typeof months)[number]) =>
+    months.reduce((acc, m) => acc + (m[key] as number), 0);
+  const netRevenueCents = sum("netRevenueCents");
+  const netResultCents = sum("netResultCents");
+  return {
+    months,
+    totals: {
+      revenueCents: sum("revenueCents"),
+      deductionsCents: sum("deductionsCents"),
+      netRevenueCents,
+      costsCents: sum("costsCents"),
+      grossProfitCents: sum("grossProfitCents"),
+      opexCents: sum("opexCents"),
+      operatingResultCents: sum("operatingResultCents"),
+      financialCents: sum("financialCents"),
+      netResultCents,
+      marginPct: Math.round((netResultCents / netRevenueCents) * 1000) / 10,
+    },
+  };
+}
+
+/** "Minha Empresa" → "minha-empresa" (mesma ideia do servidor). */
+function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
 
 /** Linha de extrato com os campos v3 preenchidos (tags, loanId). */
 function tx(over: Record<string, unknown>) {
@@ -979,6 +1150,8 @@ export interface CapturedRequest {
   method: string;
   url: string;
   body: unknown;
+  /** Cabeçalho `X-FinFlow-Space` da escrita (undefined = ausente). */
+  space?: string;
 }
 
 /** Intercepta a API inteira com fixtures determinísticas e captura escritas. */
@@ -988,6 +1161,8 @@ export async function mockApi(
 ): Promise<CapturedRequest[]> {
   const captured: CapturedRequest[] = [];
   let authenticated = !options.requireAuth;
+  // catálogo de espaços desta página (POST /spaces acrescenta)
+  const spaces = spaceFixtures.spaces.map((s) => ({ ...s }));
 
   const json = (route: Route, body: unknown, status = 200) =>
     route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
@@ -997,6 +1172,7 @@ export async function mockApi(
     const method = request.method();
     const url = new URL(request.url());
     const path = url.pathname.replace(/^\/api/, "");
+    const space = request.headers()["x-finflow-space"];
 
     if (method !== "GET") {
       let body: unknown;
@@ -1006,13 +1182,30 @@ export async function mockApi(
         // multipart (upload de planilha): guarda o corpo bruto
         body = request.postData();
       }
-      captured.push({ method, url: url.toString(), body });
+      captured.push({ method, url: url.toString(), body, space });
+    }
+
+    // v3 fase 2: slug desconhecido = 404 (auth e system não dependem de espaço)
+    const independent = path.startsWith("/auth/") || path.startsWith("/system/");
+    if (!independent && space && !spaces.some((s) => s.slug === space)) {
+      return json(route, { message: "espaço não encontrado" }, 404);
     }
 
     if (method === "GET") {
       if (path === "/auth/status")
         return json(route, { required: Boolean(options.requireAuth), authenticated });
-      if (path === "/dashboard/summary") return json(route, fixtures.summary);
+      if (path === "/dashboard/summary")
+        return json(route, {
+          ...fixtures.summary,
+          totalBalanceCents:
+            spaceFixtures.balanceBySpace[space ?? "pessoal"] ?? fixtures.summary.totalBalanceCents,
+        });
+      if (path === "/spaces") return json(route, spaces);
+      if (path === "/spaces/overview") return json(route, spaceFixtures.overview);
+      if (path === "/members") return json(route, spaceFixtures.members);
+      if (path === "/members/balances") return json(route, spaceFixtures.balances);
+      if (path === "/business/metrics") return json(route, spaceFixtures.metrics);
+      if (path === "/business/dre") return json(route, businessDre());
       if (path === "/dashboard/cashflow") return json(route, fixtures.cashflow);
       if (path === "/dashboard/categories") return json(route, fixtures.categorySlices);
       if (path === "/dashboard/upcoming") return json(route, fixtures.upcoming);
@@ -1060,6 +1253,31 @@ export async function mockApi(
       if (path === "/system/info") return json(route, fixtures.systemInfo);
       if (path === "/ai/status") return json(route, fixtures.aiStatus);
     }
+
+    // v3 fase 2: escritas
+    if (method === "POST" && path === "/spaces") {
+      const input = request.postDataJSON() as { name: string; kind: string; color?: string };
+      const created = {
+        slug: slugify(input.name),
+        name: input.name,
+        kind: input.kind,
+        color: input.color ?? "#34d399",
+        createdAt: "2026-11-27T00:00:00Z",
+        isDefault: false,
+      };
+      spaces.push(created);
+      return json(route, created, 201);
+    }
+    if (method === "POST" && path === "/members")
+      return json(
+        route,
+        { id: uuid(62), color: "#a78bfa", ...(request.postDataJSON() as object) },
+        201,
+      );
+    if (method === "PATCH" && /^\/members\/[^/]+$/.test(path))
+      return json(route, { ...spaceFixtures.members[0], ...(request.postDataJSON() as object) });
+    if (method === "POST" && path === "/members/settle")
+      return json(route, { id: uuid(63), ...(request.postDataJSON() as object) }, 201);
 
     // v3: escritas
     if (method === "POST" && path === "/tags")

@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { AppShell } from "./components/layout/app-shell";
 import { PrivacyRerender } from "./lib/privacy";
+import { subscribeSpace } from "./lib/space";
 import "./styles.css";
 
 const DashboardPage = lazy(() =>
@@ -46,6 +47,11 @@ const AssistantPage = lazy(() =>
 const CalculatorsPage = lazy(() =>
   import("./pages/calculators").then((m) => ({ default: m.CalculatorsPage })),
 );
+const SpacesPage = lazy(() => import("./pages/spaces").then((m) => ({ default: m.SpacesPage })));
+const SplitPage = lazy(() => import("./pages/split").then((m) => ({ default: m.SplitPage })));
+const BusinessPage = lazy(() =>
+  import("./pages/business").then((m) => ({ default: m.BusinessPage })),
+);
 const LandingPage = lazy(() => import("./pages/landing").then((m) => ({ default: m.LandingPage })));
 
 /** Página lazy que re-renderiza ao alternar o modo privacidade (valores mascarados). */
@@ -61,6 +67,13 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: { staleTime: 15_000, retry: 1, refetchOnWindowFocus: false },
   },
+});
+
+// Trocar de espaço (inclusive a volta automática para o pessoal) descarta tudo o que veio do
+// espaço anterior; o AppShell remonta com a nova chave e refaz as consultas com o novo cabeçalho.
+subscribeSpace(() => {
+  void queryClient.cancelQueries();
+  queryClient.clear();
 });
 
 const router = createBrowserRouter([
@@ -83,6 +96,9 @@ const router = createBrowserRouter([
       { path: "/planilhas", element: page(<SpreadsheetsPage />) },
       { path: "/assistente", element: page(<AssistantPage />) },
       { path: "/calculadoras", element: page(<CalculatorsPage />) },
+      { path: "/espacos", element: page(<SpacesPage />) },
+      { path: "/divisao", element: page(<SplitPage />) },
+      { path: "/empresa", element: page(<BusinessPage />) },
       { path: "/configuracoes", element: page(<SettingsPage />) },
     ],
   },

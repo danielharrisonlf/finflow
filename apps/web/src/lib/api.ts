@@ -1,3 +1,5 @@
+import { DEFAULT_SPACE_SLUG, getActiveSpace, resetToDefaultSpace, spaceHeaders } from "./space";
+
 const DEFAULT_API_ORIGIN = import.meta.env.DEV ? "http://localhost:3333" : "";
 const BASE_URL = `${import.meta.env.VITE_API_URL ?? DEFAULT_API_ORIGIN}/api`;
 const TOKEN_KEY = "finflow_token";
@@ -37,11 +39,23 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * 404 de um espaço que não existe mais (apagado em outro aparelho, catálogo trocado): volta para
+ * o `pessoal`. O contrato não fixa a mensagem, então aceita qualquer texto que fale de espaço,
+ * além de 404 na própria lista de espaços.
+ */
+export function handleUnknownSpace(status: number, path: string, message: string): void {
+  if (status !== 404 || getActiveSpace() === DEFAULT_SPACE_SLUG) return;
+  if (path.startsWith("/spaces") || /espa[çc]o|space/i.test(message)) resetToDefaultSpace();
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getAuthToken();
   // FormData: o navegador define o Content-Type com o boundary do multipart.
-  const headers: Record<string, string> =
-    init?.body instanceof FormData ? {} : { "Content-Type": "application/json" };
+  const headers: Record<string, string> = {
+    ...(init?.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
+    ...spaceHeaders(),
+  };
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
@@ -67,6 +81,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       // corpo não-JSON: mantém a mensagem genérica
     }
+    handleUnknownSpace(response.status, path, message);
     throw new ApiError(message, response.status, issues);
   }
   if (response.status === 204) return undefined as T;
@@ -92,12 +107,15 @@ export const api = {
 
 /**
  * URL absoluta para download direto via `<a href>`: o token vai em `?token=`,
- * já que o navegador não envia o header Authorization em navegação.
+ * já que o navegador não envia o header Authorization em navegação. O espaço ativo vai em
+ * `?space=` pelo mesmo motivo (ausente = `pessoal`).
  */
 export function downloadUrl(path: string, params?: URLSearchParams): string {
   const query = new URLSearchParams(params);
   const token = getAuthToken();
   if (token) query.set("token", token);
+  const space = getActiveSpace();
+  if (space !== DEFAULT_SPACE_SLUG) query.set("space", space);
   const qs = query.toString();
   return `${BASE_URL}${path}${qs ? `?${qs}` : ""}`;
 }

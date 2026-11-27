@@ -116,9 +116,9 @@ export function InvestmentsPage() {
       {summary.data && summary.data.totalCurrentCents > 0 ? (
         <div className="grid gap-4 lg:grid-cols-12">
           <Card className="lg:col-span-7" data-testid="investments-history">
-            <CardHeader title="Evolução em 12 meses" />
-            {summary.data.history.length > 1 ? (
-              <HistoryChart history={summary.data.history} />
+            <CardHeader title="Evolução da carteira" />
+            {trimEmptyMonths(summary.data.history).length > 1 ? (
+              <HistoryChart history={trimEmptyMonths(summary.data.history)} />
             ) : (
               <p className="px-5 pb-5 text-sm text-app-muted">
                 O gráfico aparece depois de algumas atualizações de valor.
@@ -319,6 +319,12 @@ function AllocationList({
 }
 
 /** Linhas do valor atual vs. investido, fim de cada mês (SVG nativo). */
+/** Meses antes do primeiro registro de valor não são "zero investido": só não há dado ainda. */
+function trimEmptyMonths(history: InvestmentSummary["history"]): InvestmentSummary["history"] {
+  const first = history.findIndex((h) => h.currentCents !== 0 || h.investedCents !== 0);
+  return first <= 0 ? history : history.slice(first);
+}
+
 function HistoryChart({ history }: { history: InvestmentSummary["history"] }) {
   const [ref, width] = useElementWidth<HTMLDivElement>(640);
   const height = 210;

@@ -17,6 +17,14 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useSearchParams } from "react-router-dom";
 import { z } from "zod";
+import {
+  buildSplitPayload,
+  EMPTY_SPLIT,
+  MemberSplitFields,
+  splitFieldSchema,
+  splitFromTransaction,
+  useHomeMembers,
+} from "../components/member-split";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { CategoryIcon, formatCategoryLabel } from "../components/ui/category-icon";
@@ -359,6 +367,7 @@ const editTransactionSchema = z.object({
   pending: z.boolean(),
   notes: z.string().max(500),
   tagIds: z.array(z.string()),
+  split: splitFieldSchema,
 });
 type EditTransactionForm = z.infer<typeof editTransactionSchema>;
 
@@ -462,6 +471,11 @@ function EditTransactionSheet({
   const accounts = useAccounts();
   const categories = useCategories(categoryKind);
   const update = useUpdateTransaction();
+  // espaço Casa: quem pagou e divisão só em despesas (conta ou cartão)
+  const home = useHomeMembers();
+  const showSplit =
+    home.isHome && (transaction?.type === "EXPENSE" || transaction?.type === "CARD_EXPENSE");
+  const [splitError, setSplitError] = useState<string>();
 
   const form = useForm<EditTransactionForm>({
     resolver: zodResolver(editTransactionSchema),
@@ -474,9 +488,12 @@ function EditTransactionSheet({
       pending: false,
       notes: "",
       tagIds: [],
+      split: EMPTY_SPLIT,
     },
   });
   const tagIds = form.watch("tagIds");
+  const split = form.watch("split");
+  const amountInput = form.watch("amount");
 
   useEffect(() => {
     if (transaction) {
@@ -489,12 +506,20 @@ function EditTransactionSheet({
         pending: transaction.status === "PENDING",
         notes: transaction.notes ?? "",
         tagIds: (transaction.tags ?? []).map((t) => t.id),
+        split: splitFromTransaction(transaction),
       });
+      setSplitError(undefined);
     }
   }, [transaction, form]);
 
   const submit = form.handleSubmit(async (values) => {
     if (!transaction) return;
+    const shared = showSplit ? buildSplitPayload(values.split, home.members, true) : null;
+    if (shared && !shared.ok) {
+      setSplitError(shared.error);
+      return;
+    }
+    setSplitError(undefined);
     await update.mutateAsync({
       id: transaction.id,
       description: values.description.trim(),
@@ -506,6 +531,7 @@ function EditTransactionSheet({
       notes: values.notes.trim() || null,
       // substitui o conjunto: lista vazia remove todas as tags
       tagIds: values.tagIds,
+      ...(shared?.ok ? { paidByMemberId: shared.paidByMemberId, splits: shared.splits } : {}),
     });
     onClose();
   });
@@ -590,6 +616,18 @@ function EditTransactionSheet({
           <Field label="Observações (opcional)">
             <Input placeholder="Notas adicionais…" {...form.register("notes")} />
           </Field>
+
+          {showSplit ? (
+            <MemberSplitFields
+              value={split}
+              onChange={(v) => form.setValue("split", v, { shouldDirty: true })}
+              members={home.members}
+              amountCents={
+                isSimple ? parseBRLInput(amountInput) : Math.abs(transaction.amountCents)
+              }
+              error={splitError}
+            />
+          ) : null}
 
           <TagPicker
             value={tagIds}

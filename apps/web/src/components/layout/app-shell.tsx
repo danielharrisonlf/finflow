@@ -5,14 +5,17 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { clearAuthToken } from "../../lib/api";
 import { cn } from "../../lib/cn";
 import { useAuthStatus } from "../../lib/queries";
+import { useActiveSpaceSlug } from "../../lib/space";
+import { useActiveSpace, useSpaceGuard } from "../../lib/use-active-space";
 import { LoginPage } from "../../pages/login";
 import { AlertsBell } from "../alerts-bell";
 import { CommandPalette } from "../command-palette";
 import { ThemeToggle } from "../landing/ThemeToggle";
 import { NewTransactionSheet } from "../new-transaction-sheet";
 import { PrivacyToggle } from "../privacy-toggle";
+import { SpaceSheet, SpaceSwitcherButton, SpaceSwitcherCompact } from "../space-switcher";
 import { Sheet } from "../ui/sheet";
-import { isActivePath, MOBILE_PRIMARY, NAV_GROUPS, type NavItem } from "./nav";
+import { isActivePath, MOBILE_PRIMARY, type NavItem, navGroupsFor } from "./nav";
 
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
@@ -41,14 +44,27 @@ function shortcutLabel(): string {
     : "Ctrl K";
 }
 
+/**
+ * Trocar de espaço remonta o shell inteiro (páginas, sheets abertos, estados locais); o cache do
+ * TanStack Query é limpo em main.tsx no mesmo instante.
+ */
 export function AppShell() {
+  const slug = useActiveSpaceSlug();
+  return <AppShellView key={slug} />;
+}
+
+function AppShellView() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [spacesOpen, setSpacesOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const { pathname } = useLocation();
   const inMore = !MOBILE_PRIMARY.some((item) => isActivePath(pathname, item.to));
   const auth = useAuthStatus();
   const queryClient = useQueryClient();
+  const { kind } = useActiveSpace();
+  const navGroups = navGroupsFor(kind);
+  useSpaceGuard();
 
   useEffect(() => {
     const onUnauthorized = () => {
@@ -90,7 +106,8 @@ export function AppShell() {
             <AlertsBell className="h-9 w-9" />
           </div>
         </div>
-        <div className="px-3">
+        <div className="flex flex-col gap-2 px-3">
+          <SpaceSwitcherButton onClick={() => setSpacesOpen(true)} />
           <button
             type="button"
             onClick={() => setPaletteOpen(true)}
@@ -108,7 +125,7 @@ export function AppShell() {
           className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3"
           aria-label="Principal"
         >
-          {NAV_GROUPS.map((group) => (
+          {navGroups.map((group) => (
             <div key={group.title ?? "geral"} className="flex flex-col gap-0.5">
               {group.title ? (
                 <p className="px-3 pb-1 text-[11px] font-medium tracking-wide text-app-subtle uppercase">
@@ -169,6 +186,7 @@ export function AppShell() {
           <div className="mb-4 flex items-center justify-between gap-1 md:hidden">
             <Brand compact />
             <div className="flex items-center gap-0.5">
+              <SpaceSwitcherCompact onClick={() => setSpacesOpen(true)} />
               <button
                 type="button"
                 onClick={() => setPaletteOpen(true)}
@@ -231,7 +249,13 @@ export function AppShell() {
 
       <Sheet open={moreOpen} onOpenChange={setMoreOpen} title="Todas as seções">
         <nav aria-label="Todas as seções" className="flex flex-col gap-4 pb-2">
-          {NAV_GROUPS.map((group) => (
+          <SpaceSwitcherButton
+            onClick={() => {
+              setMoreOpen(false);
+              setSpacesOpen(true);
+            }}
+          />
+          {navGroups.map((group) => (
             <div key={group.title ?? "geral"}>
               {group.title ? (
                 <p className="pb-1.5 text-[11px] font-medium tracking-wide text-app-subtle uppercase">
@@ -281,6 +305,7 @@ export function AppShell() {
         </nav>
       </Sheet>
 
+      <SpaceSheet open={spacesOpen} onOpenChange={setSpacesOpen} />
       <CommandPalette
         open={paletteOpen}
         onOpenChange={setPaletteOpen}

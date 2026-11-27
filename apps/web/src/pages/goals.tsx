@@ -45,6 +45,7 @@ import {
   useUpdateWish,
   useWishlist,
 } from "../lib/queries";
+import { useActiveSpace } from "../lib/use-active-space";
 
 const tabCls =
   "min-h-10 flex-1 cursor-pointer rounded-(--radius-control) px-4 text-sm text-app-muted transition-colors data-[state=active]:bg-app-soft data-[state=active]:font-medium data-[state=active]:text-app-text sm:flex-none";
@@ -56,7 +57,10 @@ interface GoalPreset {
 
 export function GoalsPage() {
   const goals = useGoals();
-  const [tab, setTab] = useState("goals");
+  const [tabState, setTab] = useState("goals");
+  // espaço Empresa: só metas, sem desejos nem reserva de emergência (v3 fase 2 §6)
+  const isBusiness = useActiveSpace().kind === "BUSINESS";
+  const tab = isBusiness ? "goals" : tabState;
   const [createOpen, setCreateOpen] = useState(false);
   const [preset, setPreset] = useState<GoalPreset | null>(null);
   const [contributing, setContributing] = useState<Goal | null>(null);
@@ -77,9 +81,13 @@ export function GoalsPage() {
     <div className="space-y-4">
       <header className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Metas e desejos</h1>
+          <h1 className="text-xl font-semibold tracking-tight">
+            {isBusiness ? "Metas" : "Metas e desejos"}
+          </h1>
           <p className="text-sm text-app-muted">
-            Caixinhas, reserva de emergência e lista de compras
+            {isBusiness
+              ? "Objetivos de caixa da empresa"
+              : "Caixinhas, reserva de emergência e lista de compras"}
           </p>
         </div>
         {tab === "goals" ? (
@@ -99,7 +107,10 @@ export function GoalsPage() {
 
       <Tabs.Root value={tab} onValueChange={setTab}>
         <Tabs.List
-          className="flex gap-1 rounded-(--radius-control) bg-app-background/70 p-1 sm:inline-flex"
+          className={cn(
+            "flex gap-1 rounded-(--radius-control) bg-app-background/70 p-1 sm:inline-flex",
+            isBusiness && "hidden",
+          )}
           aria-label="Seções"
         >
           <Tabs.Trigger value="goals" className={tabCls}>
@@ -110,12 +121,17 @@ export function GoalsPage() {
           </Tabs.Trigger>
         </Tabs.List>
 
-        <Tabs.Content value="goals" className="mt-4 space-y-4 outline-none">
-          <ReservePanel
-            goal={reserveGoal}
-            onCreate={(targetCents) => openCreate({ kind: "RESERVE", targetCents })}
-            onContribute={setContributing}
-          />
+        <Tabs.Content
+          value="goals"
+          className={cn("space-y-4 outline-none", isBusiness ? "mt-0" : "mt-4")}
+        >
+          {isBusiness ? null : (
+            <ReservePanel
+              goal={reserveGoal}
+              onCreate={(targetCents) => openCreate({ kind: "RESERVE", targetCents })}
+              onContribute={setContributing}
+            />
+          )}
 
           {goals.isLoading ? (
             <Card>

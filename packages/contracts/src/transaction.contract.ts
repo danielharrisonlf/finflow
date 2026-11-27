@@ -8,10 +8,14 @@ import {
   positiveCentsSchema,
   yearSchema,
 } from "./common";
+import { transactionSplitSchema } from "./member.contract";
 import { transactionTagSchema } from "./tag.contract";
 
 /** Conjunto de tags de um lançamento (substitui o atual quando enviado). */
 const tagIdsSchema = z.array(idSchema).max(20);
+
+/** Divisão entre membros (espaço Casa, v3 fase 2 §4): soma = 100; vazia = igual entre todos. */
+const splitsSchema = z.array(transactionSplitSchema).max(50);
 
 export const transactionTypeSchema = z.enum([
   "INCOME",
@@ -36,6 +40,8 @@ export const createTransactionSchema = z.object({
   categoryId: idSchema.nullish(),
   notes: z.string().max(500).nullish(),
   tagIds: tagIdsSchema.optional(),
+  paidByMemberId: idSchema.nullish(),
+  splits: splitsSchema.optional(),
 });
 export type CreateTransactionInput = z.infer<typeof createTransactionSchema>;
 
@@ -48,6 +54,8 @@ export const updateTransactionSchema = z.object({
   categoryId: idSchema.nullish(),
   notes: z.string().max(500).nullish(),
   tagIds: tagIdsSchema.optional(),
+  paidByMemberId: idSchema.nullish(),
+  splits: splitsSchema.optional(),
 });
 export type UpdateTransactionInput = z.infer<typeof updateTransactionSchema>;
 
@@ -63,6 +71,8 @@ export const createCardExpenseSchema = z.object({
   notes: z.string().max(500).nullish(),
   /** Aplicadas a todas as parcelas. */
   tagIds: tagIdsSchema.optional(),
+  paidByMemberId: idSchema.nullish(),
+  splits: splitsSchema.optional(),
 });
 export type CreateCardExpenseInput = z.infer<typeof createCardExpenseSchema>;
 
@@ -113,6 +123,9 @@ export const transactionSchema = z.object({
   notes: z.string().nullable(),
   /** Sempre presente no v3; opcional para tolerar backend antigo. */
   tags: z.array(transactionTagSchema).optional(),
+  /** Espaço Casa: quem pagou e a divisão (opcionais para tolerar outros espaços). */
+  paidByMemberId: idSchema.nullish(),
+  splits: z.array(transactionSplitSchema).optional(),
 });
 export type Transaction = z.infer<typeof transactionSchema>;
 
