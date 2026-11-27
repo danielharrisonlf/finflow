@@ -5,57 +5,65 @@ import {
   ArrowUpRight,
   AudioLines,
   Bell,
+  CalendarClock,
   Check,
   CheckCheck,
   ChevronRight,
   CreditCard,
   Download,
+  Gauge,
+  Github,
+  HardDrive,
+  Heart,
   LayoutDashboard,
   LockKeyhole,
   Menu,
   Plus,
+  Scissors,
   Send,
   ShieldCheck,
   Sparkles,
   Target,
   TrendingUp,
+  Umbrella,
   Wallet,
+  Wand2,
   X,
 } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Brand } from "./Brand";
 import { DemoDashboard } from "./DemoDashboard";
+import { DownloadSection } from "./DownloadSection";
+import { repoUrl } from "./download";
 import { GoalCalculator } from "./GoalCalculator";
 import { money } from "./money";
+import { ProjectionPreview } from "./ProjectionPreview";
+import { SpreadsheetSection } from "./SpreadsheetSection";
 import { ThemeToggle } from "./ThemeToggle";
 import "./landing.css";
 
 const links = [
   ["Recursos", "#recursos"],
+  ["Planilhas", "#planilhas"],
   ["Como funciona", "#como-funciona"],
-  ["No celular", "#mobile"],
   ["Dúvidas", "#duvidas"],
 ];
 const year = new Date().getFullYear();
 
-function StartButton({ children = "Conheça o FinFlow" }: { children?: React.ReactNode }) {
+function DownloadButton({ children = "Baixar grátis" }: { children?: React.ReactNode }) {
   return (
-    <a className="ff-button" href="#recursos">
+    <a className="ff-button" href="#baixar">
       {children}
-      <ArrowUpRight size={17} />
+      <Download size={17} aria-hidden="true" />
     </a>
   );
 }
 
-function AccountAccess({
-  href,
-  onNavigate,
-  onOpenDialog,
-}: {
-  href?: string;
-  onNavigate?: () => void;
-  onOpenDialog?: () => void;
-}) {
+const downloadAnchor = "#baixar";
+
+// Inside the self-hosted app the account link opens the dashboard; the public page has no
+// accounts to sign in to, so the same slot leads to the download section.
+function AccountAccess({ href, onNavigate }: { href?: string; onNavigate?: () => void }) {
   if (href) {
     return (
       <a className="ff-account-link" href={href} onClick={onNavigate}>
@@ -65,17 +73,10 @@ function AccountAccess({
     );
   }
   return (
-    <button
-      type="button"
-      className="ff-account-link"
-      onClick={() => {
-        onNavigate?.();
-        onOpenDialog?.();
-      }}
-    >
-      Acessar minha conta
-      <ArrowUpRight size={15} />
-    </button>
+    <a className="ff-account-link" href={downloadAnchor} onClick={onNavigate}>
+      Baixar grátis
+      <Download size={15} aria-hidden="true" />
+    </a>
   );
 }
 
@@ -83,8 +84,6 @@ function Navbar({ accountHref }: { accountHref?: string }) {
   const [open, setOpen] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
   const mobileNav = useRef<HTMLElement>(null);
-  const dialog = useRef<HTMLDialogElement>(null);
-  const titleId = useId();
 
   useEffect(() => {
     if (!open) return;
@@ -158,7 +157,7 @@ function Navbar({ accountHref }: { accountHref?: string }) {
         </div>
         <div className="ff-nav-actions">
           <ThemeToggle />
-          <AccountAccess href={accountHref} onOpenDialog={() => dialog.current?.showModal()} />
+          <AccountAccess href={accountHref} />
           <button
             ref={menuButton}
             type="button"
@@ -193,46 +192,10 @@ function Navbar({ accountHref }: { accountHref?: string }) {
                 <span>Aparência</span>
                 <ThemeToggle />
               </div>
-              <AccountAccess
-                href={accountHref}
-                onNavigate={() => setOpen(false)}
-                onOpenDialog={() => dialog.current?.showModal()}
-              />
+              <AccountAccess href={accountHref} onNavigate={() => setOpen(false)} />
             </div>
           </nav>
         </div>
-      )}
-      {!accountHref && (
-        <dialog ref={dialog} className="ff-account-dialog" aria-labelledby={titleId}>
-          <form method="dialog">
-            <button type="submit" className="ff-icon-button" aria-label="Fechar acesso à conta">
-              <X size={20} />
-            </button>
-          </form>
-          <span className="ff-feature-icon">
-            <Wallet size={22} />
-          </span>
-          <h2 id={titleId}>Estamos preparando o FinFlow.</h2>
-          <p>
-            O FinFlow estará disponível em breve. Ainda não há cadastro aberto nem data de
-            lançamento anunciada. Enquanto isso, conheça a proposta e as prévias do produto.
-          </p>
-          <button
-            className="ff-button"
-            type="button"
-            onClick={() => {
-              dialog.current?.close();
-              document.getElementById("recursos")?.scrollIntoView({
-                behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
-                  ? "instant"
-                  : "smooth",
-              });
-            }}
-          >
-            Conheça o FinFlow
-            <ArrowUpRight size={17} />
-          </button>
-        </dialog>
       )}
     </header>
   );
@@ -244,17 +207,17 @@ function Hero() {
       <div className="ff-hero-copy">
         <span className="ff-eyebrow ff-launch-status">
           <span />
-          FinFlow · disponível em breve
+          FinFlow · grátis e de código aberto
         </span>
         <h1>
           Seu dinheiro em ordem. <span className="ff-hero-emphasis">Mais espaço para viver.</span>
         </h1>
         <p>
-          Contas, cartões e metas em um só lugar. Entenda seu mês, cuide do que importa e planeje o
-          que vem depois.
+          Contas, cartões, metas e planilhas em um só lugar, no seu computador. Entenda seu mês e
+          planeje o que vem depois.
         </p>
         <div className="ff-hero-actions">
-          <StartButton />
+          <DownloadButton />
           <a className="ff-secondary-link" href="#como-funciona">
             Como funciona
             <ArrowRight size={17} aria-hidden="true" />
@@ -263,11 +226,11 @@ function Hero() {
         <ul className="ff-hero-proof">
           <li>
             <Check size={15} />
-            Clareza para o dia a dia
+            Windows, macOS e Linux
           </li>
           <li>
             <Check size={15} />
-            No seu ritmo
+            Seus dados ficam com você
           </li>
         </ul>
       </div>
@@ -692,7 +655,7 @@ function MobileExperience() {
             ))}
           </fieldset>
           <p className="ff-fineprint">
-            Prévia ilustrativa. O FinFlow ainda está em preparação para o lançamento.
+            Prévia ilustrativa. A interface se adapta à tela do celular.
           </p>
           <div className="ff-mobile-telegram">
             <div>
@@ -831,6 +794,39 @@ function TelegramPreview() {
   );
 }
 
+const moreFeatures = [
+  {
+    icon: CalendarClock,
+    title: "Compromissos",
+    text: "Contas fixas e parcelas dos próximos meses, separadas entre a pagar e a receber.",
+  },
+  {
+    icon: Gauge,
+    title: "Ritmo do mês",
+    text: "Quanto você gastou até hoje comparado ao mesmo período do mês passado.",
+  },
+  {
+    icon: Scissors,
+    title: "Onde dá para cortar",
+    text: "Cada gasto é Fixo, Cortável ou Variável. Assim fica claro o que pode sair primeiro.",
+  },
+  {
+    icon: Umbrella,
+    title: "Reserva de emergência",
+    text: "Uma meta de 6 meses do seu custo de vida, ou 12 se alguém depende de você.",
+  },
+  {
+    icon: Heart,
+    title: "Desejos",
+    text: "Sua lista de compras por prioridade, com a data em que cada item cabe no saldo.",
+  },
+  {
+    icon: Wand2,
+    title: "Automações",
+    text: "Regras que categorizam lançamentos e importações sozinhas pela descrição.",
+  },
+];
+
 function DailyFeatures() {
   return (
     <section className="ff-section ff-container" id="recursos">
@@ -847,6 +843,20 @@ function DailyFeatures() {
         </p>
       </div>
       <div className="ff-features-grid">
+        <article className="ff-feature-card ff-projection-feature" id="projecao">
+          <div className="ff-feature-copy">
+            <span className="ff-feature-icon">
+              <TrendingUp size={20} aria-hidden="true" />
+            </span>
+            <h3>Veja o saldo de cada dia antes de ele chegar.</h3>
+            <p>
+              Contas fixas, parcelas e faturas entram na projeção do saldo dia a dia, com faixas de
+              cor do folgado ao negativo. O FinFlow avisa qual será o menor saldo nos próximos 30
+              dias e quanto dá para guardar sem apertar.
+            </p>
+          </div>
+          <ProjectionPreview />
+        </article>
         <article className="ff-feature-card ff-cards-feature" id="cartoes">
           <div className="ff-feature-copy">
             <span className="ff-feature-icon">
@@ -867,13 +877,26 @@ function DailyFeatures() {
             </span>
             <h3>Seu limite, no seu ritmo.</h3>
             <p>
-              Veja quanto ainda pode gastar em cada categoria. Cores que ajudam a decidir, sem fazer
-              conta de cabeça.
+              Defina um limite mensal e veja se o mês está mais rápido que o anterior. Cores por
+              categoria ajudam a decidir, sem fazer conta de cabeça.
             </p>
           </div>
           <BudgetPreview />
         </article>
       </div>
+      <ul className="ff-feature-list">
+        {moreFeatures.map(({ icon: Icon, title, text }) => (
+          <li key={title}>
+            <span className="ff-feature-icon">
+              <Icon size={19} aria-hidden="true" />
+            </span>
+            <div>
+              <h3>{title}</h3>
+              <p>{text}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
@@ -888,21 +911,21 @@ function HowItWorks() {
           <br />
           Uma nova visão do mês.
         </h2>
-        <p>A proposta é simples: reunir as informações e ajudar você a decidir com mais clareza.</p>
+        <p>Reunir as informações e ajudar você a decidir com mais clareza, no seu tempo.</p>
       </div>
       <ol className="ff-how-steps">
         {[
           {
             title: "Reúna o que entra e sai",
-            text: "Contas, receitas e despesas. Cada informação ajuda a enxergar melhor o todo.",
+            text: "Lance receitas e despesas ou importe sua planilha e o extrato do banco.",
           },
           {
             title: "Encontre o seu ritmo",
-            text: "Veja os gastos por categoria e escolha limites que combinam com a sua realidade.",
+            text: "Separe o fixo do variável, escolha um limite mensal e acompanhe o ritmo do mês.",
           },
           {
             title: "Dê espaço aos seus planos",
-            text: "Acompanhe o mês, ajuste o que precisar e avance um passo de cada vez.",
+            text: "Veja o saldo dos próximos dias, guarde quando sobrar e monte sua reserva.",
           },
         ].map((step, index) => (
           <li key={step.title}>
@@ -967,8 +990,8 @@ function AIAssistant() {
             </li>
           </ul>
           <p className="ff-fineprint">
-            Os exemplos são ilustrativos. O recurso depende de um assistente compatível e de
-            configuração. A disponibilidade no lançamento ainda não foi anunciada.
+            Os exemplos são ilustrativos. O FinFlow inclui um servidor MCP e uma linha de comando; o
+            recurso depende de um assistente compatível configurado por você.
           </p>
         </div>
         <div className="ff-ai-chat">
@@ -1027,30 +1050,30 @@ function Privacy() {
           Seus dados. Suas escolhas.
         </h2>
         <p>
-          Nesta página, você conhece a proposta do FinFlow com números fictícios. Sem pedir seus
-          dados financeiros para entender como funciona.
+          O FinFlow roda no seu computador. Sem conta, sem cadastro e sem enviar seus dados
+          financeiros para servidor nenhum.
         </p>
-        <a className="ff-text-link" href="#demonstracao">
-          Conheça a prévia do produto
-          <Download size={16} />
+        <a className="ff-text-link" href="#baixar">
+          Baixar o FinFlow
+          <Download size={16} aria-hidden="true" />
         </a>
       </div>
       <div className="ff-privacy-features">
         {[
           {
-            icon: Download,
-            title: "Um exemplo que você pode levar",
-            text: "A prévia permite baixar os lançamentos fictícios em CSV. Você pode abrir o arquivo em uma planilha e conferir os números.",
+            icon: HardDrive,
+            title: "Um arquivo no seu computador",
+            text: "Tudo fica num banco SQLite local. Para fazer backup, basta copiar o arquivo. Nada vai para a nuvem.",
           },
           {
             icon: LockKeyhole,
-            title: "Nenhuma senha bancária por aqui",
-            text: "A página não pede acesso ao seu banco e não realiza pagamentos ou transferências. Os controles usam apenas dados de exemplo.",
+            title: "Nenhuma senha bancária",
+            text: "O FinFlow não se conecta ao seu banco nem faz pagamentos. Você importa o extrato quando quiser.",
           },
           {
-            icon: ShieldCheck,
-            title: "Em preparação, com transparência",
-            text: "O FinFlow ainda não foi lançado. A data, os planos e as condições de acesso serão informados quando estiverem definidos.",
+            icon: Github,
+            title: "Código aberto e gratuito",
+            text: "Qualquer pessoa pode ler o código, compilar a própria versão e conferir o que o programa faz.",
           },
         ].map(({ icon: Icon, title, text }) => (
           <article key={title}>
@@ -1070,24 +1093,32 @@ function Privacy() {
 
 const questions = [
   {
-    q: "O FinFlow já está disponível?",
-    a: "Ainda não. Estamos preparando o FinFlow para o lançamento, sem data anunciada. Nesta página, você conhece a proposta e interage com exemplos fictícios. O cadastro público ainda não está aberto.",
+    q: "O FinFlow é gratuito?",
+    a: "Sim. O FinFlow é gratuito e de código aberto. Não há cadastro, mensalidade ou pedido de cartão: você baixa o programa e usa no seu computador.",
+  },
+  {
+    q: "Onde ficam os meus dados?",
+    a: "Num arquivo SQLite no seu computador, na pasta de configuração do usuário (AppData no Windows, Application Support no macOS, ~/.config no Linux). Nada é enviado para a nuvem. Para fazer backup, copie esse arquivo.",
+  },
+  {
+    q: "Preciso instalar alguma coisa?",
+    a: "Não. O FinFlow é um único arquivo para Windows, macOS ou Linux. Abra o programa e use pelo navegador em localhost:3333. Não precisa de Docker nem de banco de dados à parte.",
+  },
+  {
+    q: "Consigo trazer a planilha que já uso?",
+    a: "Sim. O FinFlow importa a planilha diária (Entrada, Saída, Diário e Saldo), arquivos do Excel e CSV, e o extrato OFX do banco. Antes de importar, você confere uma prévia com possíveis duplicados. E pode exportar tudo para uma pasta .xlsx com fórmulas.",
   },
   {
     q: "O FinFlow se conecta automaticamente ao meu banco?",
-    a: "As prévias mostram informações registradas manualmente. Nenhuma conexão automática com bancos está anunciada. Esta página não pede sua senha bancária nem acessa contas reais.",
+    a: "Não. O FinFlow não pede sua senha bancária nem acessa contas reais. Você registra os lançamentos ou importa o extrato exportado pelo internet banking.",
   },
   {
     q: "Preciso entender de finanças para usar?",
-    a: "A proposta é ajudar quem quer organizar o dinheiro no dia a dia, mesmo sem conhecer termos financeiros. Os exemplos mostram receitas, gastos, limites e metas com valores e explicações simples.",
+    a: "Não. A proposta é ajudar quem quer organizar o dinheiro no dia a dia, mesmo sem conhecer termos financeiros. Receitas, gastos, limites e metas aparecem com valores e explicações simples.",
   },
   {
     q: "O que acontece com os valores que eu testar aqui?",
     a: "Os controles da prévia e da calculadora funcionam só no seu navegador. Os valores voltam ao início quando você recarrega a página. A preferência de tema é salva no navegador, quando ele permite.",
-  },
-  {
-    q: "Quanto vai custar?",
-    a: "Os preços e as condições de acesso ainda não foram anunciados. Não há contratação, cobrança ou pedido de cartão nesta página.",
   },
 ];
 
@@ -1126,11 +1157,8 @@ function Footer() {
             <br />
             <span>Um passo de cada vez.</span>
           </h2>
-          <p>Estamos preparando um jeito mais simples de cuidar do seu dinheiro.</p>
-          <span className="ff-launch-status">
-            <span />
-            FinFlow · disponível em breve
-          </span>
+          <p>Baixe, abra no seu computador e comece hoje. Grátis e sem cadastro.</p>
+          <DownloadButton />
           <a className="ff-text-link" href="#inicio">
             Voltar ao início
             <ArrowUpRight size={17} aria-hidden="true" />
@@ -1144,14 +1172,18 @@ function Footer() {
         </div>
         <div className="ff-footer-links">
           <a href="#recursos">Recursos</a>
+          <a href="#planilhas">Planilhas</a>
           <a href="#mobile">No celular</a>
-          <a href="#cartoes">Cartões</a>
           <a href="#como-funciona">Como funciona</a>
           <a href="#seguranca">Privacidade</a>
+          <a href="#baixar">Baixar</a>
           <a href="#duvidas">Dúvidas</a>
+          <a href={repoUrl} rel="noopener">
+            Código-fonte
+          </a>
         </div>
         <div className="ff-footer-bottom">
-          <span>© {year} FinFlow. Feito para a vida real.</span>
+          <span>© {year} FinFlow. Gratuito, de código aberto e feito para a vida real.</span>
           <a href="#inicio">
             Voltar ao início
             <ArrowUpRight size={14} />
@@ -1172,11 +1204,13 @@ export function LandingPage({ accountHref }: { accountHref?: string }) {
       <main id="ff-content">
         <Hero />
         <DailyFeatures />
+        <SpreadsheetSection />
         <HowItWorks />
         <MobileExperience />
         <GoalCalculator />
         <AIAssistant />
         <Privacy />
+        <DownloadSection />
         <FAQ />
       </main>
       <Footer />

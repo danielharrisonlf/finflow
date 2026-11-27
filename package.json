@@ -13,6 +13,7 @@
     "build:web": "pnpm --filter @finflow/contracts build && pnpm --filter @finflow/web build && node scripts/sync-webui.mjs",
     "build:go": "node scripts/build-go.mjs",
     "build": "pnpm build:web && pnpm build:go",
+    "release": "node scripts/release.mjs",
     "serve": "go run ./cmd/finflow serve",
     "seed": "go run ./cmd/finflow seed",
     "typecheck": "turbo run typecheck",

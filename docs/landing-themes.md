@@ -1,6 +1,6 @@
 # Landing B2C e temas
 
-> O ajuste visual após o feedback do usuário, descrito ao final, é a versão atual: copy original restaurada e hero com painel compacto. A landing em `/inicio` continua comunicando pré-lançamento. Os registros anteriores são históricos.
+> A versão atual é a descrita em **Lançamento local-first — 27 de novembro de 2026**, ao final: o produto deixou de ser pré-lançamento e passou a ser gratuito, de código aberto e executado no computador do usuário. A composição visual aprovada (hero com painel compacto, regras de dobra) foi mantida. Os registros anteriores são históricos.
 
 ## Refatoração visual
 
@@ -115,3 +115,32 @@ node apps/web/scripts/verify-public-landing.mjs https://finflow-landing-umber.ve
 O vínculo Vercel existente é lido de `../finflow-landing/.vercel/project.json`. O pacote usa a Build Output API v3, com conteúdo estático, os cabeçalhos existentes e suporte a `/inicio`.
 
 Antes do deploy e no domínio de produção, as verificações passaram em Chromium e WebKit: HTTP 200 sem autenticação, copy original, dois temas, sete larguras, painel na dobra, axe AA, diálogo de acesso, gasto/desfazer, troca de mês, CSV, calculadora e assets. Nenhuma chamada à API. Capturas da versão pública em `apps/web/test-results/public-verification/`. O pacote teve revisão independente dos hashes e do conteúdo a publicar.
+
+## Lançamento local-first — 27 de novembro de 2026
+
+O FinFlow passou a ser distribuído como binário único, gratuito e de código aberto, publicado em GitHub Releases. A landing deixou de anunciar “disponível em breve” e agora leva ao download.
+
+### O que mudou
+
+- **Hero**: headline e painel compacto preservados (mesmas regras de dobra). Selo “FinFlow · grátis e de código aberto”, subtítulo com planilhas e “no seu computador”, CTA principal **Baixar grátis** (rola até `#baixar`) e secundário “Como funciona”. Provas: “Windows, macOS e Linux” e “Seus dados ficam com você”.
+- **Navegação**: Recursos, Planilhas, Como funciona, Dúvidas. Na rota integrada `/inicio`, **Acessar minha conta** continua levando a `/`. Na landing pública (sem `accountHref`), o mesmo espaço vira o link **Baixar grátis** para `#baixar`; o diálogo de pré-lançamento foi removido (não há login falso).
+- **Recursos** (`#recursos`): novo card largo **Projeção** (`#projecao`, `ProjectionPreview.tsx` + `projection.ts`) com 30 barras coloridas pelas faixas de saldo, menor saldo nos próximos 30 dias e legenda das cinco faixas; cards de cartões e limite preservados (o de limite cita limite mensal e ritmo do mês); lista de seis recursos: compromissos, ritmo do mês, onde dá para cortar (Fixo/Cortável/Variável), reserva de emergência (6 ou 12 meses), desejos e automações.
+- **Planilhas** (`#planilhas`, `SpreadsheetSection.tsx`): importação da planilha diária (Entrada · Saída · Diário · Saldo), Excel/CSV e OFX; exportação `.xlsx` anual com fórmulas vivas, saldo colorido e aba Economia. A ilustração é uma `<table>` real com barra de fórmula, células de saldo tingidas pela faixa (com o nome da faixa para leitores de tela) e abas da pasta.
+- **Rode no seu computador** (`#baixar`, `DownloadSection.tsx` + `download.ts`): botão principal detectado pelo sistema (Windows, macOS Apple Silicon, macOS Intel, Linux; arquitetura via `userAgentData` quando disponível, Apple Silicon como padrão no Mac), os outros cinco pacotes, três passos (baixe → abra → use em localhost:3333), comandos `install.sh` / `install.ps1` com botão de copiar (com seleção manual quando a área de transferência é bloqueada), link para compilar do código-fonte e nota de privacidade (SQLite local, nada vai para a nuvem). Em celulares, uma nota explica que o FinFlow roda no computador.
+- **Copy**: “Como funciona”, assistente de IA (MCP incluído), privacidade (arquivo local, sem senha bancária, código aberto), perguntas frequentes (gratuidade, dados, instalação, planilhas, banco) e chamada final (“Baixar grátis”) atualizados. Nenhuma marca ou autor de terceiros é citado.
+- **Temas**: tokens `--ff-band-*` (cinco faixas) em `theme.css` para claro e escuro. As cores de faixa são gráficas; textos continuam em `--ff-text` / `--ff-muted`.
+- **SEO**: `index.html` e `build-public-landing.mjs` sem “Em breve” (título público “FinFlow — Seu dinheiro em ordem, grátis e no seu computador”).
+
+Os links de download usam `https://github.com/danielharrisonlf/finflow/releases/latest/download/finflow-<os>-<arch>.(zip|tar.gz)`; os nomes estáveis são gerados por `scripts/release.mjs` (veja `docs/release.md`).
+
+### Testes atualizados deliberadamente
+
+- `e2e/landing-themes.spec.ts`: o primeiro teste agora exige “Baixar grátis” → `#baixar` e proíbe textos de pré-lançamento e nomes de terceiros (a proibição de “grátis” em links foi retirada; demo/cadastro continuam proibidos). Novos testes: seção de download (asset por sistema com UA emulado, cinco alternativas, passos, comandos, cópia, código-fonte, todos os CTAs “Baixar grátis”) e prévias de planilha e projeção (tabela, 30 barras, legenda, seis recursos). O teste de alvos de toque inclui `#baixar a, #baixar button`. O teste de dobra não mudou.
+- `scripts/verify-public-landing.mjs`: sem diálogo de conta; confere o link “Baixar grátis” do cabeçalho, o formato do link de release e as cinco alternativas.
+
+### Validação
+
+- `pnpm --filter @finflow/web typecheck` e `pnpm --filter @finflow/web build` aprovados. Biome limpo em todos os arquivos desta mudança (o `pnpm lint` global acusou apenas `src/pages/projection.tsx`, trabalho paralelo de outra frente).
+- Landing: 22/22 (desktop Chromium + Pixel 7) e 22/22 (Android Chromium + iPhone 13 WebKit), incluindo os quatro cenários de dobra, as sete larguras sem rolagem horizontal nos dois temas e axe WCAG 2.1 AA. Com três workers simultâneos, o WebKit chegou a estourar o tempo em dois testes por carga; isolados, passaram.
+- Pacote público: `node apps/web/scripts/build-public-landing.mjs` e `verify-public-landing.mjs` contra o build servido localmente, aprovados em Chromium e WebKit (sete larguras, dois temas, axe, zero chamadas à API).
+- Capturas inspecionadas em `apps/web/test-results/screenshots/local-{light,dark}-{390,1440}-{hero,recursos,planilhas,seguranca,baixar,final}.png`.

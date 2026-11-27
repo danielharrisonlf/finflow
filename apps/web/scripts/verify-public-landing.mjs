@@ -40,7 +40,12 @@ for (const [engine, browserType] of [
     );
     const dashboard = page.locator("#demonstracao");
     assert.equal(await dashboard.locator(".ff-preview-details").getAttribute("open"), null);
-    assert.equal(await page.getByRole("link", { name: /demonstração|grátis/i }).count(), 0);
+    assert.equal(
+      await page.getByRole("link", { name: /demonstração|criar conta|cadastr/i }).count(),
+      0,
+    );
+    assert.equal(await page.getByText(/disponível em breve|em preparação/i).count(), 0);
+    assert.equal(await page.getByText(/Breno|Visor/i).count(), 0);
     for (const theme of ["light", "dark"]) {
       if (theme === "dark")
         await page.getByRole("button", { name: "Ativar tema escuro", exact: true }).click();
@@ -69,11 +74,17 @@ for (const [engine, browserType] of [
         }
       }
     }
-    await page.getByRole("button", { name: "Acessar minha conta", exact: true }).click();
-    const dialog = page.getByRole("dialog");
-    assert.equal(await dialog.isVisible(), true);
-    assert.match(await dialog.innerText(), /em breve/);
-    await dialog.getByRole("button", { name: "Fechar acesso à conta", exact: true }).click();
+    // The public page has no accounts: the header action is the download path, never a login.
+    assert.equal(await page.getByText("Acessar minha conta").count(), 0);
+    assert.equal(await page.getByRole("dialog").count(), 0);
+    await page.locator(".ff-nav-actions").getByRole("link", { name: "Baixar grátis" }).click();
+    await page.waitForURL(/#baixar$/);
+    const primary = page.locator("#baixar .ff-download-primary");
+    assert.match(
+      await primary.getAttribute("href"),
+      /^https:\/\/github\.com\/danielharrisonlf\/finflow\/releases\/latest\/download\/finflow-(windows|darwin|linux)-(amd64|arm64)\.(zip|tar\.gz)$/,
+    );
+    assert.equal(await page.locator("#baixar .ff-download-others a").count(), 5);
     await dashboard.locator(".ff-preview-details > summary").click();
     assert.equal(await dashboard.locator(".balance strong").innerText(), "R$ 24.586,50");
     await dashboard.getByRole("button", { name: "Simular uma despesa", exact: true }).click();

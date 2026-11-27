@@ -348,36 +348,6 @@
   background: var(--ff-tint);
   color: var(--ff-accent);
 }
-.finflow-landing .ff-account-dialog {
-  position: fixed;
-  inset: 0;
-  margin: auto;
-  width: min(490px, calc(100% - 36px));
-  max-height: 90dvh;
-  overflow-y: auto;
-  padding: 36px 24px;
-  background: var(--ff-surface);
-  color: var(--ff-text);
-  border: 1px solid var(--ff-border);
-  border-radius: 20px;
-  box-shadow: var(--ff-shadow);
-}
-.finflow-landing .ff-account-dialog::backdrop {
-  background: #12251c99;
-}
-.finflow-landing .ff-account-dialog form {
-  position: absolute;
-  right: 8px;
-  top: 8px;
-}
-.finflow-landing .ff-account-dialog h2 {
-  margin-block: 20px;
-  font-size: 30px;
-}
-.finflow-landing .ff-account-dialog .ff-button {
-  margin-top: 24px;
-}
-
 /* The hero presents one compact product surface; extra controls open on request. */
 .finflow-landing .ff-hero {
   display: grid;
@@ -2153,5 +2123,516 @@
   }
   .finflow-landing .ff-hero-copy > p {
     font-size: 16px;
+  }
+}
+
+/* Local-first release: projection, spreadsheets and the download path. */
+.finflow-landing .is-dark-green {
+  --band: var(--ff-band-dark-green);
+}
+.finflow-landing .is-light-green {
+  --band: var(--ff-band-light-green);
+}
+.finflow-landing .is-yellow {
+  --band: var(--ff-band-yellow);
+}
+.finflow-landing .is-light-red {
+  --band: var(--ff-band-light-red);
+}
+.finflow-landing .is-red {
+  --band: var(--ff-band-red);
+}
+.finflow-landing .ff-projection-feature {
+  grid-column: 1 / -1;
+}
+.finflow-landing .ff-projection {
+  margin-top: 28px;
+  padding: 18px;
+  border-radius: 16px;
+  background: var(--ff-surface);
+  min-width: 0;
+}
+.finflow-landing .ff-projection-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.finflow-landing .ff-projection-alert > svg {
+  margin-top: 3px;
+  color: var(--ff-warning);
+}
+.finflow-landing .ff-projection-alert span,
+.finflow-landing .ff-projection-alert small {
+  display: block;
+  font-size: 12px;
+  color: var(--ff-muted);
+}
+.finflow-landing .ff-projection-alert strong {
+  display: block;
+  font-size: 24px;
+  font-weight: 550;
+  letter-spacing: -0.03em;
+  line-height: 1.3;
+}
+.finflow-landing .ff-projection-chart {
+  display: block;
+  width: 100%;
+  height: 112px;
+  margin-top: 16px;
+}
+.finflow-landing .ff-projection-chart rect {
+  fill: var(--band);
+}
+.finflow-landing .ff-projection-chart rect.is-lowest {
+  stroke: var(--ff-text);
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+}
+.finflow-landing .ff-projection-zero {
+  stroke: var(--ff-subtle);
+  stroke-width: 1px;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+}
+.finflow-landing .ff-projection-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--ff-subtle);
+}
+.finflow-landing .ff-projection-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  list-style: none;
+  padding: 14px 0 0;
+  margin: 14px 0 0;
+  border-top: 1px solid var(--ff-border);
+  font-size: 11px;
+  color: var(--ff-muted);
+}
+.finflow-landing .ff-projection-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.finflow-landing .ff-band-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  background: var(--band);
+}
+.finflow-landing .ff-feature-list {
+  display: grid;
+  gap: 24px;
+  list-style: none;
+  padding: 0;
+  margin: 40px 0 0;
+}
+.finflow-landing .ff-feature-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+.finflow-landing :where(.ff-feature-list, .ff-sheets-list) .ff-feature-icon {
+  flex-shrink: 0;
+}
+.finflow-landing .ff-feature-list h3 {
+  font-size: 17px;
+}
+.finflow-landing .ff-feature-list p {
+  margin-top: 6px;
+  font-size: 13px;
+}
+
+.finflow-landing .ff-sheets {
+  display: grid;
+  gap: 36px;
+  align-items: center;
+}
+.finflow-landing .ff-sheets-copy {
+  min-width: 0;
+}
+.finflow-landing .ff-sheets-copy h2 {
+  margin-block: 15px 20px;
+}
+.finflow-landing .ff-sheets-copy > p {
+  max-width: 480px;
+}
+.finflow-landing .ff-sheets-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 28px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--ff-accent);
+}
+.finflow-landing .ff-sheets-list {
+  display: grid;
+  gap: 16px;
+  list-style: none;
+  padding: 0;
+  margin: 14px 0 0;
+}
+.finflow-landing .ff-sheets-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.finflow-landing .ff-sheets-list .ff-feature-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+}
+.finflow-landing .ff-sheets-list strong {
+  font-size: 15px;
+  font-weight: 550;
+}
+.finflow-landing .ff-sheets-list p {
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 1.65;
+}
+.finflow-landing .ff-sheets-copy > .ff-sheets-export {
+  margin-top: 12px;
+  font-size: 14px;
+}
+.finflow-landing .ff-sheets-export strong {
+  color: var(--ff-text);
+  font-weight: 600;
+}
+.finflow-landing .ff-sheet {
+  margin: 0;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--ff-border);
+  border-radius: 20px;
+  background: var(--ff-surface);
+  box-shadow: var(--ff-shadow);
+}
+.finflow-landing .ff-sheet-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--ff-border);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.finflow-landing .ff-sheet-bar > span {
+  padding-right: 10px;
+  border-right: 1px solid var(--ff-border);
+  color: var(--ff-muted);
+  font-weight: 600;
+}
+.finflow-landing :where(.ff-sheet-bar code, .ff-install-command code) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--ff-text);
+  overflow-wrap: anywhere;
+}
+.finflow-landing .ff-sheet table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.finflow-landing .ff-sheet caption {
+  caption-side: top;
+  text-align: left;
+  padding-bottom: 10px;
+  font-size: 12px;
+  color: var(--ff-muted);
+}
+.finflow-landing .ff-sheet :where(th, td) {
+  padding: 7px 4px;
+  border: 1px solid var(--ff-border);
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.finflow-landing .ff-sheet thead th {
+  background: var(--ff-soft);
+  color: var(--ff-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-align: center;
+}
+.finflow-landing .ff-sheet tbody th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--ff-muted);
+}
+.finflow-landing .ff-sheet .ff-band-cell {
+  background: color-mix(in srgb, var(--band) 26%, var(--ff-surface));
+  font-weight: 600;
+}
+.finflow-landing .ff-sheet tbody tr:last-child .ff-band-cell {
+  outline: 2px solid var(--ff-accent);
+  outline-offset: -2px;
+}
+.finflow-landing .ff-sheet-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 12px;
+  font-size: 11px;
+}
+.finflow-landing .ff-sheet-tabs span {
+  padding: 5px 10px;
+  border-radius: 6px;
+  background: var(--ff-soft);
+  color: var(--ff-muted);
+}
+.finflow-landing .ff-sheet-tabs .active {
+  background: var(--ff-tint);
+  color: var(--ff-accent);
+  font-weight: 600;
+}
+.finflow-landing .ff-sheet figcaption {
+  margin-top: 10px;
+}
+
+.finflow-landing .ff-download {
+  border-top: 1px solid var(--ff-border);
+}
+.finflow-landing .ff-download-grid {
+  display: grid;
+  gap: 20px;
+  align-items: start;
+}
+.finflow-landing .ff-download-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  padding: 26px 22px;
+  border-radius: 24px;
+  background: var(--ff-tint);
+}
+.finflow-landing .ff-download-card > .ff-feature-icon {
+  background: var(--ff-surface);
+}
+.finflow-landing .ff-download-mobile {
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--ff-text);
+}
+.finflow-landing .ff-download-primary {
+  width: 100%;
+  margin-top: 22px;
+  justify-content: flex-start;
+  gap: 12px;
+  white-space: normal;
+  text-align: left;
+}
+.finflow-landing .ff-download-detail {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--ff-muted);
+}
+.finflow-landing .ff-download-others {
+  width: 100%;
+  margin-top: 26px;
+}
+.finflow-landing .ff-download-others > span {
+  font-size: 12px;
+  font-weight: 600;
+}
+.finflow-landing .ff-download-others ul {
+  display: grid;
+  list-style: none;
+  padding: 0;
+  margin: 6px 0 0;
+}
+.finflow-landing .ff-download-others a {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px 10px;
+  min-height: 48px;
+  padding-block: 6px;
+  border-bottom: 1px solid var(--ff-border);
+  font-size: 14px;
+  font-weight: 550;
+  color: var(--ff-accent);
+}
+.finflow-landing .ff-download-others a:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.finflow-landing .ff-download-others small {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ff-muted);
+}
+.finflow-landing .ff-download-privacy {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 24px;
+  font-size: 13px;
+  color: var(--ff-text);
+}
+.finflow-landing .ff-download-privacy > svg {
+  margin-top: 4px;
+  color: var(--ff-accent);
+}
+.finflow-landing .ff-download-side {
+  display: grid;
+  gap: 20px;
+  align-content: start;
+  min-width: 0;
+}
+.finflow-landing .ff-download-steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.finflow-landing .ff-download-steps li {
+  display: flex;
+  gap: 16px;
+  padding-block: 14px;
+  border-bottom: 1px solid var(--ff-border);
+}
+.finflow-landing .ff-download-steps li:first-child {
+  padding-top: 0;
+}
+.finflow-landing .ff-download-steps .ff-step-index {
+  margin: 2px 0 0;
+}
+.finflow-landing .ff-download-steps h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 17px;
+}
+.finflow-landing .ff-download-steps h3 > svg {
+  color: var(--ff-accent);
+}
+.finflow-landing .ff-download-steps p {
+  margin-top: 4px;
+  font-size: 13px;
+}
+.finflow-landing .ff-download-terminal {
+  min-width: 0;
+  padding: 22px 18px;
+  border-radius: 20px;
+  background: var(--ff-soft);
+}
+.finflow-landing .ff-download-terminal h3 {
+  font-size: 17px;
+}
+.finflow-landing .ff-install-command {
+  margin-top: 14px;
+  border: 1px solid var(--ff-border);
+  border-radius: 12px;
+  background: var(--ff-surface);
+}
+.finflow-landing .ff-install-command-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 4px 0 14px;
+  border-bottom: 1px solid var(--ff-border);
+  font-size: 12px;
+  color: var(--ff-muted);
+}
+.finflow-landing .ff-install-command-head button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 44px;
+  min-height: 44px;
+  padding-inline: 10px;
+  border-radius: 8px;
+  color: var(--ff-accent);
+  font-size: 12px;
+  font-weight: 550;
+}
+.finflow-landing .ff-install-command-head button:hover {
+  background: var(--ff-tint);
+}
+.finflow-landing .ff-install-command code {
+  display: block;
+  padding: 12px 14px;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+.finflow-landing .ff-download-terminal .ff-text-link {
+  justify-content: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+@media (min-width: 480px) {
+  .finflow-landing .ff-download-others ul {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 18px;
+  }
+  .finflow-landing .ff-download-others a {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    min-height: 60px;
+  }
+  .finflow-landing .ff-sheet {
+    padding: 18px;
+  }
+  .finflow-landing .ff-sheet table {
+    font-size: 12px;
+  }
+  .finflow-landing .ff-sheet :where(th, td) {
+    padding-inline: 8px;
+  }
+}
+@media (min-width: 640px) {
+  .finflow-landing .ff-feature-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 28px 32px;
+  }
+  .finflow-landing .ff-download-card {
+    padding: 36px;
+  }
+  .finflow-landing .ff-download-primary {
+    width: auto;
+  }
+  .finflow-landing .ff-download-terminal {
+    padding: 26px;
+  }
+}
+@media (min-width: 900px) {
+  .finflow-landing .ff-projection-feature {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    align-items: center;
+    gap: 40px;
+  }
+  .finflow-landing .ff-projection {
+    margin-top: 0;
+    padding: 22px;
+  }
+  .finflow-landing .ff-sheets {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 56px;
+  }
+  .finflow-landing .ff-download-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 24px;
+  }
+}
+@media (min-width: 1025px) {
+  .finflow-landing .ff-feature-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 36px 40px;
+    margin-top: 56px;
+  }
+  .finflow-landing .ff-sheets {
+    gap: 88px;
   }
 }

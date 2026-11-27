@@ -136,23 +136,29 @@ test("/inicio is public, isolated from APIs, and links into the existing auth ga
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
     "Seu dinheiro em ordem. Mais espaço para viver.",
   );
-  await expect(page.getByText(/disponível em breve/i).first()).toBeVisible();
+  await expect(page.getByText("FinFlow · grátis e de código aberto")).toBeVisible();
+  await expect(
+    page.getByText(/disponível em breve|em preparação|ainda não foi lançado/i),
+  ).toHaveCount(0);
+  await expect(page.getByText(/Breno|Visor/i)).toHaveCount(0);
   await expect(page.locator(".ff-hero-copy > p")).toHaveText(
-    "Contas, cartões e metas em um só lugar. Entenda seu mês, cuide do que importa e planeje o que vem depois.",
+    "Contas, cartões, metas e planilhas em um só lugar, no seu computador. Entenda seu mês e planeje o que vem depois.",
   );
   const heroActions = page.locator(".ff-hero-actions");
-  await expect(heroActions.getByRole("link", { name: "Conheça o FinFlow" })).toHaveAttribute(
+  // The product is free and local-first: the primary CTA leads to the download section.
+  await expect(heroActions.getByRole("link", { name: "Baixar grátis" })).toHaveAttribute(
     "href",
-    "#recursos",
+    "#baixar",
   );
   await expect(heroActions.getByRole("link")).toHaveCount(2);
   await expect(heroActions.locator('a[href="#como-funciona"]')).toBeVisible();
+  // There is no sign-up flow, so nothing may promise a demo account or registration.
   await expect(
-    page.getByRole("link", { name: /demo|demonstração|grátis|criar conta|cadastro|cadastre-se/i }),
+    page.getByRole("link", { name: /demo|demonstração|criar conta|cadastro|cadastre-se/i }),
   ).toHaveCount(0);
   await expect(
     page.getByRole("button", {
-      name: /demo|demonstração|grátis|criar conta|cadastro|cadastre-se/i,
+      name: /demo|demonstração|criar conta|cadastro|cadastre-se/i,
     }),
   ).toHaveCount(0);
   await expect(
@@ -176,6 +182,127 @@ test("/inicio is public, isolated from APIs, and links into the existing auth ga
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page.getByTestId("login-page")).toBeVisible();
   await expect(page.getByText("senha incorreta")).toBeVisible();
+});
+
+async function emulateDesktop(page: Page, userAgent: string) {
+  await page.addInitScript((ua) => {
+    Object.defineProperty(navigator, "userAgent", { configurable: true, get: () => ua });
+    Object.defineProperty(navigator, "userAgentData", { configurable: true, get: () => undefined });
+  }, userAgent);
+}
+
+const latestDownload = "https://github.com/danielharrisonlf/finflow/releases/latest/download/";
+
+test("download section offers the right release asset, other systems, and install commands", async ({
+  page,
+}) => {
+  await emulateDesktop(
+    page,
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36",
+  );
+  await page.goto("/inicio");
+  const download = page.locator("#baixar");
+  await expect(download.getByRole("heading", { name: "Rode no seu computador." })).toBeVisible();
+  const primary = download.locator(".ff-download-primary");
+  await expect(primary).toHaveText("Baixar para Windows");
+  await expect(primary).toHaveAttribute("href", `${latestDownload}finflow-windows-amd64.zip`);
+  const others = download.locator(".ff-download-others a");
+  await expect(others).toHaveCount(5);
+  const hrefs = await others.evaluateAll((links) => links.map((a) => a.getAttribute("href")));
+  expect(hrefs.sort()).toEqual(
+    [
+      "finflow-darwin-amd64.tar.gz",
+      "finflow-darwin-arm64.tar.gz",
+      "finflow-linux-amd64.tar.gz",
+      "finflow-linux-arm64.tar.gz",
+      "finflow-windows-arm64.zip",
+    ].map((name) => `${latestDownload}${name}`),
+  );
+  await expect(download.locator(".ff-download-steps li")).toHaveCount(3);
+  await expect(download.locator(".ff-download-steps")).toContainText("localhost:3333");
+  await expect(download.getByText(/arquivo SQLite no seu computador/)).toBeVisible();
+  await expect(download.getByText(/Nada vai para a nuvem/)).toBeVisible();
+  await expect(download.locator(".ff-install-command code")).toHaveText([
+    "curl -fsSL https://raw.githubusercontent.com/danielharrisonlf/finflow/main/scripts/install.sh | sh",
+    "irm https://raw.githubusercontent.com/danielharrisonlf/finflow/main/scripts/install.ps1 | iex",
+  ]);
+  const copy = download.getByRole("button", { name: "Copiar comando para macOS e Linux" });
+  await copy.click();
+  await expect(copy).toContainText(/Copiado|Selecionado/);
+  await expect(download.getByRole("link", { name: "Compilar do código-fonte" })).toHaveAttribute(
+    "href",
+    "https://github.com/danielharrisonlf/finflow",
+  );
+
+  // Every "Baixar grátis" CTA on the page leads to the same section.
+  for (const cta of await page.getByRole("link", { name: "Baixar grátis" }).all()) {
+    await expect(cta).toHaveAttribute("href", "#baixar");
+  }
+
+  for (const [ua, label, asset] of [
+    [
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+      "Baixar para macOS (Apple Silicon)",
+      "finflow-darwin-arm64.tar.gz",
+    ],
+    [
+      "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36",
+      "Baixar para Linux",
+      "finflow-linux-amd64.tar.gz",
+    ],
+  ] as const) {
+    const other = await page.context().newPage();
+    await emulateDesktop(other, ua);
+    await other.goto("/inicio");
+    const button = other.locator("#baixar .ff-download-primary");
+    await expect(button).toHaveText(label);
+    await expect(button).toHaveAttribute("href", `${latestDownload}${asset}`);
+    await other.close();
+  }
+});
+
+test("spreadsheet and projection previews expose readable data", async ({ page }) => {
+  await page.goto("/inicio");
+  const sheets = page.locator("#planilhas");
+  await expect(sheets.getByRole("heading", { level: 2 })).toContainText("Sua planilha entra.");
+  await expect(sheets).toContainText("Entrada · Saída · Diário · Saldo");
+  await expect(sheets).toContainText("OFX");
+  await expect(sheets).toContainText(".xlsx");
+  await expect(sheets).toContainText("Economia");
+  const table = sheets.getByRole("table");
+  await expect(table.getByRole("columnheader")).toHaveText([
+    "Data",
+    "Entrada",
+    "Saída",
+    "Diário",
+    "Saldo",
+  ]);
+  await expect(table.locator("tbody tr")).toHaveCount(7);
+
+  const projection = page.locator("#projecao");
+  await expect(projection.getByRole("img")).toHaveAttribute(
+    "aria-label",
+    /Saldo projetado dia a dia nos próximos 30 dias/,
+  );
+  await expect(projection.locator(".ff-projection-chart rect")).toHaveCount(30);
+  await expect(
+    projection.getByText("Menor saldo nos próximos 30 dias", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    projection.getByRole("list", { name: "Faixas de cor do saldo" }).locator("li"),
+  ).toHaveCount(5);
+  for (const title of [
+    "Compromissos",
+    "Ritmo do mês",
+    "Onde dá para cortar",
+    "Reserva de emergência",
+    "Desejos",
+    "Automações",
+  ]) {
+    await expect(
+      page.locator(".ff-feature-list").getByRole("heading", { name: title }),
+    ).toBeVisible();
+  }
 });
 
 test("theme follows OS, persists explicit choice, resets to system, and syncs across tabs", async ({
@@ -677,7 +804,7 @@ test("mobile menu supports keyboard use and landing controls meet touch target s
   const landingControlTargets = await page.evaluate(() => {
     const elements = Array.from(
       document.querySelectorAll<HTMLElement>(
-        ".ff-hero-actions a, .ff-theme-control button, #demonstracao button, #demonstracao select, #demonstracao summary",
+        ".ff-hero-actions a, .ff-theme-control button, #demonstracao button, #demonstracao select, #demonstracao summary, #baixar a, #baixar button",
       ),
     ).filter((element) => element.getClientRects().length > 0);
     return elements.map((element) => {
