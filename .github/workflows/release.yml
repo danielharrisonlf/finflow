@@ -31,6 +31,20 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - name: Check version policy (.claude/skills/finflow-release)
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          # A tag estável precisa bater com a versão dos package.json e ter notas em docs/releases/.
+          version="${TAG#v}"
+          base="${version%%-*}"
+          for f in package.json apps/web/package.json packages/contracts/package.json; do
+            v=$(node -p "require('./$f').version")
+            if [[ "$v" != "$base" ]]; then echo "::error::$f tem version $v, a tag pede $base"; exit 1; fi
+          done
+          if [[ "$TAG" != *-* && ! -f "docs/releases/$version.md" ]]; then
+            echo "::error::faltam as notas docs/releases/$version.md"; exit 1
+          fi
       - run: pnpm install --frozen-lockfile
       - name: Build release archives
         run: node scripts/release.mjs "$GITHUB_REF_NAME"
@@ -39,11 +53,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
-          flags=()
-          if [[ "$TAG" == *-* ]]; then flags+=(--prerelease); fi
+          # Versão publicada é imutável: nunca reenvia assets de uma release existente.
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/release/* --clobber
-          else
-            gh release create "$TAG" dist/release/* --verify-tag --generate-notes \
-              --title "FinFlow $TAG" "${flags[@]}"
+            echo "::error::a release $TAG já existe; lance a próxima versão em vez de trocar os arquivos"; exit 1
           fi
+          version="${TAG#v}"
+          flags=(--verify-tag --title "FinFlow $TAG")
+          if [[ -f "docs/releases/$version.md" ]]; then flags+=(--notes-file "docs/releases/$version.md"); else flags+=(--generate-notes); fi
+          if [[ "$TAG" == *-* ]]; then flags+=(--prerelease); else flags+=(--latest); fi
+          gh release create "$TAG" dist/release/* "${flags[@]}"
