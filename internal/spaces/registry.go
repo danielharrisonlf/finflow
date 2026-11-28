@@ -26,9 +26,13 @@ const (
 // Options configura o registro de espaços.
 type Options struct {
 	// DataDir é a pasta do banco pessoal, onde ficam spaces.json e spaces/<slug>.db; vazio = só o
-	// espaço pessoal (Unsupported explica o motivo).
+	// espaço pessoal (Unsupported explica o motivo), a menos que Catalog e Files sejam informados.
 	DataDir     string
 	Unsupported string
+	// Catalog e Files substituem o catálogo em arquivo e os bancos em <DataDir>/spaces (runtime do
+	// navegador). nil = derivados de DataDir.
+	Catalog Catalog
+	Files   SpaceFiles
 	// PersonalFile é o caminho do banco pessoal (só informativo no catálogo).
 	PersonalFile string
 	// HTTPClient é repassado aos serviços de cada espaço (nil = padrão).
@@ -68,6 +72,8 @@ type Registry struct {
 	mu        sync.Mutex
 	base      *service.Services
 	opts      Options
+	catalog   Catalog
+	files     SpaceFiles
 	open      map[string]*openSpace
 	closed    bool
 	startedAt string
@@ -75,12 +81,23 @@ type Registry struct {
 
 // New cria o registro com o espaço pessoal já aberto (base). O registro não fecha o banco pessoal.
 func New(base *service.Services, opts Options) *Registry {
-	return &Registry{
+	r := &Registry{
 		base:      base,
 		opts:      opts,
+		catalog:   opts.Catalog,
+		files:     opts.Files,
 		open:      map[string]*openSpace{},
 		startedAt: time.Now().UTC().Format(time.RFC3339),
 	}
+	if opts.DataDir != "" {
+		if r.catalog == nil {
+			r.catalog = FileCatalog{Path: filepath.Join(opts.DataDir, CatalogFile)}
+		}
+		if r.files == nil {
+			r.files = DirFiles{Dir: filepath.Join(opts.DataDir, "spaces")}
+		}
+	}
+	return r
 }
 
 // Single é o registro só com o espaço pessoal (testes e modos sem pasta de dados).
@@ -89,19 +106,10 @@ func Single(base *service.Services) *Registry {
 }
 
 // Supported indica se o registro pode criar espaços adicionais.
-func (r *Registry) Supported() bool { return r.opts.DataDir != "" }
+func (r *Registry) Supported() bool { return r.catalog != nil && r.files != nil }
 
 // Base devolve os serviços do espaço pessoal.
 func (r *Registry) Base() *service.Services { return r.base }
-
-func (r *Registry) catalogPath() string { return filepath.Join(r.opts.DataDir, CatalogFile) }
-
-func (r *Registry) spacesDir() string { return filepath.Join(r.opts.DataDir, "spaces") }
-
-// spacePath é sempre derivado do slug (já validado), nunca do campo "file" do catálogo.
-func (r *Registry) spacePath(slug string) string {
-	return filepath.Join(r.spacesDir(), slug+".db")
-}
 
 func (r *Registry) unsupported() error {
 	return &service.AppError{Status: http.StatusNotImplemented, Message: r.opts.Unsupported}
@@ -113,12 +121,18 @@ func (r *Registry) load() (catalog, error) {
 	if !r.Supported() {
 		return catalog{}, nil
 	}
-	return readCatalog(r.catalogPath())
+	entries, err := r.catalog.Load()
+	if err != nil {
+		return catalog{}, err
+	}
+	return cleanCatalog(entries), nil
 }
 
+func (r *Registry) save(c catalog) error { return r.catalog.Save(c.Spaces) }
+
 // personalEntry devolve o espaço pessoal: o do catálogo (nome e cor editáveis) ou o padrão.
-func (r *Registry) personalEntry(c catalog) catalogEntry {
-	e := catalogEntry{
+func (r *Registry) personalEntry(c catalog) CatalogEntry {
+	e := CatalogEntry{
 		Slug:  domain.DefaultSpaceSlug,
 		Name:  "Pessoal",
 		Kind:  domain.SpacePersonal,
@@ -144,7 +158,7 @@ func (r *Registry) personalEntry(c catalog) catalogEntry {
 	return e
 }
 
-func toSpace(e catalogEntry) domain.Space {
+func toSpace(e CatalogEntry) domain.Space {
 	return domain.Space{
 		Slug:      e.Slug,
 		Name:      e.Name,
@@ -235,7 +249,7 @@ func (r *Registry) Services(ctx context.Context, slug string) (*service.Services
 }
 
 func (r *Registry) openSpace(ctx context.Context, slug string, kind domain.SpaceKind) (*openSpace, error) {
-	database, err := db.Open(ctx, "", r.spacePath(slug))
+	database, err := r.files.Open(ctx, slug)
 	if err != nil {
 		return nil, fmt.Errorf("abrir espaço %q: %w", slug, err)
 	}
@@ -253,8 +267,7 @@ func (r *Registry) slugTaken(c catalog, slug string) bool {
 	if slug == domain.DefaultSpaceSlug || c.find(slug) >= 0 {
 		return true
 	}
-	_, err := os.Stat(r.spacePath(slug))
-	return err == nil
+	return r.files.Exists(slug)
 }
 
 // Create cria o espaço: banco novo com as categorias padrão do tipo e entrada no catálogo.
@@ -292,7 +305,7 @@ func (r *Registry) Create(ctx context.Context, in domain.CreateSpaceInput) (doma
 	if in.Color != nil {
 		color = *in.Color
 	}
-	entry := catalogEntry{
+	entry := CatalogEntry{
 		Slug:      slug,
 		Name:      strings.TrimSpace(in.Name),
 		Kind:      in.Kind,
@@ -305,12 +318,12 @@ func (r *Registry) Create(ctx context.Context, in domain.CreateSpaceInput) (doma
 		return domain.Space{}, err
 	}
 	if c.find(domain.DefaultSpaceSlug) < 0 {
-		c.Spaces = append([]catalogEntry{r.personalEntry(c)}, c.Spaces...)
+		c.Spaces = append([]CatalogEntry{r.personalEntry(c)}, c.Spaces...)
 	}
 	c.Spaces = append(c.Spaces, entry)
-	if err := writeCatalog(r.catalogPath(), c); err != nil {
+	if err := r.save(c); err != nil {
 		_ = sp.db.Close()
-		removeDBFiles(r.spacePath(slug))
+		r.files.Remove(slug)
 		return domain.Space{}, err
 	}
 	r.open[slug] = sp
@@ -336,7 +349,7 @@ func (r *Registry) Update(slug string, in domain.UpdateSpaceInput) (domain.Space
 	}
 	i := c.find(slug)
 	if i < 0 { // pessoal ainda fora do catálogo
-		c.Spaces = append([]catalogEntry{r.personalEntry(c)}, c.Spaces...)
+		c.Spaces = append([]CatalogEntry{r.personalEntry(c)}, c.Spaces...)
 		i = 0
 	}
 	if in.Name.Set {
@@ -345,7 +358,7 @@ func (r *Registry) Update(slug string, in domain.UpdateSpaceInput) (domain.Space
 	if in.Color.Set {
 		c.Spaces[i].Color = in.Color.Value
 	}
-	if err := writeCatalog(r.catalogPath(), c); err != nil {
+	if err := r.save(c); err != nil {
 		return domain.Space{}, err
 	}
 	if slug == domain.DefaultSpaceSlug {
@@ -379,46 +392,12 @@ func (r *Registry) Delete(slug, confirm string) error {
 		}
 		delete(r.open, slug)
 	}
-	if err := r.moveToTrash(slug); err != nil {
+	if err := r.files.Trash(slug); err != nil {
 		return err
 	}
 	i := c.find(slug)
 	c.Spaces = append(c.Spaces[:i], c.Spaces[i+1:]...)
-	return writeCatalog(r.catalogPath(), c)
-}
-
-func (r *Registry) moveToTrash(slug string) error {
-	src := r.spacePath(slug)
-	if _, err := os.Stat(src); errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	trash := filepath.Join(r.spacesDir(), "trash")
-	if err := os.MkdirAll(trash, 0o755); err != nil {
-		return fmt.Errorf("criar lixeira de espaços: %w", err)
-	}
-	dst := filepath.Join(trash, fmt.Sprintf("%s-%s.db", slug, time.Now().UTC().Format("20060102-150405")))
-	for n := 2; ; n++ {
-		if _, err := os.Stat(dst); errors.Is(err, os.ErrNotExist) {
-			break
-		}
-		dst = filepath.Join(trash, fmt.Sprintf("%s-%s-%d.db", slug, time.Now().UTC().Format("20060102-150405"), n))
-	}
-	if err := os.Rename(src, dst); err != nil {
-		return fmt.Errorf("mover espaço %q para a lixeira: %w", slug, err)
-	}
-	for _, suffix := range []string{"-wal", "-shm"} {
-		if _, err := os.Stat(src + suffix); err == nil {
-			_ = os.Rename(src+suffix, dst+suffix)
-		}
-	}
-	return nil
-}
-
-// removeDBFiles apaga um banco que o próprio registro acabou de criar (falha ao gravar o catálogo).
-func removeDBFiles(path string) {
-	for _, p := range []string{path, path + "-wal", path + "-shm"} {
-		_ = os.Remove(p)
-	}
+	return r.save(c)
 }
 
 // Overview é a visão unificada: os totais de cada espaço e a soma de todos.

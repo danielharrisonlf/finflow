@@ -4,6 +4,10 @@ node_modules/
 # builds & binaries
 dist/
 build/
+# build do app no navegador (pnpm build:browser → pacote público em /app/)
+apps/web/dist-browser/
+# runtime do navegador gerado por `pnpm build:wasm` (finflow.wasm, wasm_exec.js, runtime.json)
+apps/web/public/runtime/
 .turbo/
 *.tsbuildinfo
 # binário na raiz (ancorado para não ignorar cmd/finflow/)

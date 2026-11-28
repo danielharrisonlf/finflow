@@ -88,6 +88,8 @@ type SystemInfo struct {
 	LANURLs      []string `json:"lanUrls"`
 	AIConfigured bool     `json:"aiConfigured"`
 	MCPHTTPPath  string   `json:"mcpHttpPath"`
+	// Runtime: "server" (binário) ou "browser" (WebAssembly no navegador).
+	Runtime string `json:"runtime"`
 }
 
 func (s *Server) handleSystemInfo(w http.ResponseWriter, r *http.Request) {
@@ -97,24 +99,51 @@ func (s *Server) handleSystemInfo(w http.ResponseWriter, r *http.Request) {
 		LANEnabled:   s.opts.LAN,
 		LANURLs:      []string{},
 		MCPHTTPPath:  MCPHTTPPath,
+		Runtime:      s.runtime(),
 	}
 	if info.Version == "" {
 		info.Version = "dev"
 	}
+	browser := info.Runtime == RuntimeBrowser
+	if browser {
+		info.LANEnabled = false
+	}
 	if d := s.svcs.Store.DB; d != nil {
 		info.DBDialect = string(d.Dialect)
-		if d.Dialect == db.DialectSQLite && d.Target != "" {
+		if d.Dialect == db.DialectSQLite && d.Target != "" && !browser {
 			target := d.Target
 			info.DataPath = &target
 		}
 	}
-	if s.opts.LAN {
+	if info.LANEnabled {
 		info.LANURLs = LANURLs(s.opts.Port)
 	}
 	if st, err := newAIService(s.svcs).Status(r.Context()); err == nil {
 		info.AIConfigured = st.Configured
 	}
 	writeJSON(w, http.StatusOK, info)
+}
+
+func (s *Server) runtime() string {
+	if s.opts.Runtime == "" {
+		return RuntimeServer
+	}
+	return s.opts.Runtime
+}
+
+// handleSystemSeed cria os dados de exemplo do tipo do espaço da requisição (pessoal, Casa ou
+// Empresa); só num espaço vazio (409 caso contrário).
+func (s *Server) handleSystemSeed(w http.ResponseWriter, r *http.Request) {
+	sp, err := s.spaces.Get(requestSpace(r))
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if err := s.svc(r).SeedDemo(r.Context(), sp.Kind); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"seeded": true, "space": sp.Slug, "kind": sp.Kind})
 }
 
 // LANURLs lista http://<ip>:<porta> para os IPv4 privados das interfaces ativas (modo rede local).

@@ -209,6 +209,9 @@ func (s *Services) PreviewLink(ctx context.Context, in domain.LinkPreviewInput) 
 	if issues := domain.ValidateLinkPreview(in); len(issues) > 0 {
 		return domain.LinkPreview{}, ValidationFailed(issues)
 	}
+	if linkPreviewDisabled {
+		return domain.LinkPreview{}, nil
+	}
 	previewer := s.LinkPreview
 	if previewer == nil {
 		previewer = NewLinkPreviewer()

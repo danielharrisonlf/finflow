@@ -35,6 +35,7 @@ func (s *Server) registerWealthRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/mcp", s.handleMCPMethodNotAllowed)
 
 	mux.HandleFunc("GET /api/system/info", s.requireAuthGlobal(s.handleSystemInfo))
+	mux.HandleFunc("POST /api/system/seed", s.requireAuth(s.handleSystemSeed))
 }
 
 // ───────────────────────── Investimentos ─────────────────────────
