@@ -1,0 +1,24 @@
+# Contexto do `docker build`: só o que o Dockerfile copia (fontes Go, web e contratos).
+.git
+.github
+.claude
+.turbo
+**/node_modules
+**/dist
+**/dist-browser
+**/.turbo
+**/*.tsbuildinfo
+**/test-results
+**/playwright-report
+**/coverage
+apps/web/public/runtime
+internal/webui/dist
+finflow
+finflow.exe
+*.db
+*.db-wal
+*.db-shm
+.env
+.env.*
+*.log
+docs

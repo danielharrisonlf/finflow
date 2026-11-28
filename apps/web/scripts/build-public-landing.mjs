@@ -56,7 +56,7 @@ html = html
   )
   .replace(
     "<title>FinFlow</title>",
-    "<title>FinFlow — Seu dinheiro em ordem, grátis, no navegador ou no computador</title>",
+    "<title>FinFlow — finanças pessoais de código aberto, no seu computador</title>",
   )
   .replace(
     "</head>",

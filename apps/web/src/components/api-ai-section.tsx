@@ -1,6 +1,7 @@
 import { Bot, Check, Copy, Plug, Smartphone } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { describeActiveAi } from "../lib/ai";
 import { useAiStatus, useSystemInfo } from "../lib/queries";
 import { isBrowserRuntime } from "../runtime/client";
 import { Card } from "./ui/card";
@@ -108,7 +109,7 @@ export function ApiAiSection() {
         </h2>
         <p className="mt-1 text-sm text-app-muted">
           {isBrowserRuntime
-            ? "Versão do FinFlow e o assistente. As perguntas ao assistente vão direto deste navegador para a API do Claude."
+            ? "Versão do FinFlow e o assistente. As perguntas vão direto deste navegador para o modelo escolhido (local ou API do Claude)."
             : "Use seus dados em assistentes compatíveis com MCP, acesse a API pessoal e abra o FinFlow no celular pela rede local."}
         </p>
       </div>
@@ -213,15 +214,20 @@ export function ApiAiSection() {
           ) : (
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone={ai.data.configured ? "income" : "warn"}>
-                {ai.data.configured ? "Chave configurada" : "Chave não configurada"}
+                {ai.data.configured ? "IA configurada" : "IA não configurada"}
               </Badge>
               <span className="text-sm text-app-muted">
                 {ai.data.configured
-                  ? ai.data.source === "ENV"
-                    ? "via variável de ambiente"
-                    : "salva nas configurações"
-                  : "o assistente precisa de uma chave de API"}
-                {ai.data.model ? ` · modelo ${ai.data.model}` : ""}
+                  ? `${describeActiveAi(ai.data) ?? "Assistente"}${
+                      ai.data.source === "ENV"
+                        ? " · via variável de ambiente"
+                        : ai.data.source === "SETTINGS"
+                          ? " · salvo nas configurações"
+                          : ""
+                    }`
+                  : ai.data.reachable
+                    ? "Ollama encontrado neste computador — escolha-o em Assistente, acima"
+                    : "escolha um modelo local ou a API do Claude em Assistente, acima"}
               </span>
             </div>
           )}

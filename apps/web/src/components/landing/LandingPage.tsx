@@ -60,12 +60,32 @@ const year = new Date().getFullYear();
 /** O FinFlow no navegador (docs/browser-runtime-contract.md §5): publicado em /app/ no site. */
 const defaultAppHref = "/app/";
 
-// Primary path: use FinFlow right in the browser, on phone or computer, with nothing to install.
-function AppButton({ href }: { href: string }) {
+// Primary path: download FinFlow and run it on your own computer (docs/local-agent-contract.md §4).
+function DownloadButton() {
   return (
-    <a className="ff-button" href={href}>
-      Usar no navegador
-      <Globe size={17} aria-hidden="true" />
+    <a className="ff-button" href="#baixar">
+      Baixar grátis
+      <Download size={17} aria-hidden="true" />
+    </a>
+  );
+}
+
+// Secondary path: the open-source code, to read, build or run with `pnpm start` or Docker.
+function RepoLink() {
+  return (
+    <a className="ff-secondary-link" href={repoUrl} rel="noopener">
+      Código no GitHub
+      <Github size={17} aria-hidden="true" />
+    </a>
+  );
+}
+
+// Third path: try it in the browser first, with nothing to install.
+function TryInBrowserLink({ href }: { href: string }) {
+  return (
+    <a className="ff-text-link ff-try-link" href={href}>
+      Experimentar no navegador
+      <Globe size={16} aria-hidden="true" />
     </a>
   );
 }
@@ -91,7 +111,7 @@ function AccountAccess({
   }
   return (
     <a className="ff-account-link" href={appHref} onClick={onNavigate}>
-      Usar no navegador
+      Experimentar no navegador
       <ArrowUpRight size={15} aria-hidden="true" />
     </a>
   );
@@ -228,30 +248,28 @@ function Hero({ appHref }: { appHref: string }) {
       <div className="ff-hero-copy">
         <span className="ff-eyebrow ff-launch-status">
           <span />
-          FinFlow · grátis e de código aberto
+          Código aberto (MIT) · roda no seu computador
         </span>
         <h1>
           Seu dinheiro em ordem. <span className="ff-hero-emphasis">Mais espaço para viver.</span>
         </h1>
         <p>
-          Contas, cartões, metas e planilhas em um só lugar, no navegador ou no computador. Entenda
-          seu mês e planeje o que vem depois.
+          Contas, cartões, metas e planilhas num programa que roda no seu computador. Sem conta e
+          sem nuvem: seus dados ficam num arquivo SQLite seu.
         </p>
         <div className="ff-hero-actions">
-          <AppButton href={appHref} />
-          <a className="ff-secondary-link" href="#baixar">
-            Baixar para o computador
-            <Download size={17} aria-hidden="true" />
-          </a>
+          <DownloadButton />
+          <RepoLink />
+          <TryInBrowserLink href={appHref} />
         </div>
         <ul className="ff-hero-proof">
           <li>
             <Check size={15} />
-            Celular e computador, instala como app
+            Assistente local (Ollama) ou Claude
           </li>
           <li>
             <Check size={15} />
-            Seus dados ficam no seu navegador
+            Windows, macOS, Linux ou Docker
           </li>
         </ul>
       </div>
@@ -1007,11 +1025,12 @@ function Privacy() {
           Seus dados. Suas escolhas.
         </h2>
         <p>
-          O FinFlow roda no seu navegador ou no seu computador. Sem conta, sem cadastro e sem nuvem.
-          Se você ativar o assistente, só as perguntas que fizer a ele vão para a API do Claude.
+          O FinFlow roda no seu computador. Sem conta, sem cadastro e sem nuvem. O assistente pode
+          rodar aqui também, com o Ollama; se você escolher o Claude, só as perguntas que fizer a
+          ele vão para a API da Anthropic.
         </p>
         <a className="ff-text-link" href="#baixar">
-          Baixar para o computador
+          Baixar grátis
           <Download size={16} aria-hidden="true" />
         </a>
       </div>
@@ -1029,8 +1048,8 @@ function Privacy() {
           },
           {
             icon: Github,
-            title: "Código aberto e gratuito",
-            text: "Qualquer pessoa pode ler o código, compilar a própria versão e conferir o que o programa faz.",
+            title: "Código aberto (MIT) e gratuito",
+            text: "Qualquer pessoa pode ler o código, rodar a partir dele com pnpm start ou Docker e conferir o que o programa faz.",
           },
         ].map(({ icon: Icon, title, text }) => (
           <article key={title}>
@@ -1051,11 +1070,11 @@ function Privacy() {
 const questions = [
   {
     q: "O FinFlow é gratuito?",
-    a: "Sim. O FinFlow é gratuito e de código aberto. Não há cadastro, mensalidade ou pedido de cartão: você usa direto no navegador ou baixa o programa para o computador.",
+    a: "Sim. O FinFlow é gratuito e de código aberto, sob a licença MIT. Não há cadastro, mensalidade ou pedido de cartão: você baixa o programa, roda a partir do código ou experimenta direto no navegador.",
   },
   {
     q: "Preciso pagar pela IA?",
-    a: "O FinFlow é grátis. O assistente usa a sua própria chave da API do Claude, cobrada pela Anthropic conforme o uso. Todo o resto funciona sem chave nenhuma, inclusive o simulador “Posso comprar?” e as calculadoras.",
+    a: "Não. O assistente pode rodar no seu computador com um modelo local, pelo Ollama ou pelo LM Studio, sem chave e sem custo. Se preferir, use a sua própria chave da API do Claude, cobrada pela Anthropic conforme o uso. Todo o resto funciona sem assistente nenhum, inclusive o simulador “Posso comprar?” e as calculadoras.",
   },
   {
     q: "Onde ficam meus dados na versão do navegador?",
@@ -1071,11 +1090,11 @@ const questions = [
   },
   {
     q: "Meus dados vão para a nuvem?",
-    a: "Não. Lançamentos, contas e planilhas ficam no seu computador. A única exceção são as perguntas que você fizer ao assistente, se ativá-lo: elas são enviadas à API do Claude para gerar a resposta.",
+    a: "Não. Lançamentos, contas e planilhas ficam num arquivo no seu computador. Com o assistente local, nem as perguntas saem dele. Só se você escolher o Claude, as perguntas que fizer ao assistente são enviadas à API do Claude para gerar a resposta.",
   },
   {
     q: "Preciso instalar alguma coisa?",
-    a: "Não. Use direto no navegador, no celular ou no computador, e instale como app se quiser. Se preferir o programa, ele é um único arquivo para Windows, macOS ou Linux que abre em localhost:3333, sem Docker nem banco de dados à parte.",
+    a: "Só o programa: um único arquivo para Windows, macOS ou Linux que abre em localhost:3333, sem banco de dados à parte. Quem prefere pode rodar a partir do código-fonte com pnpm start ou com Docker. E dá para experimentar antes direto no navegador, sem instalar nada.",
   },
   {
     q: "Funciona no celular?",
@@ -1135,13 +1154,13 @@ function Footer({ appHref }: { appHref: string }) {
             <span>Um passo de cada vez.</span>
           </h2>
           <p>
-            Abra no navegador, no celular ou no computador, e comece hoje. Grátis e sem cadastro.
+            Baixe, rode no seu computador e comece hoje. Grátis, de código aberto e sem cadastro.
           </p>
-          <AppButton href={appHref} />
-          <a className="ff-text-link" href="#baixar">
-            Baixar para o computador
-            <Download size={17} aria-hidden="true" />
-          </a>
+          <div className="ff-final-actions">
+            <DownloadButton />
+            <RepoLink />
+          </div>
+          <TryInBrowserLink href={appHref} />
         </div>
       </section>
       <footer className="ff-footer ff-container">
@@ -1157,7 +1176,7 @@ function Footer({ appHref }: { appHref: string }) {
           <a href="#mobile">No celular</a>
           <a href="#como-funciona">Como funciona</a>
           <a href="#seguranca">Privacidade</a>
-          <a href={appHref}>Usar no navegador</a>
+          <a href={appHref}>Experimentar no navegador</a>
           <a href="#baixar">Baixar</a>
           <a href="#duvidas">Dúvidas</a>
           <a href={repoUrl} rel="noopener">

@@ -60,3 +60,28 @@ test("copiar o snippet MCP mostra confirmação", async ({ page, context, browse
     "Copiado",
   );
 });
+
+test("Assistente detectado automaticamente aparece nas configurações", async ({ page }) => {
+  await mockApi(page);
+  await page.route("**/api/ai/status", (route) =>
+    route.fulfill({
+      json: {
+        configured: true,
+        provider: "ollama",
+        model: "qwen2.5:7b",
+        visionModel: null,
+        baseUrl: "http://ollama:11434",
+        source: "AUTO",
+        reachable: true,
+        receiptSupported: false,
+      },
+    }),
+  );
+  await page.goto("/configuracoes");
+  await expect(page.getByTestId("ai-status")).toContainText(
+    "Detectado automaticamente: Ollama · qwen2.5:7b",
+  );
+  const auto = page.getByTestId("ai-auto");
+  await expect(auto).toContainText("http://ollama:11434");
+  await expect(page.getByTestId("ai-settings").getByLabel("Local (Ollama)")).toBeChecked();
+});

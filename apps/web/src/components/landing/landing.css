@@ -390,6 +390,29 @@
   padding-inline: 18px;
   gap: 14px;
 }
+/* Terceira opção, mais discreta que o botão e o link do código. */
+.finflow-landing .ff-try-link {
+  color: var(--ff-text);
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: var(--ff-border);
+  text-underline-offset: 5px;
+}
+.finflow-landing .ff-try-link:hover {
+  text-decoration-color: currentColor;
+}
+.finflow-landing .ff-try-link > svg {
+  color: var(--ff-accent);
+}
+.finflow-landing .ff-hero-actions .ff-try-link {
+  font-size: 13px;
+}
+.finflow-landing .ff-final-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+}
 .finflow-landing .ff-hero-proof {
   display: flex;
   flex-wrap: wrap;
@@ -2571,6 +2594,78 @@
   justify-content: flex-start;
   gap: 8px;
   margin-top: 12px;
+}
+/* Três caminhos para rodar no computador: executável, código-fonte (pnpm start) e Docker. */
+.finflow-landing .ff-download-tablist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.finflow-landing .ff-download-tablist [role="tab"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding-inline: 16px;
+  border: 1px solid var(--ff-border);
+  border-radius: 999px;
+  background: var(--ff-surface);
+  color: var(--ff-text);
+  font-size: 14px;
+  font-weight: 550;
+}
+.finflow-landing .ff-download-tablist [role="tab"]:hover {
+  border-color: var(--ff-accent);
+}
+.finflow-landing .ff-download-tablist [role="tab"][data-state="active"] {
+  border-color: var(--ff-accent);
+  background: var(--ff-accent);
+  color: var(--ff-accent-text);
+}
+.finflow-landing .ff-download-panel:focus-visible {
+  outline: 2px solid var(--ff-accent);
+  outline-offset: 4px;
+  border-radius: 24px;
+}
+.finflow-landing .ff-download-terminal h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.finflow-landing .ff-download-terminal h3 > svg {
+  color: var(--ff-accent);
+}
+.finflow-landing .ff-download-terminal > p {
+  margin-top: 8px;
+  font-size: 13px;
+}
+.finflow-landing .ff-download-terminal code:not(.ff-install-command code) {
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+.finflow-landing .ff-download-requirements {
+  display: grid;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.finflow-landing .ff-download-requirements li {
+  display: grid;
+  gap: 2px;
+  padding-block: 14px;
+  border-bottom: 1px solid var(--ff-border);
+}
+.finflow-landing .ff-download-requirements li:first-child {
+  padding-top: 0;
+}
+.finflow-landing .ff-download-requirements strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+.finflow-landing .ff-download-requirements span {
+  font-size: 13px;
+  color: var(--ff-muted);
 }
 
 @media (min-width: 480px) {

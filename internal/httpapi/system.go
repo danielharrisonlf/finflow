@@ -118,8 +118,9 @@ func (s *Server) handleSystemInfo(w http.ResponseWriter, r *http.Request) {
 	if info.LANEnabled {
 		info.LANURLs = LANURLs(s.opts.Port)
 	}
-	if st, err := newAIService(s.svcs).Status(r.Context()); err == nil {
-		info.AIConfigured = st.Configured
+	// Sem ping ao servidor local: a configuração resolvida e o último resultado da detecção automática.
+	if ok, err := s.ai.Configured(r.Context()); err == nil {
+		info.AIConfigured = ok
 	}
 	writeJSON(w, http.StatusOK, info)
 }

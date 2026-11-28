@@ -27,8 +27,10 @@ var newAIService = func(svcs *service.Services) *ai.Service {
 const chatWriteTimeout = 15 * time.Minute
 
 func (s *Server) registerAIRoutes(mux *http.ServeMux) {
-	// A chave da API fica no espaço pessoal; o chat e os comprovantes consultam o espaço da requisição.
+	// A configuração do provedor (e as chaves) fica no espaço pessoal; o chat e os comprovantes
+	// consultam o espaço da requisição.
 	svc := newAIService(s.svcs)
+	s.ai = svc
 	mux.HandleFunc("GET /api/ai/status", s.requireAuthGlobal(func(w http.ResponseWriter, r *http.Request) {
 		st, err := svc.Status(r.Context())
 		if err != nil {
@@ -37,6 +39,29 @@ func (s *Server) registerAIRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, http.StatusOK, st)
 	}))
+	mux.HandleFunc("PUT /api/ai/config", s.requireAuthGlobal(func(w http.ResponseWriter, r *http.Request) {
+		var body ai.ConfigInput
+		if err := decodeJSON(r, &body); err != nil {
+			writeError(w, r, err)
+			return
+		}
+		st, err := svc.SaveConfig(r.Context(), body)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, st)
+	}))
+	mux.HandleFunc("GET /api/ai/models", s.requireAuthGlobal(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		res, err := svc.Models(r.Context(), q.Get("provider"), q.Get("baseUrl"))
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, res)
+	}))
+	// Legado: equivale a PUT /api/ai/config {provider: "claude", apiKey}.
 	mux.HandleFunc("PUT /api/ai/key", s.requireAuthGlobal(func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			APIKey *string `json:"apiKey"`
@@ -61,7 +86,7 @@ func (s *Server) registerAIRoutes(mux *http.ServeMux) {
 }
 
 // sseWriter escreve eventos Server-Sent Events; os cabeçalhos só saem no primeiro evento, para que erros
-// anteriores (ex.: chave ausente) ainda possam ser respondidos em JSON com o status correto.
+// anteriores (ex.: sem configuração, servidor local fora do ar) ainda possam ser respondidos em JSON com o status correto.
 type sseWriter struct {
 	w       http.ResponseWriter
 	rc      *http.ResponseController

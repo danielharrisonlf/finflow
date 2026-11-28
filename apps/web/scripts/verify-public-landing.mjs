@@ -82,20 +82,26 @@ for (const [engine, browserType] of [
       }
     }
     // The public page has no accounts: the header action opens FinFlow in the browser, never a
-    // login. The hero offers the browser app first and the desktop download second.
+    // login. The hero offers the download first, the source code second and the browser app as a
+    // third, text-only option (docs/local-agent-contract.md §4).
     assert.equal(await page.getByText("Acessar minha conta").count(), 0);
     assert.equal(await page.getByRole("dialog").count(), 0);
     const nav = page.locator(".ff-nav-actions");
     assert.equal(
-      await nav.getByRole("link", { name: "Usar no navegador" }).getAttribute("href"),
+      await nav.getByRole("link", { name: "Experimentar no navegador" }).getAttribute("href"),
       "/app/",
     );
     const hero = page.locator(".ff-hero-actions");
+    assert.equal(await hero.getByRole("link").count(), 3);
     assert.equal(
-      await hero.getByRole("link", { name: "Usar no navegador" }).getAttribute("href"),
+      await hero.getByRole("link", { name: "Experimentar no navegador" }).getAttribute("href"),
       "/app/",
     );
-    await hero.getByRole("link", { name: "Baixar para o computador" }).click();
+    assert.equal(
+      await hero.getByRole("link", { name: "Código no GitHub" }).getAttribute("href"),
+      "https://github.com/danielharrisonlf/finflow",
+    );
+    await hero.getByRole("link", { name: "Baixar grátis" }).click();
     await page.waitForURL(/#baixar$/);
     const primary = page.locator("#baixar .ff-download-primary");
     assert.match(
@@ -103,6 +109,16 @@ for (const [engine, browserType] of [
       /^https:\/\/github\.com\/danielharrisonlf\/finflow\/releases\/latest\/download\/finflow-(windows|darwin|linux)-(amd64|arm64)\.(zip|tar\.gz)$/,
     );
     assert.equal(await page.locator("#baixar .ff-download-others a").count(), 5);
+    const tabs = page.locator("#baixar").getByRole("tab");
+    assert.deepEqual(await tabs.allInnerTexts(), ["Executável", "Código-fonte", "Docker"]);
+    await tabs.nth(1).click();
+    assert.equal(
+      (await page.locator("#baixar .ff-install-command code").first().innerText()).trim(),
+      "git clone https://github.com/danielharrisonlf/finflow && cd finflow && pnpm install && pnpm start",
+    );
+    await tabs.nth(2).click();
+    assert.match(await page.locator("#baixar").innerText(), /docker compose --profile ai up -d/);
+    await tabs.nth(0).click();
     await dashboard.locator(".ff-preview-details > summary").click();
     assert.equal(await dashboard.locator(".balance strong").innerText(), "R$ 24.586,50");
     await dashboard.getByRole("button", { name: "Simular uma despesa", exact: true }).click();
@@ -123,6 +139,7 @@ for (const [engine, browserType] of [
       (await ai.getByRole("heading", { level: 2 }).innerText()).trim(),
       "Pergunte ao FinFlow.",
     );
+    assert.match(await ai.innerText(), /modelo local \(Ollama ou LM Studio\)/);
     assert.match(await ai.innerText(), /sua própria chave da API do Claude/);
     const questions = ai.getByRole("group", { name: "Perguntas de exemplo" }).getByRole("button");
     assert.deepEqual(await questions.allInnerTexts(), [

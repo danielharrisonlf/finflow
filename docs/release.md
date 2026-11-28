@@ -80,7 +80,7 @@ node apps/web/scripts/verify-public-landing.mjs http://localhost:4180/   # em ou
 - `static/` com a landing e `static/app/` com o app;
 - `config.json` com fallback de SPA (`/app/*` → `/app/index.html`, exceto `assets/`, `runtime/`, `icons/` e `fonts/`), `/app` → `/app/` (308), `Content-Type: application/wasm`, cache imutável em `/assets/*` e `/app/assets/*`, `no-cache` no `index.html`, no `sw.js` e nas rotas do app, e revalidação em `/app/runtime/*`.
 
-A verificação confere a landing (temas, larguras, acessibilidade, CTAs **Usar no navegador** e **Baixar para o computador**, FAQ) e o app: `/app/` carrega, o runtime sobe, os dados de exemplo são criados e nenhuma requisição sai do próprio site; também confere o fallback de SPA, o MIME do `.wasm` e o manifest com `start_url`/`scope` `/app/`. O Chromium é obrigatório; no WebKit o app é reportado como `runtime-unsupported` se o motor não tiver o OPFS que o runtime usa.
+A verificação confere a landing (temas, larguras, acessibilidade, CTAs **Baixar grátis**, **Código no GitHub** e **Experimentar no navegador**, as abas Executável/Código-fonte/Docker da seção de download, FAQ) e o app: `/app/` carrega, o runtime sobe, os dados de exemplo são criados e nenhuma requisição sai do próprio site; também confere o fallback de SPA, o MIME do `.wasm` e o manifest com `start_url`/`scope` `/app/`. O Chromium é obrigatório; no WebKit o app é reportado como `runtime-unsupported` se o motor não tiver o OPFS que o runtime usa.
 
 Para publicar, a partir do pacote gerado:
 
@@ -92,6 +92,25 @@ node ../../scripts/verify-public-landing.mjs https://finflow-landing-umber.verce
 ```
 
 Cada build do app gera um `sw.js` com versão nova; quem estiver com o app aberto vê **Nova versão disponível — Recarregar** e os dados (no navegador da pessoa) não são tocados.
+
+## Código-fonte e Docker
+
+Não há artefato extra a publicar para quem roda a partir do código: `pnpm start` ([scripts/start.mjs](../scripts/start.mjs)) compila o web e o binário na máquina da pessoa, e `docker compose up -d` constrói a imagem localmente a partir do [`Dockerfile`](../Dockerfile). Antes de marcar a tag, confira os dois caminhos:
+
+```bash
+# clone limpo, como quem chega pelo README (use uma porta e um banco descartáveis)
+git clone https://github.com/danielharrisonlf/finflow /tmp/ff && cd /tmp/ff
+pnpm install && FINFLOW_NO_BROWSER=1 API_PORT=3411 FINFLOW_DB_PATH=/tmp/ff.db pnpm start -- --seed
+curl -s http://127.0.0.1:3411/api/system/info
+
+# imagem e compose (o job `docker` do CI faz o mesmo build e um smoke test, sem push)
+docker build --build-arg FINFLOW_VERSION=v0.5.0 -t finflow:local .
+FINFLOW_PORT=3412 docker compose -p finflow-check up -d app && docker compose -p finflow-check ps
+docker compose -p finflow-check down -v
+docker compose --profile ai config -q      # valida o profile do Ollama sem baixar o modelo
+```
+
+A imagem não é publicada em registry; quem usa Docker constrói a partir do repositório. As tags das imagens base (`node`, `golang`, `alpine`, `ollama/ollama`) ficam fixas no `Dockerfile` e no `docker-compose.yaml`: atualize-as de propósito, junto com o `go.mod` e o `engines` do `package.json`.
 
 ## Avisos para quem baixa
 

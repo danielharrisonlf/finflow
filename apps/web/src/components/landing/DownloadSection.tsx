@@ -1,6 +1,9 @@
+import * as Tabs from "@radix-ui/react-tabs";
 import {
   ArrowUpRight,
+  Boxes,
   Check,
+  Code2,
   Copy,
   Download,
   FolderOpen,
@@ -8,6 +11,7 @@ import {
   Globe,
   HardDrive,
   Laptop,
+  Sparkles,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -18,6 +22,7 @@ import {
   platformById,
   platforms,
   repoUrl,
+  sourceCommands,
 } from "./download";
 
 function InstallCommand({ label, command }: { label: string; command: string }) {
@@ -99,82 +104,149 @@ export function DownloadSection({ appHref }: { appHref: string }) {
   return (
     <section className="ff-section ff-download ff-container" id="baixar">
       <div className="ff-section-head">
-        <span className="ff-eyebrow">Prefere instalar?</span>
+        <span className="ff-eyebrow">Código aberto · licença MIT</span>
         <h2>Rode no seu computador.</h2>
         <p>
-          O mesmo FinFlow num único programa, sem cadastro, sem mensalidade e sem servidor de
-          terceiros. Se preferir não instalar nada, use no navegador: o backup feito lá abre aqui
-          também.
+          Baixe o programa pronto, rode a partir do código ou suba com Docker. Em todos, o banco é
+          um arquivo SQLite seu, sem cadastro, sem mensalidade e sem servidor de terceiros.
         </p>
         <a className="ff-text-link" href={appHref}>
-          Usar no navegador, sem instalar
+          Experimentar no navegador, sem instalar
           <ArrowUpRight size={16} aria-hidden="true" />
         </a>
       </div>
-      <div className="ff-download-grid">
-        <div className="ff-download-card">
-          <span className="ff-feature-icon">
-            <Laptop size={21} aria-hidden="true" />
-          </span>
-          {detection.mobile && (
-            <p className="ff-download-mobile">
-              No celular, use o FinFlow no navegador, pelo link acima. O programa é para o
-              computador: abra esta página nele para baixar, ou escolha o sistema abaixo.
-            </p>
-          )}
-          <a
-            className="ff-button ff-download-primary"
-            href={primary.href}
-            data-platform={primary.id}
-          >
-            <Download size={18} aria-hidden="true" />
-            Baixar para {primary.label}
-          </a>
-          <small className="ff-download-detail">{primary.detail} · versão mais recente</small>
-          <div className="ff-download-others">
-            <span>Outros sistemas</span>
-            <ul>
-              {others.map((p) => (
-                <li key={p.id}>
-                  <a href={p.href} data-platform={p.id}>
-                    {p.label}
-                    <small>{p.detail}</small>
-                  </a>
-                </li>
-              ))}
+      <Tabs.Root defaultValue="executavel" className="ff-download-tabs">
+        <Tabs.List className="ff-download-tablist" aria-label="Como rodar o FinFlow">
+          <Tabs.Trigger value="executavel">
+            <Download size={16} aria-hidden="true" />
+            Executável
+          </Tabs.Trigger>
+          <Tabs.Trigger value="codigo">
+            <Code2 size={16} aria-hidden="true" />
+            Código-fonte
+          </Tabs.Trigger>
+          <Tabs.Trigger value="docker">
+            <Boxes size={16} aria-hidden="true" />
+            Docker
+          </Tabs.Trigger>
+        </Tabs.List>
+        <Tabs.Content value="executavel" className="ff-download-panel">
+          <div className="ff-download-grid">
+            <div className="ff-download-card">
+              <span className="ff-feature-icon">
+                <Laptop size={21} aria-hidden="true" />
+              </span>
+              {detection.mobile && (
+                <p className="ff-download-mobile">
+                  No celular, use o FinFlow no navegador, pelo link acima. O programa é para o
+                  computador: abra esta página nele para baixar, ou escolha o sistema abaixo.
+                </p>
+              )}
+              <a
+                className="ff-button ff-download-primary"
+                href={primary.href}
+                data-platform={primary.id}
+              >
+                <Download size={18} aria-hidden="true" />
+                Baixar para {primary.label}
+              </a>
+              <small className="ff-download-detail">{primary.detail} · versão mais recente</small>
+              <div className="ff-download-others">
+                <span>Outros sistemas</span>
+                <ul>
+                  {others.map((p) => (
+                    <li key={p.id}>
+                      <a href={p.href} data-platform={p.id}>
+                        {p.label}
+                        <small>{p.detail}</small>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <p className="ff-download-privacy">
+                <HardDrive size={16} aria-hidden="true" />
+                Seus dados ficam num arquivo SQLite no seu computador. Nada vai para a nuvem.
+              </p>
+            </div>
+            <div className="ff-download-side">
+              <ol className="ff-download-steps">
+                {steps.map(({ icon: Icon, title, text }, index) => (
+                  <li key={title}>
+                    <span className="ff-step-index">0{index + 1}</span>
+                    <div>
+                      <h3>
+                        <Icon size={17} aria-hidden="true" />
+                        {title}
+                      </h3>
+                      <p>{text}</p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+              <div className="ff-download-terminal">
+                <h3>Prefere o terminal?</h3>
+                <InstallCommand label="macOS e Linux" command={installCommands.unix} />
+                <InstallCommand label="Windows (PowerShell)" command={installCommands.windows} />
+              </div>
+            </div>
+          </div>
+        </Tabs.Content>
+        <Tabs.Content value="codigo" className="ff-download-panel">
+          <div className="ff-download-grid">
+            <div className="ff-download-terminal">
+              <h3>Clone e rode com um comando</h3>
+              <p>
+                O <code>pnpm start</code> confere os requisitos, compila o que mudou e abre o
+                FinFlow no navegador, com o banco num arquivo seu.
+              </p>
+              <InstallCommand label="Terminal" command={sourceCommands.clone} />
+              <InstallCommand label="Com dados de exemplo" command={sourceCommands.seed} />
+              <a className="ff-text-link" href={repoUrl} rel="noopener">
+                <Github size={16} aria-hidden="true" />
+                Código no GitHub
+              </a>
+            </div>
+            <ul className="ff-download-requirements" aria-label="Requisitos">
+              <li>
+                <strong>Go 1.26 ou mais novo</strong>
+                <span>go.dev/dl</span>
+              </li>
+              <li>
+                <strong>Node 22.12 ou mais novo</strong>
+                <span>nodejs.org</span>
+              </li>
+              <li>
+                <strong>pnpm pelo Corepack</strong>
+                <span>corepack enable</span>
+              </li>
             </ul>
           </div>
-          <p className="ff-download-privacy">
-            <HardDrive size={16} aria-hidden="true" />
-            Seus dados ficam num arquivo SQLite no seu computador. Nada vai para a nuvem.
-          </p>
-        </div>
-        <div className="ff-download-side">
-          <ol className="ff-download-steps">
-            {steps.map(({ icon: Icon, title, text }, index) => (
-              <li key={title}>
-                <span className="ff-step-index">0{index + 1}</span>
-                <div>
-                  <h3>
-                    <Icon size={17} aria-hidden="true" />
-                    {title}
-                  </h3>
-                  <p>{text}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
-          <div className="ff-download-terminal">
-            <h3>Prefere o terminal?</h3>
-            <InstallCommand label="macOS e Linux" command={installCommands.unix} />
-            <InstallCommand label="Windows (PowerShell)" command={installCommands.windows} />
-            <a className="ff-text-link" href={repoUrl} rel="noopener">
-              <Github size={16} aria-hidden="true" />
-              Compilar do código-fonte
-            </a>
+        </Tabs.Content>
+        <Tabs.Content value="docker" className="ff-download-panel">
+          <div className="ff-download-grid">
+            <div className="ff-download-terminal">
+              <h3>Sem Go nem Node na máquina</h3>
+              <p>
+                Sobe o FinFlow em localhost:3333, com o banco num volume do Docker e acesso só por
+                este computador.
+              </p>
+              <InstallCommand label="Docker Compose" command={sourceCommands.docker} />
+            </div>
+            <div className="ff-download-terminal">
+              <h3>
+                <Sparkles size={17} aria-hidden="true" />
+                Com o assistente local
+              </h3>
+              <p>
+                O profile <code>ai</code> sobe também um Ollama e baixa o modelo no primeiro uso.
+                Nada sai do seu computador.
+              </p>
+              <InstallCommand label="Docker com Ollama" command={sourceCommands.dockerAi} />
+            </div>
           </div>
-        </div>
-      </div>
+        </Tabs.Content>
+      </Tabs.Root>
     </section>
   );
 }

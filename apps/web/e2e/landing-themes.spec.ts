@@ -6,9 +6,10 @@ import { mockApi } from "./mocks";
 
 const screenshotsDir = join(process.cwd(), "test-results", "screenshots");
 const themeButtonName = /Ativar tema (claro|escuro)/;
-// Inside the installed app, /inicio points "Usar no navegador" at the hosted browser app;
+// Inside the installed app, /inicio points "Experimentar no navegador" at the hosted browser app;
 // the public package points it at its own /app/ (verify-public-landing.mjs).
 const hostedApp = "https://finflow-landing-umber.vercel.app/app/";
+const repoUrl = "https://github.com/danielharrisonlf/finflow";
 
 interface AxeNodeResult {
   target: string[];
@@ -139,7 +140,7 @@ test("/inicio is public, isolated from APIs, and links into the existing auth ga
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
     "Seu dinheiro em ordem. Mais espaço para viver.",
   );
-  await expect(page.getByText("FinFlow · grátis e de código aberto")).toBeVisible();
+  await expect(page.getByText("Código aberto (MIT) · roda no seu computador")).toBeVisible();
   await expect(
     page.getByText(/disponível em breve|em preparação|ainda não foi lançado/i),
   ).toHaveCount(0);
@@ -147,19 +148,25 @@ test("/inicio is public, isolated from APIs, and links into the existing auth ga
   // The AI integration may name Claude/Anthropic; no other AI vendor is named.
   await expect(page.getByText(/ChatGPT|OpenAI|Gemini|Copilot/i)).toHaveCount(0);
   await expect(page.locator(".ff-hero-copy > p")).toHaveText(
-    "Contas, cartões, metas e planilhas em um só lugar, no navegador ou no computador. Entenda seu mês e planeje o que vem depois.",
+    "Contas, cartões, metas e planilhas num programa que roda no seu computador. Sem conta e sem nuvem: seus dados ficam num arquivo SQLite seu.",
   );
+  await expect(page.locator(".ff-hero-proof")).toContainText("Assistente local (Ollama) ou Claude");
   const heroActions = page.locator(".ff-hero-actions");
-  // Primary CTA: FinFlow in the browser, nothing to install. Secondary: the desktop download.
-  await expect(heroActions.getByRole("link", { name: "Usar no navegador" })).toHaveAttribute(
-    "href",
-    hostedApp,
-  );
-  await expect(heroActions.getByRole("link")).toHaveCount(2);
-  await expect(heroActions.getByRole("link", { name: "Baixar para o computador" })).toHaveAttribute(
+  // Primary CTA: the download (docs/local-agent-contract.md §4). Secondary: the source code.
+  // Third, as a text link: try it in the browser.
+  await expect(heroActions.getByRole("link")).toHaveCount(3);
+  await expect(heroActions.locator(".ff-button")).toHaveText("Baixar grátis");
+  await expect(heroActions.getByRole("link", { name: "Baixar grátis" })).toHaveAttribute(
     "href",
     "#baixar",
   );
+  await expect(heroActions.getByRole("link", { name: "Código no GitHub" })).toHaveAttribute(
+    "href",
+    repoUrl,
+  );
+  await expect(
+    heroActions.getByRole("link", { name: "Experimentar no navegador" }),
+  ).toHaveAttribute("href", hostedApp);
   // There is no sign-up flow, so nothing may promise a demo account or registration.
   await expect(
     page.getByRole("link", { name: /demo|demonstração|criar conta|cadastro|cadastre-se/i }),
@@ -235,19 +242,49 @@ test("download section offers the right release asset, other systems, and instal
   const copy = download.getByRole("button", { name: "Copiar comando para macOS e Linux" });
   await copy.click();
   await expect(copy).toContainText(/Copiado|Selecionado/);
-  await expect(download.getByRole("link", { name: "Compilar do código-fonte" })).toHaveAttribute(
-    "href",
-    "https://github.com/danielharrisonlf/finflow",
-  );
 
-  // Every "Baixar para o computador" CTA leads to this section; every "Usar no navegador" CTA
-  // (hero, final call, footer, download intro) opens the browser app.
-  const downloadCtas = await page.getByRole("link", { name: "Baixar para o computador" }).all();
+  // Three ways to run it locally: executable (default), source code with pnpm start, Docker.
+  const tabs = download.getByRole("tablist", { name: "Como rodar o FinFlow" }).getByRole("tab");
+  await expect(tabs).toHaveText(["Executável", "Código-fonte", "Docker"]);
+  await expect(tabs.first()).toHaveAttribute("aria-selected", "true");
+  await tabs.nth(1).click();
+  await expect(tabs.nth(1)).toHaveAttribute("aria-selected", "true");
+  await expect(download.locator(".ff-download-primary")).toHaveCount(0);
+  await expect(download.locator(".ff-install-command code")).toHaveText([
+    "git clone https://github.com/danielharrisonlf/finflow && cd finflow && pnpm install && pnpm start",
+    "pnpm start -- --seed",
+  ]);
+  await expect(download.getByRole("list", { name: "Requisitos" })).toContainText(
+    /Go 1\.26[\s\S]*Node 22\.12[\s\S]*Corepack/,
+  );
+  await expect(download.getByRole("link", { name: "Código no GitHub" })).toHaveAttribute(
+    "href",
+    repoUrl,
+  );
+  // Arrow keys move between tabs (WAI-ARIA tabs pattern).
+  await tabs.nth(1).press("ArrowRight");
+  await expect(tabs.nth(2)).toBeFocused();
+  await expect(tabs.nth(2)).toHaveAttribute("aria-selected", "true");
+  await expect(download.locator(".ff-install-command code")).toHaveText([
+    "git clone https://github.com/danielharrisonlf/finflow && cd finflow && docker compose up -d",
+    "docker compose --profile ai up -d",
+  ]);
+  await expect(download.getByRole("tabpanel")).toContainText("Ollama");
+  await tabs.first().click();
+  await expect(download.locator(".ff-download-primary")).toHaveText("Baixar para Windows");
+
+  // Every "Baixar grátis" CTA leads to this section; every "Experimentar no navegador" CTA
+  // (hero, final call, footer, download intro) opens the browser app; "Código no GitHub" opens
+  // the repository.
+  const downloadCtas = await page.getByRole("link", { name: "Baixar grátis" }).all();
   expect(downloadCtas.length).toBeGreaterThanOrEqual(3);
   for (const cta of downloadCtas) await expect(cta).toHaveAttribute("href", "#baixar");
-  const appCtas = await page.getByRole("link", { name: /^Usar no navegador/ }).all();
-  expect(appCtas.length).toBeGreaterThanOrEqual(3);
+  const appCtas = await page.getByRole("link", { name: /^Experimentar no navegador/ }).all();
+  expect(appCtas.length).toBeGreaterThanOrEqual(4);
   for (const cta of appCtas) await expect(cta).toHaveAttribute("href", hostedApp);
+  const repoCtas = await page.getByRole("link", { name: "Código no GitHub" }).all();
+  expect(repoCtas.length).toBeGreaterThanOrEqual(2);
+  for (const cta of repoCtas) await expect(cta).toHaveAttribute("href", repoUrl);
 
   for (const [ua, label, asset] of [
     [
@@ -340,6 +377,7 @@ test("assistant example answers locally and always asks before writing", async (
   const ai = page.locator("#assistente");
   await expect(ai.getByRole("heading", { level: 2 })).toHaveText("Pergunte ao FinFlow.");
   await expect(ai.locator(".ff-assistant-badge")).toHaveText("Exemplo");
+  await expect(ai).toContainText("modelo local (Ollama ou LM Studio)");
   await expect(ai).toContainText("sua própria chave da API do Claude");
   await expect(ai).toContainText("depois que você confirma");
   await expect(ai).toContainText("foto do comprovante");
@@ -429,9 +467,15 @@ test("planning, mobile and FAQ sections describe v3 features", async ({ page }) 
 
   const faq = page.locator("#duvidas");
   for (const [question, answer] of [
-    ["Preciso pagar pela IA?", /sua própria chave da API do Claude, cobrada pela Anthropic/],
+    [
+      "Preciso pagar pela IA?",
+      /^Não\. [\s\S]*modelo local, pelo Ollama ou pelo LM Studio, sem chave e sem custo[\s\S]*sua própria chave da API do Claude, cobrada pela Anthropic/,
+    ],
     ["Funciona no celular?", /navegador do celular[\s\S]*instale como app[\s\S]*rede de casa/],
-    ["Meus dados vão para a nuvem?", /perguntas que você fizer ao assistente[\s\S]*API do Claude/],
+    [
+      "Meus dados vão para a nuvem?",
+      /assistente local, nem as perguntas saem dele[\s\S]*escolher o Claude[\s\S]*API do Claude/,
+    ],
     [
       "Onde ficam meus dados na versão do navegador?",
       /No próprio navegador[\s\S]*Dados neste navegador[\s\S]*apaga o FinFlow/,
@@ -631,9 +675,10 @@ test("compact landing preview fits the intended desktop fold", async ({ page }, 
 
     const panelBox = await page.locator(".dashboard").boundingBox();
     const primaryBox = await page.locator(".ff-hero-actions .ff-button").boundingBox();
-    const secondaryBox = await page.locator('.ff-hero-actions a[href="#baixar"]').boundingBox();
+    const secondaryBox = await page.locator(".ff-hero-actions .ff-secondary-link").boundingBox();
+    const tertiaryBox = await page.locator(".ff-hero-actions .ff-try-link").boundingBox();
     const noteBox = await page.locator(".ff-preview-note").boundingBox();
-    if (!panelBox || !primaryBox || !secondaryBox || !noteBox) {
+    if (!panelBox || !primaryBox || !secondaryBox || !tertiaryBox || !noteBox) {
       throw new Error(
         `${viewport.name}: hero, preview panel, and note must render before measuring`,
       );
@@ -662,6 +707,10 @@ test("compact landing preview fits the intended desktop fold", async ({ page }, 
     expect(
       secondaryBox.y + secondaryBox.height,
       `${viewport.name} secondary CTA fits`,
+    ).toBeLessThanOrEqual(viewportHeight);
+    expect(
+      tertiaryBox.y + tertiaryBox.height,
+      `${viewport.name} browser link fits`,
     ).toBeLessThanOrEqual(viewportHeight);
     expect(panelBox.y + panelBox.height, `${viewport.name} default panel fits`).toBeLessThanOrEqual(
       viewportHeight,

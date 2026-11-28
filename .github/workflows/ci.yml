@@ -97,3 +97,27 @@ jobs:
           name: playwright-report
           path: apps/web/playwright-report
           retention-days: 7
+
+  docker:
+    name: Docker image (build + smoke, sem push)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: build
+        run: docker build --build-arg FINFLOW_VERSION=ci-${{ github.sha }} -t finflow:ci .
+      - name: smoke (healthcheck e /api/system/info)
+        run: |
+          docker run -d --name finflow-ci -p 127.0.0.1:3333:3333 finflow:ci
+          for i in $(seq 1 30); do
+            status="$(docker inspect -f '{{.State.Health.Status}}' finflow-ci)"
+            [ "$status" = "healthy" ] && break
+            sleep 2
+          done
+          docker inspect -f '{{.State.Health.Status}}' finflow-ci | grep -qx healthy
+          curl -fsS http://127.0.0.1:3333/api/system/info
+          curl -fsS http://127.0.0.1:3333/ | grep -q '<div id="root">'
+          docker image ls finflow:ci
+      - name: logs
+        if: always()
+        run: docker logs finflow-ci || true
+      - run: docker compose --profile ai --profile postgres --profile test config -q

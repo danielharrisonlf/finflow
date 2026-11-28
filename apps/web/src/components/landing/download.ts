@@ -72,6 +72,14 @@ export const installCommands = {
   windows: `irm ${rawScripts}/install.ps1 | iex`,
 };
 
+// Rodar a partir do código (docs/local-agent-contract.md §4): `pnpm start` ou Docker Compose.
+export const sourceCommands = {
+  clone: `git clone ${repoUrl} && cd finflow && pnpm install && pnpm start`,
+  seed: "pnpm start -- --seed",
+  docker: `git clone ${repoUrl} && cd finflow && docker compose up -d`,
+  dockerAi: "docker compose --profile ai up -d",
+};
+
 export function platformById(id: PlatformId): Platform {
   return platforms.find((p) => p.id === id) ?? (platforms[0] as Platform);
 }

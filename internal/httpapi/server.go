@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"finflow/internal/ai"
 	"finflow/internal/domain"
 	"finflow/internal/service"
 	"finflow/internal/spaces"
@@ -51,6 +52,9 @@ type Server struct {
 	spaces  *spaces.Registry
 	opts    ServerOptions
 	handler http.Handler
+	// ai é o Assistente (configuração no espaço pessoal); compartilhado para reaproveitar o cache
+	// dos pings e da detecção automática do Ollama.
+	ai *ai.Service
 }
 
 // SpaceHeader escolhe o espaço da requisição (ausente = pessoal); em links (?token=) vale ?space=.

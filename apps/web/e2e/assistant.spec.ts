@@ -1,9 +1,21 @@
 import { expect, type Page, test } from "@playwright/test";
 import { ids, mockApi } from "./mocks";
 
-// Assistente (v3 §15): a API do Claude nunca é chamada — /api/ai/* é interceptado com SSE roteirizado.
+// Assistente (v3 §15 e assistente local): nenhum modelo é chamado — /api/ai/* é interceptado com SSE
+// roteirizado.
 
 const configured = { configured: true, source: "SETTINGS", model: "claude-opus-5-5" };
+
+const localConfigured = {
+  configured: true,
+  provider: "ollama",
+  model: "qwen2.5:7b",
+  visionModel: null,
+  baseUrl: "http://localhost:11434",
+  source: "SETTINGS",
+  reachable: true,
+  receiptSupported: false,
+};
 
 function sse(events: [string, unknown][]): string {
   return events.map(([name, data]) => `event: ${name}\ndata: ${JSON.stringify(data)}\n\n`).join("");
@@ -12,10 +24,11 @@ function sse(events: [string, unknown][]): string {
 /** Registrado depois do mockApi, tem precedência sobre ele. */
 async function mockAi(
   page: Page,
-  opts: { status?: unknown; chat?: string; receipt?: unknown } = {},
-): Promise<{ chatBodies: unknown[]; keyBodies: unknown[] }> {
+  opts: { status?: unknown; chat?: string; receipt?: unknown; models?: unknown[] } = {},
+): Promise<{ chatBodies: unknown[]; keyBodies: unknown[]; configBodies: unknown[] }> {
   const chatBodies: unknown[] = [];
   const keyBodies: unknown[] = [];
+  const configBodies: unknown[] = [];
   await page.route("**/api/ai/**", (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -37,9 +50,17 @@ async function mockAi(
       keyBodies.push(request.postDataJSON());
       return route.fulfill({ json: configured });
     }
+    if (path.endsWith("/ai/models")) {
+      return route.fulfill({ json: { models: opts.models ?? [] } });
+    }
+    if (path.endsWith("/ai/config")) {
+      const body = request.postDataJSON() as { provider: string; model?: string };
+      configBodies.push(body);
+      return route.fulfill({ json: { ...localConfigured, model: body.model ?? "qwen2.5:7b" } });
+    }
     return route.fulfill({ status: 404, json: { message: "rota" } });
   });
-  return { chatBodies, keyBodies };
+  return { chatBodies, keyBodies, configBodies };
 }
 
 test.beforeEach(async ({ page }) => {
@@ -197,4 +218,78 @@ test("comprovante abre o lançamento preenchido; planilha vai para /planilhas", 
     buffer: Buffer.from("OFXHEADER:100"),
   });
   await expect(page).toHaveURL(/\/planilhas$/);
+});
+
+const notConfigured = (reachable: boolean) => ({
+  configured: false,
+  provider: null,
+  model: null,
+  visionModel: null,
+  baseUrl: null,
+  source: null,
+  reachable,
+  receiptSupported: false,
+});
+
+test("modo local primeiro: usa o Ollama deste computador em um clique", async ({ page }) => {
+  await mockApi(page);
+  const { configBodies, chatBodies } = await mockAi(page, {
+    status: notConfigured(true),
+    models: [
+      { id: "llama3.1:8b", label: "llama3.1:8b · 8.0B", tools: true },
+      { id: "qwen2.5:7b", label: "qwen2.5:7b · 7.6B", tools: true },
+    ],
+    chat: sse([
+      ["tool", { name: "get_summary", label: "Consultando seu resumo do mês" }],
+      ["text", { delta: "Seu saldo está positivo." }],
+      ["done", { stopReason: "end_turn" }],
+    ]),
+  });
+  await page.goto("/assistente");
+
+  const local = page.getByTestId("ai-setup-local");
+  await expect(local).toContainText("Encontramos o Ollama rodando neste computador");
+  await expect(local).toContainText("llama3.1:8b, qwen2.5:7b");
+  // A API do Claude continua disponível como alternativa, abaixo do modo local.
+  await expect(page.getByTestId("ai-setup").getByLabel("Chave da API do Claude")).toBeVisible();
+  await expect(page.getByTestId("can-afford")).toBeVisible();
+
+  await local.getByRole("button", { name: "Usar o Ollama deste computador" }).click();
+  await expect(page.getByText("Pergunte sobre o seu dinheiro")).toBeVisible();
+  expect(configBodies).toEqual([{ provider: "ollama", model: "qwen2.5:7b" }]);
+  await expect(page.getByTestId("ai-active-provider")).toHaveText("Ollama (local) · qwen2.5:7b");
+  await expect(page.getByText("Modelo local: nada sai deste computador.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Remover chave" })).toHaveCount(0);
+
+  await page.getByLabel("Pergunta para o assistente").fill("Como estou?");
+  await page.getByRole("button", { name: "Enviar" }).click();
+  await expect(page.getByTestId("ai-answer")).toContainText("Seu saldo está positivo.");
+  expect(chatBodies).toHaveLength(1);
+});
+
+test("sem Ollama: mostra como instalar e verificar de novo", async ({ page }) => {
+  await mockApi(page);
+  await mockAi(page, { status: notConfigured(false) });
+  await page.goto("/assistente");
+  const local = page.getByTestId("ai-setup-local");
+  await expect(local).toContainText("ollama pull qwen2.5:7b");
+  await expect(local.getByRole("link", { name: "ollama.com" })).toHaveAttribute(
+    "href",
+    "https://ollama.com/download",
+  );
+  await expect(local.getByRole("button", { name: "Verificar de novo" })).toBeVisible();
+  await expect(local.getByRole("link", { name: "Configurações → Assistente" })).toHaveAttribute(
+    "href",
+    "/configuracoes",
+  );
+});
+
+test("detecção automática: mostra o Ollama encontrado no cabeçalho", async ({ page }) => {
+  await mockApi(page);
+  await mockAi(page, { status: { ...localConfigured, source: "AUTO" } });
+  await page.goto("/assistente");
+  await expect(page.getByTestId("ai-active-provider")).toHaveText(
+    "Detectado automaticamente: Ollama · qwen2.5:7b",
+  );
+  await expect(page.getByText("Pergunte sobre o seu dinheiro")).toBeVisible();
 });

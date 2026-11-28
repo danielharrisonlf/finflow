@@ -2,14 +2,11 @@ package ai
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"path"
 	"strings"
-
-	"github.com/anthropics/anthropic-sdk-go/v2"
 
 	"finflow/internal/domain"
 	"finflow/internal/service"
@@ -17,8 +14,6 @@ import (
 
 // MaxReceiptBytes é o tamanho máximo do arquivo de comprovante (10 MiB).
 const MaxReceiptBytes = 10 << 20
-
-const receiptMaxTokens = 16000
 
 // ReceiptResult é a resposta de POST /api/ai/receipt.
 type ReceiptResult struct {
@@ -114,59 +109,58 @@ func (s *Service) categoryList(ctx context.Context) ([]domain.Category, string, 
 	return cats, text, nil
 }
 
-// ExtractReceipt lê um comprovante (imagem ou PDF) com structured outputs e mapeia a categoria pelo nome.
+// receiptRequest é o que cada provedor recebe para ler um comprovante.
+type receiptRequest struct {
+	data      []byte
+	mediaType string
+	// prompt é o turno do usuário (data de hoje + categorias + pedido).
+	prompt string
+}
+
+// Erros de leitura compartilhados pelos provedores.
+var (
+	errReceiptUnreadable = &service.AppError{Status: http.StatusUnprocessableEntity, Message: "Não foi possível ler este arquivo. Envie a foto de um comprovante ou nota fiscal."}
+	errReceiptFormat     = &service.AppError{Status: http.StatusBadGateway, Message: "A resposta da leitura do comprovante veio em formato inesperado. Tente de novo."}
+	errReceiptPDFLocal   = &service.AppError{Status: http.StatusUnprocessableEntity, Message: "O modelo local lê só imagens. Envie uma foto (JPEG, PNG ou WebP) do comprovante."}
+)
+
+// ExtractReceipt lê um comprovante (imagem ou PDF) com o provedor configurado e mapeia a categoria pelo
+// nome. Provedores locais precisam de um modelo de visão (senão 412).
 func (s *Service) ExtractReceipt(ctx context.Context, data []byte, mediaType string) (ReceiptResult, error) {
-	client, err := s.client(ctx)
+	p, r, err := s.provider(ctx)
 	if err != nil {
 		return ReceiptResult{}, err
+	}
+	if !r.receiptSupported() {
+		return ReceiptResult{}, ErrNoVisionModel
 	}
 	cats, catText, err := s.categoryList(ctx)
 	if err != nil {
 		return ReceiptResult{}, err
 	}
-	b64 := base64.StdEncoding.EncodeToString(data)
-	var fileBlock anthropic.BetaContentBlockParamUnion
-	if mediaType == "application/pdf" {
-		fileBlock = anthropic.NewBetaDocumentBlock(anthropic.BetaBase64PDFSourceParam{Data: b64})
-	} else {
-		fileBlock = anthropic.NewBetaImageBlock(anthropic.BetaBase64ImageSourceParam{
-			Data: b64, MediaType: anthropic.BetaBase64ImageSourceMediaType(mediaType),
-		})
-	}
 	prompt := todayContext(domain.Now()) + "\n" + catText + "\n\nExtraia os dados deste comprovante."
-
-	msg, err := client.Beta.Messages.New(ctx, anthropic.BetaMessageNewParams{
-		Model:     Model,
-		MaxTokens: receiptMaxTokens,
-		System:    []anthropic.BetaTextBlockParam{{Text: receiptSystemPrompt}},
-		OutputConfig: anthropic.BetaOutputConfigParam{
-			Effort: anthropic.BetaOutputConfigEffortLow,
-			Format: anthropic.BetaJSONOutputFormatParam{Schema: receiptSchema()},
-		},
-		Betas:     []anthropic.AnthropicBeta{fallbackBeta},
-		Fallbacks: anthropic.BetaFallbacksParamOfDefault(),
-		Messages:  []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(fileBlock, anthropic.NewBetaTextBlock(prompt))},
-	})
+	raw, err := p.extractReceipt(ctx, receiptRequest{data: data, mediaType: mediaType, prompt: prompt})
 	if err != nil {
-		return ReceiptResult{}, upstreamError(err)
-	}
-	switch msg.StopReason {
-	case anthropic.BetaStopReasonRefusal:
-		return ReceiptResult{}, &service.AppError{Status: http.StatusUnprocessableEntity, Message: "Não foi possível ler este arquivo. Envie a foto de um comprovante ou nota fiscal."}
-	case anthropic.BetaStopReasonMaxTokens:
-		return ReceiptResult{}, &service.AppError{Status: http.StatusBadGateway, Message: "A leitura do comprovante foi interrompida. Tente uma foto mais nítida."}
-	}
-	var text strings.Builder
-	for _, block := range msg.Content {
-		if block.Type == "text" {
-			text.WriteString(block.Text)
-		}
-	}
-	var raw receiptRaw
-	if err := json.Unmarshal([]byte(text.String()), &raw); err != nil {
-		return ReceiptResult{}, &service.AppError{Status: http.StatusBadGateway, Message: "A resposta da leitura do comprovante veio em formato inesperado. Tente de novo."}
+		return ReceiptResult{}, err
 	}
 	return normalizeReceipt(raw, cats), nil
+}
+
+// parseReceiptJSON aceita a resposta de modelos locais com texto ou cercas ``` em volta do objeto.
+func parseReceiptJSON(text string) (receiptRaw, error) {
+	var raw receiptRaw
+	text = strings.TrimSpace(text)
+	if err := json.Unmarshal([]byte(text), &raw); err == nil {
+		return raw, nil
+	}
+	start, end := strings.Index(text, "{"), strings.LastIndex(text, "}")
+	if start < 0 || end <= start {
+		return receiptRaw{}, errReceiptFormat
+	}
+	if err := json.Unmarshal([]byte(text[start:end+1]), &raw); err != nil {
+		return receiptRaw{}, errReceiptFormat
+	}
+	return raw, nil
 }
 
 // normalizeReceipt saneia a saída do modelo e resolve a categoria pelo nome (sem acento/maiúsculas).
