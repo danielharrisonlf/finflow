@@ -1,4 +1,14 @@
-import { Check, Copy, Download, FolderOpen, Github, Globe, HardDrive, Laptop } from "lucide-react";
+import {
+  ArrowUpRight,
+  Check,
+  Copy,
+  Download,
+  FolderOpen,
+  Github,
+  Globe,
+  HardDrive,
+  Laptop,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   type Detection,
@@ -54,7 +64,7 @@ function InstallCommand({ label, command }: { label: string; command: string }) 
   );
 }
 
-export function DownloadSection() {
+export function DownloadSection({ appHref }: { appHref: string }) {
   const [detection, setDetection] = useState<Detection>({
     platform: "windows-amd64",
     mobile: false,
@@ -89,12 +99,17 @@ export function DownloadSection() {
   return (
     <section className="ff-section ff-download ff-container" id="baixar">
       <div className="ff-section-head">
-        <span className="ff-eyebrow">Grátis e de código aberto</span>
+        <span className="ff-eyebrow">Prefere instalar?</span>
         <h2>Rode no seu computador.</h2>
         <p>
-          Sem cadastro, sem mensalidade e sem servidor de terceiros. O FinFlow é um único programa
-          que abre no seu navegador.
+          O mesmo FinFlow num único programa, sem cadastro, sem mensalidade e sem servidor de
+          terceiros. Se preferir não instalar nada, use no navegador: o backup feito lá abre aqui
+          também.
         </p>
+        <a className="ff-text-link" href={appHref}>
+          Usar no navegador, sem instalar
+          <ArrowUpRight size={16} aria-hidden="true" />
+        </a>
       </div>
       <div className="ff-download-grid">
         <div className="ff-download-card">
@@ -103,8 +118,8 @@ export function DownloadSection() {
           </span>
           {detection.mobile && (
             <p className="ff-download-mobile">
-              O FinFlow roda no computador. Abra esta página nele para baixar, ou escolha o sistema
-              abaixo.
+              No celular, use o FinFlow no navegador, pelo link acima. O programa é para o
+              computador: abra esta página nele para baixar, ou escolha o sistema abaixo.
             </p>
           )}
           <a

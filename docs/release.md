@@ -63,6 +63,36 @@ Os instaladores aceitam `FINFLOW_DOWNLOAD_URL` para testar contra uma pasta loca
 FINFLOW_DOWNLOAD_URL=http://localhost:8765 FINFLOW_INSTALL_DIR=/tmp/ff sh scripts/install.sh
 ```
 
+## Site público (landing + app no navegador)
+
+O site da Vercel (`finflow-landing-umber.vercel.app`) publica a landing em `/` e o FinFlow no navegador em `/app/` ([docs/browser-runtime-contract.md](browser-runtime-contract.md) §5). Ele não depende das releases do GitHub: refaça e publique sempre que o app ou a landing mudarem.
+
+```bash
+pnpm install
+pnpm build:browser                                   # wasm + app → apps/web/dist-browser
+node apps/web/scripts/build-public-landing.mjs       # pacote em apps/web/test-results/vercel-landing
+node apps/web/scripts/serve-public-package.mjs 4180  # serve o pacote com as mesmas rotas da Vercel
+node apps/web/scripts/verify-public-landing.mjs http://localhost:4180/   # em outro terminal
+```
+
+`build-public-landing.mjs` exige o projeto Vercel vinculado em `../finflow-landing/.vercel/project.json` e o `dist-browser` completo (`index.html`, `sw.js`, `manifest.webmanifest` e `runtime/`). Ele monta `.vercel/output` (Build Output API v3):
+
+- `static/` com a landing e `static/app/` com o app;
+- `config.json` com fallback de SPA (`/app/*` → `/app/index.html`, exceto `assets/`, `runtime/`, `icons/` e `fonts/`), `/app` → `/app/` (308), `Content-Type: application/wasm`, cache imutável em `/assets/*` e `/app/assets/*`, `no-cache` no `index.html`, no `sw.js` e nas rotas do app, e revalidação em `/app/runtime/*`.
+
+A verificação confere a landing (temas, larguras, acessibilidade, CTAs **Usar no navegador** e **Baixar para o computador**, FAQ) e o app: `/app/` carrega, o runtime sobe, os dados de exemplo são criados e nenhuma requisição sai do próprio site; também confere o fallback de SPA, o MIME do `.wasm` e o manifest com `start_url`/`scope` `/app/`. O Chromium é obrigatório; no WebKit o app é reportado como `runtime-unsupported` se o motor não tiver o OPFS que o runtime usa.
+
+Para publicar, a partir do pacote gerado:
+
+```bash
+cd apps/web/test-results/vercel-landing
+vercel deploy --prebuilt            # prévia; confira e rode a verificação contra a URL da prévia
+vercel deploy --prebuilt --prod     # produção
+node ../../scripts/verify-public-landing.mjs https://finflow-landing-umber.vercel.app/
+```
+
+Cada build do app gera um `sw.js` com versão nova; quem estiver com o app aberto vê **Nova versão disponível — Recarregar** e os dados (no navegador da pessoa) não são tocados.
+
 ## Avisos para quem baixa
 
 - Os binários não são assinados. O Windows SmartScreen pede **Mais informações → Executar assim mesmo**; no macOS, `xattr -d com.apple.quarantine finflow` libera o binário (o `install.sh` já faz isso).

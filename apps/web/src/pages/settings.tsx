@@ -5,13 +5,16 @@ import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ApiAiSection } from "../components/api-ai-section";
+import { BrowserDataSection } from "../components/browser/browser-data-section";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { Empty, LoadingRows } from "../components/ui/empty";
 import { Field, Input } from "../components/ui/field";
 import { BAND_META } from "../lib/bands";
+import { HOSTED_APP_URL } from "../lib/browser-runtime";
 import { centsToInput, parseBRLInput, parseSignedBRLInput } from "../lib/format";
 import { useSettings, useUpdateSettings } from "../lib/queries";
+import { isBrowserRuntime } from "../runtime/client";
 
 const intIn = (min: number, max: number) => (v: string) => {
   const n = Number(v);
@@ -281,17 +284,33 @@ export function SettingsPage() {
             ) : null}
           </Section>
 
-          <Card className="flex gap-3 p-5" data-testid="local-data">
-            <HardDrive size={20} aria-hidden className="mt-0.5 shrink-0 text-app-muted" />
-            <div>
-              <h2 className="text-sm font-semibold text-app-text">Dados locais</h2>
-              <p className="mt-1 text-sm text-app-muted">
-                Seus dados ficam num arquivo SQLite neste computador, gravado pelo próprio FinFlow.
-                Nada é enviado para servidores externos. Para fazer backup, copie esse arquivo ou
-                exporte a planilha anual em Planilhas.
-              </p>
-            </div>
-          </Card>
+          {/* modo navegador: os dados ficam no navegador e têm a seção própria, fora do formulário */}
+          {isBrowserRuntime ? null : (
+            <Card className="flex gap-3 p-5" data-testid="local-data">
+              <HardDrive size={20} aria-hidden className="mt-0.5 shrink-0 text-app-muted" />
+              <div>
+                <h2 className="text-sm font-semibold text-app-text">Dados locais</h2>
+                <p className="mt-1 text-sm text-app-muted">
+                  Seus dados ficam num arquivo SQLite neste computador, gravado pelo próprio
+                  FinFlow. Nada é enviado para servidores externos. Para fazer backup, copie esse
+                  arquivo ou exporte a planilha anual em Planilhas.
+                </p>
+                <p className="mt-2 text-sm text-app-muted" data-testid="use-in-browser">
+                  Usar no navegador: o FinFlow também abre sem instalar, no celular ou em outro
+                  computador, em{" "}
+                  <a
+                    href={HOSTED_APP_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-income underline-offset-4 hover:underline"
+                  >
+                    finflow-landing-umber.vercel.app/app
+                  </a>
+                  . Lá os dados ficam no navegador; para levá-los, use o backup (.db) deste arquivo.
+                </p>
+              </div>
+            </Card>
+          )}
 
           <div className="flex flex-wrap items-center gap-3">
             <Button type="submit" disabled={update.isPending} className="h-12 px-6">
@@ -311,6 +330,7 @@ export function SettingsPage() {
       )}
 
       {/* fora do formulário: não interfere no envio das configurações */}
+      {isBrowserRuntime ? <BrowserDataSection /> : null}
       <ApiAiSection />
     </div>
   );

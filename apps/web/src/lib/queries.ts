@@ -90,6 +90,7 @@ import type {
   YearOverview,
 } from "@finflow/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { isBrowserRuntime } from "../runtime/client";
 import { api, setAuthToken } from "./api";
 
 export interface Period {
@@ -105,6 +106,8 @@ export const useAuthStatus = () =>
   useQuery({
     queryKey: ["auth", "status"],
     queryFn: () => api.get<AuthStatus>("/auth/status"),
+    // modo navegador: sem senha nem login (os dados nunca saem deste navegador)
+    enabled: !isBrowserRuntime,
   });
 
 export const useSummary = (p?: Period) =>

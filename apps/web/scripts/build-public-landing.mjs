@@ -1,16 +1,31 @@
 import { createHash } from "node:crypto";
-import { copyFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { copyFile, cp, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { build } from "vite";
 
-// Publish only the approved portable landing, independent of the private app.
+// Publish the approved portable landing at / and FinFlow in the browser at /app/
+// (docs/browser-runtime-contract.md §5). The app is the `pnpm build:browser` output.
 const web = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const workspace = resolve(web, "../..");
 const publicRepo = resolve(workspace, "../finflow-landing");
 const stage = join(web, "test-results/vercel-landing");
 const source = join(web, "src/components/landing");
+const browserApp = join(web, "dist-browser");
+for (const required of ["index.html", "sw.js", "manifest.webmanifest"]) {
+  if (!existsSync(join(browserApp, required))) {
+    throw new Error(
+      `apps/web/dist-browser/${required} not found: run \`pnpm build:browser\` first`,
+    );
+  }
+}
+if (!existsSync(join(browserApp, "runtime"))) {
+  throw new Error(
+    "apps/web/dist-browser/runtime not found: `pnpm build:browser` must run build:wasm",
+  );
+}
 const project = JSON.parse(await readFile(join(publicRepo, ".vercel/project.json"), "utf8"));
 if (project.projectName !== "finflow-landing") throw new Error("Unexpected Vercel project");
 await mkdir(join(stage, "src/components/landing"), { recursive: true });
@@ -41,7 +56,7 @@ html = html
   )
   .replace(
     "<title>FinFlow</title>",
-    "<title>FinFlow — Seu dinheiro em ordem, grátis e no seu computador</title>",
+    "<title>FinFlow — Seu dinheiro em ordem, grátis, no navegador ou no computador</title>",
   )
   .replace(
     "</head>",
@@ -87,6 +102,11 @@ await build({
   plugins: [react()],
   build: { outDir: ".vercel/output/static", emptyOutDir: true, sourcemap: false },
 });
+// The browser app keeps its own manifest and service worker under /app/.
+await cp(browserApp, join(stage, ".vercel/output/static/app"), { recursive: true });
+const swVersion = /const VERSION = "([^"]+)"/.exec(
+  await readFile(join(browserApp, "sw.js"), "utf8"),
+)?.[1];
 await writeFile(
   join(stage, ".vercel/output/config.json"),
   JSON.stringify(
@@ -107,8 +127,41 @@ await writeFile(
           headers: { "Cache-Control": "public, max-age=31536000, immutable" },
           continue: true,
         },
+        // FinFlow in the browser. index.html, sw.js and the SPA routes always revalidate, so a
+        // deploy reaches open apps through the service worker update prompt.
+        { src: "/app", status: 308, headers: { Location: "/app/" } },
+        { src: "/app/(.*)", headers: { "Cache-Control": "no-cache" }, continue: true },
+        {
+          src: "/app/assets/(.*)",
+          headers: { "Cache-Control": "public, max-age=31536000, immutable" },
+          continue: true,
+        },
+        {
+          // runtime files keep stable names (versioned by query string): revalidate
+          src: "/app/runtime/(.*)",
+          headers: { "Cache-Control": "public, max-age=0, must-revalidate" },
+          continue: true,
+        },
+        {
+          src: "/app/(.*)\\.wasm",
+          headers: { "Content-Type": "application/wasm" },
+          continue: true,
+        },
+        {
+          src: "/app/manifest\\.webmanifest",
+          headers: { "Content-Type": "application/manifest+json" },
+          continue: true,
+        },
+        {
+          src: "/app/sw\\.js",
+          headers: { "Service-Worker-Allowed": "/app/" },
+          continue: true,
+        },
         { handle: "filesystem" },
         { src: "/inicio", dest: "/index.html" },
+        // SPA fallback for the app routes (/app/extrato, /app/configuracoes…); missing files
+        // under assets/runtime/icons/fonts stay 404 instead of returning HTML.
+        { src: "/app/(?!assets/|runtime/|icons/|fonts/).*", dest: "/app/index.html" },
       ],
     },
     null,
@@ -124,11 +177,17 @@ await writeFile(
       sourceHashes,
       project: project.projectName,
       productionUrl: "https://finflow-landing-umber.vercel.app/",
+      app: { path: "/app/", source: "apps/web/dist-browser", serviceWorker: swVersion ?? null },
     },
     null,
     2,
   ),
 );
 console.log(
-  JSON.stringify({ stage, project: project.projectName, files: Object.keys(sourceHashes) }),
+  JSON.stringify({
+    stage,
+    project: project.projectName,
+    files: Object.keys(sourceHashes),
+    app: { path: "/app/", serviceWorker: swVersion ?? null },
+  }),
 );

@@ -151,6 +151,9 @@
   text-decoration: underline;
   text-underline-offset: 5px;
 }
+.finflow-landing .ff-section-head .ff-text-link {
+  margin-top: 10px;
+}
 .finflow-landing .ff-fineprint {
   font-size: 12px;
   line-height: 1.7;

@@ -4,6 +4,19 @@ Todas as mudanças relevantes do FinFlow. O formato segue o [Keep a Changelog](h
 
 ## [Não lançado]
 
+### Adicionado
+
+- **FinFlow no navegador** em `/app/` do site público: o app completo sem instalar nada, no computador ou no celular, instalável como app (PWA) e com os dados guardados no próprio navegador ([docs/browser-runtime-contract.md](docs/browser-runtime-contract.md)). Tela de abertura com **Começar do zero**, **Explorar com dados de exemplo** e **Restaurar um backup (.db)**; aviso quando o FinFlow já está aberto em outra aba (**Usar aqui**); pedido de armazenamento persistente depois dos primeiros dados.
+- **Configurações → Dados neste navegador**: status do armazenamento, backup `.db` por espaço ou `.zip` com todos, restauração, **Trazer dados do app instalado** (o `finflow.db` do computador) e **Apagar todos os dados**.
+- Funciona offline depois do primeiro carregamento, com aviso **Nova versão disponível — Recarregar** quando sai uma versão nova.
+- No programa instalado, Configurações aponta para o FinFlow no navegador.
+- `pnpm build:browser`, `pnpm test:e2e:browser` e `apps/web/scripts/serve-public-package.mjs` para gerar, testar e servir localmente o pacote público com o app.
+
+### Alterado
+
+- Landing: o botão principal passa a ser **Usar no navegador**; **Baixar para o computador** fica como segunda opção, com novas perguntas no FAQ sobre onde ficam os dados no navegador e como levá-los para o app instalado.
+- O pacote público (Vercel) inclui o app em `/app/` com fallback de SPA, `application/wasm`, cache imutável para arquivos com hash e `no-cache` para `index.html` e `sw.js`.
+
 ## [0.3.0] — 2026-11-27
 
 Recursos de planejamento da v3, descritos em [docs/product-v3-contract.md](docs/product-v3-contract.md) e [docs/product-v3-spaces-contract.md](docs/product-v3-spaces-contract.md).
