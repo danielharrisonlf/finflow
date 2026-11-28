@@ -15,16 +15,19 @@ Cada pacote contém o binário (`finflow` ou `finflow.exe`) e um `LEIA-ME.txt` c
 
 ## Caminho recomendado: tag + workflow
 
-1. Confira que `main` está verde no CI.
-2. No [`CHANGELOG.md`](../CHANGELOG.md), renomeie a seção “Não lançado” para a versão e a data (por exemplo `## [0.3.0] — 2026-12-10`), abra uma nova “Não lançado” vazia e atualize os links de comparação no fim do arquivo.
-3. Crie e envie a tag:
+A política de números e o roteiro completo estão na skill [`.claude/skills/finflow-release`](../.claude/skills/finflow-release/SKILL.md) (SemVer com a convenção pré-1.0, a mesma do PC Remote). Resumo:
+
+1. Descubra o bump: `node .claude/skills/finflow-release/scripts/suggest-version.mjs --fetch` e revise os arquivos sensíveis que ele apontar.
+2. Commit `chore(release): X.Y.Z` com: `version` nos três `package.json` (raiz, `apps/web`, `packages/contracts`), a seção “Não lançado” do [`CHANGELOG.md`](../CHANGELOG.md) virando `## [X.Y.Z] — AAAA-MM-DD` (com os links no fim), as notas `docs/releases/X.Y.Z.md` e o [`docs/VERSIONS.md`](VERSIONS.md).
+3. PR com CI verde → merge na `main`.
+4. Tag no commit de merge:
 
    ```bash
-   git tag v0.2.0
-   git push origin v0.2.0
+   git tag -a vX.Y.Z -m "FinFlow vX.Y.Z"
+   git push origin vX.Y.Z
    ```
 
-4. O workflow [`.github/workflows/release.yml`](../.github/workflows/release.yml) roda `node scripts/release.mjs v0.2.0` e cria a GitHub Release com `gh release create` (notas geradas automaticamente). Se a release já existir, os arquivos são substituídos (`gh release upload --clobber`).
+5. O workflow [`.github/workflows/release.yml`](../.github/workflows/release.yml) confere se a tag bate com os `package.json` e se existem as notas, roda `node scripts/release.mjs vX.Y.Z` e cria a GitHub Release como **Latest** com o texto de `docs/releases/X.Y.Z.md`. Se a release já existir, o workflow falha: versão publicada não é substituída — lance a próxima.
 
 Tags com hífen (`v0.3.0-rc.1`) viram **pre-release** e não entram em `releases/latest`.
 
