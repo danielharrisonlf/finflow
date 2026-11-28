@@ -1,6 +1,7 @@
 // Package spaces implementa os espaços (v3 fase 2): cada espaço é um banco SQLite separado em
 // <dataDir>/spaces/<slug>.db, listado no catálogo <dataDir>/spaces.json. O banco atual continua
-// sendo o espaço "pessoal" e nunca é movido.
+// sendo o espaço "pessoal" e nunca é movido. No runtime do navegador o catálogo é uma tabela SQLite
+// (SQLCatalog) e os bancos são arquivos do VFS do worker (Options.Files).
 package spaces
 
 import (
@@ -16,9 +17,9 @@ import (
 // CatalogFile é o nome do catálogo dentro da pasta de dados.
 const CatalogFile = "spaces.json"
 
-// catalogEntry é um espaço no catálogo; File é relativo à pasta de dados (informativo: o caminho
+// CatalogEntry é um espaço no catálogo; File é relativo à pasta de dados (informativo: o caminho
 // real é sempre derivado do slug, para que um catálogo editado à mão não aponte para fora).
-type catalogEntry struct {
+type CatalogEntry struct {
 	Slug      string           `json:"slug"`
 	Name      string           `json:"name"`
 	Kind      domain.SpaceKind `json:"kind"`
@@ -28,7 +29,26 @@ type catalogEntry struct {
 }
 
 type catalog struct {
-	Spaces []catalogEntry `json:"spaces"`
+	Spaces []CatalogEntry `json:"spaces"`
+}
+
+// Catalog guarda a lista de espaços, na ordem: arquivo spaces.json no desktop (FileCatalog), tabela
+// SQLite no navegador (SQLCatalog). Load com o catálogo ausente devolve lista vazia.
+type Catalog interface {
+	Load() ([]CatalogEntry, error)
+	Save([]CatalogEntry) error
+}
+
+// FileCatalog é o catálogo em arquivo JSON (gravação atômica).
+type FileCatalog struct{ Path string }
+
+func (f FileCatalog) Load() ([]CatalogEntry, error) {
+	c, err := readCatalog(f.Path)
+	return c.Spaces, err
+}
+
+func (f FileCatalog) Save(entries []CatalogEntry) error {
+	return writeCatalog(f.Path, catalog{Spaces: entries})
 }
 
 func (c *catalog) find(slug string) int {
@@ -40,7 +60,7 @@ func (c *catalog) find(slug string) int {
 	return -1
 }
 
-// readCatalog lê o catálogo; ausente = vazio. Entradas com slug inválido ou repetido são ignoradas.
+// readCatalog lê o catálogo; ausente = vazio.
 func readCatalog(path string) (catalog, error) {
 	raw, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -53,9 +73,14 @@ func readCatalog(path string) (catalog, error) {
 	if err := json.Unmarshal(raw, &c); err != nil {
 		return catalog{}, fmt.Errorf("catálogo de espaços inválido (%s): %w", path, err)
 	}
-	clean := catalog{Spaces: make([]catalogEntry, 0, len(c.Spaces))}
+	return c, nil
+}
+
+// cleanCatalog ignora entradas com slug inválido ou repetido e corrige tipo e cor inválidos.
+func cleanCatalog(entries []CatalogEntry) catalog {
+	clean := catalog{Spaces: make([]CatalogEntry, 0, len(entries))}
 	seen := map[string]bool{}
-	for _, e := range c.Spaces {
+	for _, e := range entries {
 		if !domain.IsValidSpaceSlug(e.Slug) || seen[e.Slug] {
 			continue
 		}
@@ -68,7 +93,7 @@ func readCatalog(path string) (catalog, error) {
 		seen[e.Slug] = true
 		clean.Spaces = append(clean.Spaces, e)
 	}
-	return clean, nil
+	return clean
 }
 
 // writeCatalog grava o catálogo de forma atômica: arquivo temporário na mesma pasta + rename.

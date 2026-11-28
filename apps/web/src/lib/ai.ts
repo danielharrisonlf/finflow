@@ -1,11 +1,9 @@
-import { ApiError, api, clearAuthToken, getAuthToken, handleUnknownSpace } from "./api";
+import { ApiError, api, apiFetch, clearAuthToken, getAuthToken, handleUnknownSpace } from "./api";
 import { getActiveSpace, spaceHeaders } from "./space";
 
 // Cliente do Assistente (v3 §15). O chat usa SSE sobre fetch + ReadableStream (EventSource não envia
-// o header Authorization nem faz POST).
-
-const DEFAULT_API_ORIGIN = import.meta.env.DEV ? "http://localhost:3333" : "";
-const BASE_URL = `${import.meta.env.VITE_API_URL ?? DEFAULT_API_ORIGIN}/api`;
+// o header Authorization nem faz POST). No modo navegador, `apiFetch` usa o runtime local, que
+// também devolve o corpo em stream.
 
 export type AiRole = "user" | "assistant";
 
@@ -119,7 +117,7 @@ export async function streamChat(
   onEvent: (event: AiEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
-  const response = await fetch(`${BASE_URL}/ai/chat`, {
+  const response = await apiFetch("/ai/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "text/event-stream", ...authHeaders() },
     body: JSON.stringify({ messages }),
@@ -149,7 +147,7 @@ export async function streamChat(
 
 /** PUT /api/ai/key — `null` remove a chave salva. A chave nunca volta na resposta. */
 export async function saveAiKey(apiKey: string | null): Promise<AiStatus> {
-  const response = await fetch(`${BASE_URL}/ai/key`, {
+  const response = await apiFetch("/ai/key", {
     method: "PUT",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ apiKey }),

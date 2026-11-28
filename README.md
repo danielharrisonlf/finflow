@@ -1,8 +1,21 @@
 # FinFlow
 
-Controle financeiro pessoal **gratuito, de código aberto e local-first**: contas, cartões com faturas e parcelas, projeção do saldo dia a dia, compromissos, limite mensal, metas e reserva de emergência, desejos, investimentos, dívidas, patrimônio e importação/exportação de planilhas, com um assistente opcional que usa a sua chave da API do Claude. Um único programa roda no seu computador e abre no navegador (e no celular, pela rede de casa). Seus dados ficam num arquivo SQLite local. Nada vai para a nuvem, exceto as perguntas que você fizer ao assistente.
+Controle financeiro pessoal **gratuito, de código aberto e local-first**: contas, cartões com faturas e parcelas, projeção do saldo dia a dia, compromissos, limite mensal, metas e reserva de emergência, desejos, investimentos, dívidas, patrimônio e importação/exportação de planilhas, com um assistente opcional que usa a sua chave da API do Claude. Use direto no navegador, sem instalar nada, ou baixe um único programa para o computador. Nos dois casos os dados ficam com você (no navegador ou num arquivo SQLite local). Nada vai para a nuvem, exceto as perguntas que você fizer ao assistente.
 
-## Baixar e usar
+## Usar no navegador
+
+Abra **https://finflow-landing-umber.vercel.app/app/** no computador ou no celular. É o FinFlow completo, sem cadastro e sem baixar nada; para ter um ícone e abrir em tela cheia, use **Instalar app** (Chrome/Edge) ou **Adicionar à Tela de Início** (Safari).
+
+- **Onde ficam os dados**: no próprio navegador, no aparelho em que você usa (armazenamento do site, OPFS). Nada vai para um servidor: a API do FinFlow roda dentro da página, compilada para WebAssembly, com o mesmo banco SQLite do programa. A única exceção são as perguntas ao assistente, que vão direto do navegador para a API do Claude com a sua chave.
+- **Primeira vez**: escolha **Começar do zero**, **Explorar com dados de exemplo** ou **Restaurar um backup (.db)**.
+- **Backup**: em **Configurações → Dados neste navegador**, faça um `.db` por espaço ou um `.zip` com todos. Limpar os dados de sites do navegador apaga o FinFlow, então mantenha um backup recente. A mesma tela pede **armazenamento persistente** (o navegador deixa de apagar os dados sozinho quando falta espaço).
+- **Levar para o app instalado e vice-versa**: o formato do banco é o mesmo. Um backup `.db` do navegador abre no programa (substitua o `finflow.db`, veja [Onde ficam os seus dados](#onde-ficam-os-seus-dados)); em **Trazer dados do app instalado**, escolha o `finflow.db` do computador para usar no navegador.
+- **Uma aba por vez**: o banco aceita uma conexão. Se o FinFlow já estiver aberto em outra aba, a nova mostra **Usar aqui**.
+- **Offline**: depois do primeiro carregamento, o app abre sem internet (service worker). Quando sai uma versão nova, aparece **Nova versão disponível — Recarregar**.
+- **O que fica só no programa instalado**: rede local com QR code, MCP (stdio/HTTP), bot do Telegram e prévia de links em Desejos (o navegador bloqueia ler outros sites).
+- **Navegadores**: Chrome, Edge, Firefox e Safari atuais. Em janela anônima/privada o navegador pode não guardar os dados; nesse caso o app avisa.
+
+## Baixar para o computador
 
 Baixe o arquivo do seu sistema (sempre a versão mais recente):
 
@@ -171,6 +184,18 @@ Assim, `finflow mcp` iniciado por um host MCP em outro diretório não cria um b
 ### Fuso horário
 
 "Hoje" e o mês corrente seguem `America/Sao_Paulo` por padrão (sobrescreva com `FINFLOW_TZ`, por exemplo `FINFLOW_TZ=UTC`). As datas gravadas continuam `YYYY-MM-DD`, e os timestamps internos ficam em UTC.
+
+### FinFlow no navegador (build e testes)
+
+O app em `/app/` é o mesmo frontend com `VITE_FINFLOW_RUNTIME=browser`: `api.ts`, `ai.ts` e os downloads usam `runtimeFetch` (`apps/web/src/runtime/client.ts`), que fala com um worker onde roda `cmd/finflow-wasm` (Go → WebAssembly) sobre `@sqlite.org/sqlite-wasm`. Contrato em [docs/browser-runtime-contract.md](docs/browser-runtime-contract.md).
+
+```bash
+pnpm build:browser               # build:wasm + vite build --mode browser → apps/web/dist-browser (base /app/)
+pnpm --filter @finflow/web preview:browser   # http://localhost:5274/app/
+pnpm test:e2e:browser            # Playwright contra o dist-browser: primeira vez, exemplo, lançamento, xlsx, backup/restaurar, outra aba, offline
+```
+
+O build embutido no binário (`pnpm build:web`) não muda e não leva o runtime do navegador. Publicação do pacote público em [docs/release.md](docs/release.md#site-público-landing--app-no-navegador).
 
 ### Verificação
 

@@ -46,6 +46,7 @@ import {
   useWishlist,
 } from "../lib/queries";
 import { useActiveSpace } from "../lib/use-active-space";
+import { isBrowserRuntime } from "../runtime/client";
 
 const tabCls =
   "min-h-10 flex-1 cursor-pointer rounded-(--radius-control) px-4 text-sm text-app-muted transition-colors data-[state=active]:bg-app-soft data-[state=active]:font-medium data-[state=active]:text-app-text sm:flex-none";
@@ -631,7 +632,8 @@ function WishSheet({
 
   /** Lê título, preço e imagem do link e preenche só o que ainda está vazio. */
   const fetchPreview = async (url: string): Promise<void> => {
-    if (!isHttpUrl(url)) return;
+    // modo navegador: o CORS impede ler sites de terceiros, então não há prévia
+    if (isBrowserRuntime || !isHttpUrl(url)) return;
     const res = await preview.mutateAsync(url.trim()).catch(() => null);
     if (!res) return;
     if (res.title && !form.getValues("name").trim()) {
@@ -672,33 +674,39 @@ function WishSheet({
             <Input
               type="url"
               inputMode="url"
-              placeholder="Cole o link e preenchemos o resto"
+              placeholder={
+                isBrowserRuntime ? "Cole o link do produto" : "Cole o link e preenchemos o resto"
+              }
               {...form.register("url")}
               onPaste={(e) => {
                 const pasted = e.clipboardData.getData("text");
                 if (isHttpUrl(pasted)) void fetchPreview(pasted);
               }}
             />
-            <Button
-              variant="outline"
-              className="shrink-0"
-              disabled={preview.isPending}
-              onClick={() => void fetchPreview(form.getValues("url"))}
-            >
-              {preview.isPending ? "Lendo…" : "Buscar"}
-            </Button>
+            {isBrowserRuntime ? null : (
+              <Button
+                variant="outline"
+                className="shrink-0"
+                disabled={preview.isPending}
+                onClick={() => void fetchPreview(form.getValues("url"))}
+              >
+                {preview.isPending ? "Lendo…" : "Buscar"}
+              </Button>
+            )}
           </div>
         </Field>
         <p className="-mt-2 text-xs text-app-muted" role="status" data-testid="wish-preview-status">
-          {preview.isPending
-            ? "Lendo a página do produto…"
-            : preview.isError
-              ? "Não deu para ler esse link. Preencha nome e preço à mão."
-              : preview.data
-                ? preview.data.title || preview.data.priceCents
-                  ? "Preenchemos o que encontramos na página. Confira antes de salvar."
-                  : "A página não informou nome nem preço."
-                : "O FinFlow lê só o título, o preço e a imagem da página."}
+          {isBrowserRuntime
+            ? "Prévia do link indisponível na versão web. Preencha nome e preço à mão."
+            : preview.isPending
+              ? "Lendo a página do produto…"
+              : preview.isError
+                ? "Não deu para ler esse link. Preencha nome e preço à mão."
+                : preview.data
+                  ? preview.data.title || preview.data.priceCents
+                    ? "Preenchemos o que encontramos na página. Confira antes de salvar."
+                    : "A página não informou nome nem preço."
+                  : "O FinFlow lê só o título, o preço e a imagem da página."}
         </p>
         <div className="flex items-start gap-3">
           {imageUrl ? <WishThumb src={imageUrl} className="mt-6 h-16 w-16" /> : null}

@@ -34,7 +34,16 @@ type ServerOptions struct {
 	Port    int
 	// Spaces é o registro de espaços (v3 fase 2); nil = só o espaço pessoal (svcs).
 	Spaces *spaces.Registry
+	// Runtime é onde a API roda: RuntimeServer (padrão, binário) ou RuntimeBrowser (WebAssembly no
+	// navegador: sem rede local nem caminho de arquivo em GET /api/system/info).
+	Runtime string
 }
+
+// Valores de ServerOptions.Runtime (campo "runtime" de GET /api/system/info).
+const (
+	RuntimeServer  = "server"
+	RuntimeBrowser = "browser"
+)
 
 type Server struct {
 	// svcs são os serviços do espaço pessoal: auth, telegram e sistema não dependem do espaço.

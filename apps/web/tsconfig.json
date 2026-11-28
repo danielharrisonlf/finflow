@@ -8,6 +8,7 @@
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
@@ -16,5 +17,15 @@
     "useDefineForClassFields": true,
     "types": ["vite/client"]
   },
-  "include": ["src", "e2e", "playwright.config.ts", "vite.config.ts"]
+  "include": [
+    "src",
+    "e2e",
+    "e2e-browser",
+    "e2e-runtime",
+    "browser",
+    "playwright.config.ts",
+    "playwright.browser.config.ts",
+    "playwright.runtime.config.ts",
+    "vite.config.ts"
+  ]
 }

@@ -13,6 +13,7 @@ import {
   CreditCard,
   Download,
   Github,
+  Globe,
   HardDrive,
   Heart,
   Landmark,
@@ -56,20 +57,30 @@ const links = [
 ];
 const year = new Date().getFullYear();
 
-function DownloadButton({ children = "Baixar grátis" }: { children?: React.ReactNode }) {
+/** O FinFlow no navegador (docs/browser-runtime-contract.md §5): publicado em /app/ no site. */
+const defaultAppHref = "/app/";
+
+// Primary path: use FinFlow right in the browser, on phone or computer, with nothing to install.
+function AppButton({ href }: { href: string }) {
   return (
-    <a className="ff-button" href="#baixar">
-      {children}
-      <Download size={17} aria-hidden="true" />
+    <a className="ff-button" href={href}>
+      Usar no navegador
+      <Globe size={17} aria-hidden="true" />
     </a>
   );
 }
 
-const downloadAnchor = "#baixar";
-
 // Inside the self-hosted app the account link opens the dashboard; the public page has no
-// accounts to sign in to, so the same slot leads to the download section.
-function AccountAccess({ href, onNavigate }: { href?: string; onNavigate?: () => void }) {
+// accounts to sign in to, so the same slot opens FinFlow in the browser.
+function AccountAccess({
+  href,
+  appHref,
+  onNavigate,
+}: {
+  href?: string;
+  appHref: string;
+  onNavigate?: () => void;
+}) {
   if (href) {
     return (
       <a className="ff-account-link" href={href} onClick={onNavigate}>
@@ -79,14 +90,14 @@ function AccountAccess({ href, onNavigate }: { href?: string; onNavigate?: () =>
     );
   }
   return (
-    <a className="ff-account-link" href={downloadAnchor} onClick={onNavigate}>
-      Baixar grátis
-      <Download size={15} aria-hidden="true" />
+    <a className="ff-account-link" href={appHref} onClick={onNavigate}>
+      Usar no navegador
+      <ArrowUpRight size={15} aria-hidden="true" />
     </a>
   );
 }
 
-function Navbar({ accountHref }: { accountHref?: string }) {
+function Navbar({ accountHref, appHref }: { accountHref?: string; appHref: string }) {
   const [open, setOpen] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
   const mobileNav = useRef<HTMLElement>(null);
@@ -163,7 +174,7 @@ function Navbar({ accountHref }: { accountHref?: string }) {
         </div>
         <div className="ff-nav-actions">
           <ThemeToggle />
-          <AccountAccess href={accountHref} />
+          <AccountAccess href={accountHref} appHref={appHref} />
           <button
             ref={menuButton}
             type="button"
@@ -198,7 +209,11 @@ function Navbar({ accountHref }: { accountHref?: string }) {
                 <span>Aparência</span>
                 <ThemeToggle />
               </div>
-              <AccountAccess href={accountHref} onNavigate={() => setOpen(false)} />
+              <AccountAccess
+                href={accountHref}
+                appHref={appHref}
+                onNavigate={() => setOpen(false)}
+              />
             </div>
           </nav>
         </div>
@@ -207,7 +222,7 @@ function Navbar({ accountHref }: { accountHref?: string }) {
   );
 }
 
-function Hero() {
+function Hero({ appHref }: { appHref: string }) {
   return (
     <section className="ff-hero ff-container" id="inicio">
       <div className="ff-hero-copy">
@@ -219,24 +234,24 @@ function Hero() {
           Seu dinheiro em ordem. <span className="ff-hero-emphasis">Mais espaço para viver.</span>
         </h1>
         <p>
-          Contas, cartões, metas e planilhas em um só lugar, no seu computador. Entenda seu mês e
-          planeje o que vem depois.
+          Contas, cartões, metas e planilhas em um só lugar, no navegador ou no computador. Entenda
+          seu mês e planeje o que vem depois.
         </p>
         <div className="ff-hero-actions">
-          <DownloadButton />
-          <a className="ff-secondary-link" href="#como-funciona">
-            Como funciona
-            <ArrowRight size={17} aria-hidden="true" />
+          <AppButton href={appHref} />
+          <a className="ff-secondary-link" href="#baixar">
+            Baixar para o computador
+            <Download size={17} aria-hidden="true" />
           </a>
         </div>
         <ul className="ff-hero-proof">
           <li>
             <Check size={15} />
-            Windows, macOS e Linux
+            Celular e computador, instala como app
           </li>
           <li>
             <Check size={15} />
-            Seus dados ficam com você
+            Seus dados ficam no seu navegador
           </li>
         </ul>
       </div>
@@ -992,11 +1007,11 @@ function Privacy() {
           Seus dados. Suas escolhas.
         </h2>
         <p>
-          O FinFlow roda no seu computador. Sem conta, sem cadastro e sem nuvem. Se você ativar o
-          assistente, só as perguntas que fizer a ele vão para a API do Claude.
+          O FinFlow roda no seu navegador ou no seu computador. Sem conta, sem cadastro e sem nuvem.
+          Se você ativar o assistente, só as perguntas que fizer a ele vão para a API do Claude.
         </p>
         <a className="ff-text-link" href="#baixar">
-          Baixar o FinFlow
+          Baixar para o computador
           <Download size={16} aria-hidden="true" />
         </a>
       </div>
@@ -1036,14 +1051,22 @@ function Privacy() {
 const questions = [
   {
     q: "O FinFlow é gratuito?",
-    a: "Sim. O FinFlow é gratuito e de código aberto. Não há cadastro, mensalidade ou pedido de cartão: você baixa o programa e usa no seu computador.",
+    a: "Sim. O FinFlow é gratuito e de código aberto. Não há cadastro, mensalidade ou pedido de cartão: você usa direto no navegador ou baixa o programa para o computador.",
   },
   {
     q: "Preciso pagar pela IA?",
     a: "O FinFlow é grátis. O assistente usa a sua própria chave da API do Claude, cobrada pela Anthropic conforme o uso. Todo o resto funciona sem chave nenhuma, inclusive o simulador “Posso comprar?” e as calculadoras.",
   },
   {
-    q: "Onde ficam os meus dados?",
+    q: "Onde ficam meus dados na versão do navegador?",
+    a: "No próprio navegador, no aparelho em que você usa o FinFlow. Nada vai para um servidor. Faça backups em Configurações → Dados neste navegador: limpar os dados de sites do navegador apaga o FinFlow.",
+  },
+  {
+    q: "Posso levar meus dados para o app instalado?",
+    a: "Sim, nos dois sentidos. O navegador e o programa usam o mesmo formato de banco: o backup .db feito no navegador abre no app instalado, e o finflow.db do computador pode ser trazido para o navegador em Configurações → Dados neste navegador.",
+  },
+  {
+    q: "Onde ficam os meus dados no app instalado?",
     a: "Num arquivo SQLite no seu computador, na pasta de configuração do usuário (AppData no Windows, Application Support no macOS, ~/.config no Linux). Nada é enviado para a nuvem. Para fazer backup, copie esse arquivo.",
   },
   {
@@ -1052,11 +1075,11 @@ const questions = [
   },
   {
     q: "Preciso instalar alguma coisa?",
-    a: "Não. O FinFlow é um único arquivo para Windows, macOS ou Linux. Abra o programa e use pelo navegador em localhost:3333. Não precisa de Docker nem de banco de dados à parte.",
+    a: "Não. Use direto no navegador, no celular ou no computador, e instale como app se quiser. Se preferir o programa, ele é um único arquivo para Windows, macOS ou Linux que abre em localhost:3333, sem Docker nem banco de dados à parte.",
   },
   {
     q: "Funciona no celular?",
-    a: "Sim, pela rede de casa. Inicie o FinFlow no computador com o modo de rede local, abra o endereço ou o QR code no celular e instale como app na tela inicial. Os dados continuam no seu computador.",
+    a: "Sim. Abra o FinFlow no navegador do celular e instale como app na tela inicial; os dados ficam no celular. Quem usa o programa no computador também pode abrir pela rede de casa, com o modo de rede local, e os dados continuam no computador.",
   },
   {
     q: "Consigo trazer a planilha que já uso?",
@@ -1098,7 +1121,7 @@ function FAQ() {
   );
 }
 
-function Footer() {
+function Footer({ appHref }: { appHref: string }) {
   return (
     <>
       <section className="ff-final ff-container">
@@ -1111,11 +1134,13 @@ function Footer() {
             <br />
             <span>Um passo de cada vez.</span>
           </h2>
-          <p>Baixe, abra no seu computador e comece hoje. Grátis e sem cadastro.</p>
-          <DownloadButton />
-          <a className="ff-text-link" href="#inicio">
-            Voltar ao início
-            <ArrowUpRight size={17} aria-hidden="true" />
+          <p>
+            Abra no navegador, no celular ou no computador, e comece hoje. Grátis e sem cadastro.
+          </p>
+          <AppButton href={appHref} />
+          <a className="ff-text-link" href="#baixar">
+            Baixar para o computador
+            <Download size={17} aria-hidden="true" />
           </a>
         </div>
       </section>
@@ -1132,6 +1157,7 @@ function Footer() {
           <a href="#mobile">No celular</a>
           <a href="#como-funciona">Como funciona</a>
           <a href="#seguranca">Privacidade</a>
+          <a href={appHref}>Usar no navegador</a>
           <a href="#baixar">Baixar</a>
           <a href="#duvidas">Dúvidas</a>
           <a href={repoUrl} rel="noopener">
@@ -1150,15 +1176,22 @@ function Footer() {
   );
 }
 
-export function LandingPage({ accountHref }: { accountHref?: string }) {
+export function LandingPage({
+  accountHref,
+  appHref = defaultAppHref,
+}: {
+  accountHref?: string;
+  /** Onde abrir o FinFlow no navegador (no site público, /app/). */
+  appHref?: string;
+}) {
   return (
     <div className="finflow-landing">
       <a className="ff-skip-link" href="#ff-content">
         Pular para o conteúdo
       </a>
-      <Navbar accountHref={accountHref} />
+      <Navbar accountHref={accountHref} appHref={appHref} />
       <main id="ff-content">
-        <Hero />
+        <Hero appHref={appHref} />
         <DailyFeatures />
         <AssistantSection />
         <SpreadsheetSection />
@@ -1167,10 +1200,10 @@ export function LandingPage({ accountHref }: { accountHref?: string }) {
         <MobileExperience />
         <GoalCalculator />
         <Privacy />
-        <DownloadSection />
+        <DownloadSection appHref={appHref} />
         <FAQ />
       </main>
-      <Footer />
+      <Footer appHref={appHref} />
     </div>
   );
 }

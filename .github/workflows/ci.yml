@@ -48,6 +48,15 @@ jobs:
         run: go test -race -count=1 -coverpkg=./internal/... -coverprofile=coverage.out ./...
       - run: go tool cover -func=coverage.out | tail -1
       - run: go build -trimpath -ldflags="-s -w" -o finflow ./cmd/finflow
+      # Runtime do navegador (docs/browser-runtime-contract.md §6): a API compilada para WebAssembly.
+      - name: wasm (GOOS=js GOARCH=wasm) vet & build
+        env:
+          GOOS: js
+          GOARCH: wasm
+        run: |
+          go vet ./cmd/finflow-wasm/ ./internal/...
+          go build -trimpath -ldflags="-s -w" -o finflow.wasm ./cmd/finflow-wasm
+          ls -l finflow.wasm
 
   web-checks:
     name: Web lint, typecheck & build

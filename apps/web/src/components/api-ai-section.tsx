@@ -2,6 +2,7 @@ import { Bot, Check, Copy, Plug, Smartphone } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAiStatus, useSystemInfo } from "../lib/queries";
+import { isBrowserRuntime } from "../runtime/client";
 import { Card } from "./ui/card";
 import { LoadingRows } from "./ui/empty";
 import { QrCode } from "./ui/qr-code";
@@ -102,10 +103,13 @@ export function ApiAiSection() {
       data-testid="api-ai-section"
     >
       <div>
-        <h2 className="text-sm font-semibold text-app-text">API e IA</h2>
+        <h2 className="text-sm font-semibold text-app-text">
+          {isBrowserRuntime ? "Sistema e IA" : "API e IA"}
+        </h2>
         <p className="mt-1 text-sm text-app-muted">
-          Use seus dados em assistentes compatíveis com MCP, acesse a API pessoal e abra o FinFlow
-          no celular pela rede local.
+          {isBrowserRuntime
+            ? "Versão do FinFlow e o assistente. As perguntas ao assistente vão direto deste navegador para a API do Claude."
+            : "Use seus dados em assistentes compatíveis com MCP, acesse a API pessoal e abra o FinFlow no celular pela rede local."}
         </p>
       </div>
 
@@ -125,7 +129,7 @@ export function ApiAiSection() {
             <InfoRow label="Banco de dados">
               {info.dbDialect === "postgres" ? "PostgreSQL" : "SQLite"}
             </InfoRow>
-            {info.dataPath ? (
+            {info.dataPath && !isBrowserRuntime ? (
               <InfoRow label="Arquivo de dados">
                 <span className="flex flex-wrap items-center gap-2">
                   <code className="text-xs">{info.dataPath}</code>
@@ -133,63 +137,72 @@ export function ApiAiSection() {
                 </span>
               </InfoRow>
             ) : null}
-            <InfoRow label="URL da API">
-              <code className="text-xs">{apiBase}</code>
-            </InfoRow>
+            {isBrowserRuntime ? (
+              <InfoRow label="Onde ficam os dados">Neste navegador</InfoRow>
+            ) : (
+              <InfoRow label="URL da API">
+                <code className="text-xs">{apiBase}</code>
+              </InfoRow>
+            )}
           </dl>
         )}
 
-        <section className="flex min-w-0 flex-col gap-2">
-          <SubHeading icon={Plug}>MCP no computador (stdio)</SubHeading>
-          <p className="text-xs text-app-muted">
-            Adicione ao arquivo de configuração do seu assistente compatível com MCP, trocando o
-            caminho pelo local do executável do FinFlow.
-          </p>
-          <Snippet code={MCP_STDIO_SNIPPET} copyLabel="Copiar configuração MCP stdio" />
-        </section>
+        {/* modo navegador: sem MCP (stdio/HTTP) nem rede local, que dependem do programa instalado */}
+        {isBrowserRuntime ? null : (
+          <>
+            <section className="flex min-w-0 flex-col gap-2">
+              <SubHeading icon={Plug}>MCP no computador (stdio)</SubHeading>
+              <p className="text-xs text-app-muted">
+                Adicione ao arquivo de configuração do seu assistente compatível com MCP, trocando o
+                caminho pelo local do executável do FinFlow.
+              </p>
+              <Snippet code={MCP_STDIO_SNIPPET} copyLabel="Copiar configuração MCP stdio" />
+            </section>
 
-        <section className="flex min-w-0 flex-col gap-2">
-          <SubHeading icon={Plug}>MCP por HTTP</SubHeading>
-          <p className="text-xs text-app-muted">
-            Endpoint JSON-RPC com as mesmas ferramentas.{" "}
-            {info?.authRequired === false
-              ? "Sem senha configurada, não é preciso enviar cabeçalho de autorização."
-              : "Com senha ativada, envie o token obtido no login no cabeçalho Authorization."}
-          </p>
-          <Snippet code={httpSnippet} copyLabel="Copiar exemplo de MCP por HTTP" />
-        </section>
+            <section className="flex min-w-0 flex-col gap-2">
+              <SubHeading icon={Plug}>MCP por HTTP</SubHeading>
+              <p className="text-xs text-app-muted">
+                Endpoint JSON-RPC com as mesmas ferramentas.{" "}
+                {info?.authRequired === false
+                  ? "Sem senha configurada, não é preciso enviar cabeçalho de autorização."
+                  : "Com senha ativada, envie o token obtido no login no cabeçalho Authorization."}
+              </p>
+              <Snippet code={httpSnippet} copyLabel="Copiar exemplo de MCP por HTTP" />
+            </section>
 
-        <section className="flex min-w-0 flex-col gap-2" data-testid="lan-status">
-          <SubHeading icon={Smartphone}>Celular na rede local</SubHeading>
-          {info?.lanEnabled && lanUrl ? (
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <QrCode value={lanUrl} label={`QR code para abrir ${lanUrl}`} />
-              <div className="min-w-0">
-                <p className="text-sm text-app-text">
-                  Aponte a câmera do celular para o código ou abra:
+            <section className="flex min-w-0 flex-col gap-2" data-testid="lan-status">
+              <SubHeading icon={Smartphone}>Celular na rede local</SubHeading>
+              {info?.lanEnabled && lanUrl ? (
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <QrCode value={lanUrl} label={`QR code para abrir ${lanUrl}`} />
+                  <div className="min-w-0">
+                    <p className="text-sm text-app-text">
+                      Aponte a câmera do celular para o código ou abra:
+                    </p>
+                    <ul className="mt-1 space-y-0.5">
+                      {info.lanUrls.map((url) => (
+                        <li key={url}>
+                          <code className="text-sm break-all text-income">{url}</code>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-2 text-xs text-app-muted">
+                      O celular precisa estar no mesmo Wi-Fi. No navegador, use “Adicionar à tela
+                      inicial” para instalar como app.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-app-muted">
+                  Modo rede local desligado. Para abrir no celular, inicie com{" "}
+                  <code className="text-xs text-app-text">finflow serve --lan</code> (ou{" "}
+                  <code className="text-xs text-app-text">FINFLOW_LAN=1</code>). Por segurança, é
+                  preciso definir uma senha (<code className="text-xs">FINFLOW_PASSWORD</code>).
                 </p>
-                <ul className="mt-1 space-y-0.5">
-                  {info.lanUrls.map((url) => (
-                    <li key={url}>
-                      <code className="text-sm break-all text-income">{url}</code>
-                    </li>
-                  ))}
-                </ul>
-                <p className="mt-2 text-xs text-app-muted">
-                  O celular precisa estar no mesmo Wi-Fi. No navegador, use “Adicionar à tela
-                  inicial” para instalar como app.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-app-muted">
-              Modo rede local desligado. Para abrir no celular, inicie com{" "}
-              <code className="text-xs text-app-text">finflow serve --lan</code> (ou{" "}
-              <code className="text-xs text-app-text">FINFLOW_LAN=1</code>). Por segurança, é
-              preciso definir uma senha (<code className="text-xs">FINFLOW_PASSWORD</code>).
-            </p>
-          )}
-        </section>
+              )}
+            </section>
+          </>
+        )}
 
         <section className="flex min-w-0 flex-col gap-2" data-testid="ai-status">
           <SubHeading icon={Bot}>Assistente</SubHeading>

@@ -189,7 +189,7 @@ func (s *Service) client(ctx context.Context) (anthropic.Client, error) {
 	if err != nil {
 		return anthropic.Client{}, err
 	}
-	var opts []option.RequestOption
+	opts := platformOptions()
 	switch source {
 	case SourceEnv:
 		// Cadeia padrão do SDK (variáveis de ambiente ou perfil do `ant auth login`).

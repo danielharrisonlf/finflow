@@ -28,12 +28,13 @@ import {
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { CategoryIcon, formatCategoryLabel } from "../components/ui/category-icon";
+import { DownloadLink } from "../components/ui/download-link";
 import { Empty, LoadingRows } from "../components/ui/empty";
 import { Field, Input, Select } from "../components/ui/field";
 import { Money } from "../components/ui/money";
 import { Sheet } from "../components/ui/sheet";
 import { TagChip, TagPicker } from "../components/ui/tags";
-import { exportUrl } from "../lib/api";
+import { exportParams as withFormat } from "../lib/api";
 import { formatBRL, formatDate, formatMonthYear, parseBRLInput } from "../lib/format";
 import {
   filtersToParams,
@@ -132,27 +133,30 @@ export function TransactionsPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <a
-            href={exportUrl("csv", exportParams)}
-            download
+          <DownloadLink
+            path="/transactions/export"
+            params={withFormat("csv", exportParams)}
+            filename="finflow-lancamentos.csv"
             className="flex h-10 items-center gap-2 rounded-(--radius-control) border border-app-border px-3 text-sm text-app-text hover:border-app-muted"
           >
             <Download size={15} /> CSV
-          </a>
-          <a
-            href={exportUrl("ofx", exportParams)}
-            download
+          </DownloadLink>
+          <DownloadLink
+            path="/transactions/export"
+            params={withFormat("ofx", exportParams)}
+            filename="finflow-lancamentos.ofx"
             className="flex h-10 items-center gap-2 rounded-(--radius-control) border border-app-border px-3 text-sm text-app-text hover:border-app-muted"
           >
             <Download size={15} /> OFX
-          </a>
-          <a
-            href={exportUrl("xlsx", exportParams)}
-            download
+          </DownloadLink>
+          <DownloadLink
+            path="/transactions/export"
+            params={withFormat("xlsx", exportParams)}
+            filename="finflow-lancamentos.xlsx"
             className="flex h-10 items-center gap-2 rounded-(--radius-control) border border-app-border px-3 text-sm text-app-text hover:border-app-muted"
           >
             <Download size={15} /> <span className="hidden sm:inline">Exportar </span>Excel (.xlsx)
-          </a>
+          </DownloadLink>
         </div>
       </header>
 

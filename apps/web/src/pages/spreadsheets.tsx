@@ -17,11 +17,11 @@ import { Link } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import { Card, CardHeader } from "../components/ui/card";
 import { formatCategoryLabel } from "../components/ui/category-icon";
+import { DownloadLink } from "../components/ui/download-link";
 import { Field, Select } from "../components/ui/field";
 import { Money } from "../components/ui/money";
 import { MonthSwitcher, usePeriodState, YearSwitcher } from "../components/ui/month-switcher";
 import { Badge } from "../components/ui/segmented";
-import { downloadUrl } from "../lib/api";
 import { cn } from "../lib/cn";
 import { formatDate } from "../lib/format";
 import { useAccounts, useCategories, useCommitImport, useImportPreview } from "../lib/queries";
@@ -617,16 +617,14 @@ function ExportSection() {
           </ul>
           <div className="mt-auto flex flex-wrap items-center justify-between gap-2">
             <YearSwitcher year={year} onChange={setYear} />
-            <a
-              href={downloadUrl(
-                "/spreadsheet/export.xlsx",
-                new URLSearchParams({ year: String(year) }),
-              )}
-              download
+            <DownloadLink
+              path="/spreadsheet/export.xlsx"
+              params={new URLSearchParams({ year: String(year) })}
+              filename={`finflow-${year}.xlsx`}
               className={downloadCls}
             >
               <Download size={15} aria-hidden /> Baixar {year}
-            </a>
+            </DownloadLink>
           </div>
         </Card>
 
@@ -648,9 +646,13 @@ function ExportSection() {
             </li>
           </ul>
           <div className="mt-auto">
-            <a href={downloadUrl("/spreadsheet/template.xlsx")} download className={downloadCls}>
+            <DownloadLink
+              path="/spreadsheet/template.xlsx"
+              filename="finflow-modelo-importacao.xlsx"
+              className={downloadCls}
+            >
               <Download size={15} aria-hidden /> Baixar modelo
-            </a>
+            </DownloadLink>
           </div>
         </Card>
 
@@ -664,20 +666,20 @@ function ExportSection() {
           </div>
           <div className="mt-auto flex flex-wrap items-center justify-between gap-2">
             <MonthSwitcher period={period} onShift={shiftPeriod} />
-            <a
-              href={downloadUrl(
-                "/transactions/export",
+            <DownloadLink
+              path="/transactions/export"
+              params={
                 new URLSearchParams({
                   format: "xlsx",
                   month: String(period.month),
                   year: String(period.year),
-                }),
-              )}
-              download
+                })
+              }
+              filename={`finflow-lancamentos-${period.year}-${String(period.month).padStart(2, "0")}.xlsx`}
               className={downloadCls}
             >
               <Download size={15} aria-hidden /> Baixar
-            </a>
+            </DownloadLink>
           </div>
         </Card>
       </div>

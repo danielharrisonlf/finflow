@@ -1,10 +1,15 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MutationCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { lazy, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { RuntimeGate } from "./components/browser/runtime-gate";
 import { AppShell } from "./components/layout/app-shell";
+import { Toaster } from "./components/ui/toaster";
+import { askPersistentStorageOnce } from "./lib/browser-runtime";
 import { PrivacyRerender } from "./lib/privacy";
+import { registerServiceWorker } from "./lib/pwa";
 import { subscribeSpace } from "./lib/space";
+import { isBrowserRuntime } from "./runtime/client";
 import "./styles.css";
 
 const DashboardPage = lazy(() =>
@@ -64,6 +69,10 @@ function page(element: React.ReactNode): React.ReactNode {
 }
 
 const queryClient = new QueryClient({
+  // modo navegador: na primeira gravação de dados reais, pede armazenamento persistente
+  mutationCache: isBrowserRuntime
+    ? new MutationCache({ onSuccess: () => askPersistentStorageOnce() })
+    : undefined,
   defaultOptions: {
     queries: { staleTime: 15_000, retry: 1, refetchOnWindowFocus: false },
   },
@@ -76,50 +85,51 @@ subscribeSpace(() => {
   queryClient.clear();
 });
 
-const router = createBrowserRouter([
-  { path: "/inicio", element: page(<LandingPage />) },
-  {
-    element: <AppShell />,
-    children: [
-      { path: "/", element: page(<DashboardPage />) },
-      { path: "/extrato", element: page(<TransactionsPage />) },
-      { path: "/contas", element: page(<AccountsPage />) },
-      { path: "/orcamentos", element: page(<BudgetsPage />) },
-      { path: "/metas", element: page(<GoalsPage />) },
-      { path: "/categorias", element: page(<CategoriesPage />) },
-      { path: "/compromissos", element: page(<CommitmentsPage />) },
-      { path: "/ano", element: page(<YearPage />) },
-      { path: "/fluxo", element: page(<CashflowPage />) },
-      { path: "/projecao", element: page(<ProjectionPage />) },
-      { path: "/investimentos", element: page(<InvestmentsPage />) },
-      { path: "/dividas", element: page(<LoansPage />) },
-      { path: "/planilhas", element: page(<SpreadsheetsPage />) },
-      { path: "/assistente", element: page(<AssistantPage />) },
-      { path: "/calculadoras", element: page(<CalculatorsPage />) },
-      { path: "/espacos", element: page(<SpacesPage />) },
-      { path: "/divisao", element: page(<SplitPage />) },
-      { path: "/empresa", element: page(<BusinessPage />) },
-      { path: "/configuracoes", element: page(<SettingsPage />) },
-    ],
-  },
-]);
+const router = createBrowserRouter(
+  [
+    { path: "/inicio", element: page(<LandingPage />) },
+    {
+      element: <AppShell />,
+      children: [
+        { path: "/", element: page(<DashboardPage />) },
+        { path: "/extrato", element: page(<TransactionsPage />) },
+        { path: "/contas", element: page(<AccountsPage />) },
+        { path: "/orcamentos", element: page(<BudgetsPage />) },
+        { path: "/metas", element: page(<GoalsPage />) },
+        { path: "/categorias", element: page(<CategoriesPage />) },
+        { path: "/compromissos", element: page(<CommitmentsPage />) },
+        { path: "/ano", element: page(<YearPage />) },
+        { path: "/fluxo", element: page(<CashflowPage />) },
+        { path: "/projecao", element: page(<ProjectionPage />) },
+        { path: "/investimentos", element: page(<InvestmentsPage />) },
+        { path: "/dividas", element: page(<LoansPage />) },
+        { path: "/planilhas", element: page(<SpreadsheetsPage />) },
+        { path: "/assistente", element: page(<AssistantPage />) },
+        { path: "/calculadoras", element: page(<CalculatorsPage />) },
+        { path: "/espacos", element: page(<SpacesPage />) },
+        { path: "/divisao", element: page(<SplitPage />) },
+        { path: "/empresa", element: page(<BusinessPage />) },
+        { path: "/configuracoes", element: page(<SettingsPage />) },
+      ],
+    },
+  ],
+  // modo navegador: o app mora em /app/ no site público
+  { basename: isBrowserRuntime ? "/app" : undefined },
+);
 
 const root = document.getElementById("root");
 if (!root) throw new Error("elemento #root não encontrado");
 
+const app = <RouterProvider router={router} />;
+
 createRoot(root).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      {isBrowserRuntime ? <RuntimeGate>{app}</RuntimeGate> : app}
+      <Toaster />
     </QueryClientProvider>
   </StrictMode>,
 );
 
-// PWA (v3 §14): service worker só no build de produção, guardando apenas o shell estático.
-if (import.meta.env.PROD && "serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(() => {
-      // sem service worker o app segue funcionando normalmente
-    });
-  });
-}
+// PWA: service worker só no build de produção (lib/pwa: servidor e navegador).
+registerServiceWorker();

@@ -48,6 +48,7 @@ import {
   useUpdateTag,
 } from "../lib/queries";
 import { useActiveSpace } from "../lib/use-active-space";
+import { isBrowserRuntime } from "../runtime/client";
 
 /** Grupos do DRE (espaço Empresa, v3 fase 2 §5). */
 const DRE_GROUP_LABEL: Record<DreGroup, string> = {
@@ -791,7 +792,10 @@ function RulesPanel({
       <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-app-muted">
           Quando a descrição contém o texto da regra, a transação recebe a categoria
-          automaticamente: em lançamentos novos, compras no cartão, Telegram e importações.
+          automaticamente:{" "}
+          {isBrowserRuntime
+            ? "em lançamentos novos, compras no cartão e importações."
+            : "em lançamentos novos, compras no cartão, Telegram e importações."}{" "}
           Maiúsculas e acentos não importam.
         </p>
         <Button

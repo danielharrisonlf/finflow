@@ -77,7 +77,9 @@ function readme(os) {
       ? [
           "1. Extraia este .zip numa pasta (por exemplo, Documentos\\FinFlow).",
           "2. Dê dois cliques em finflow.exe. Uma janela preta abre e o navegador",
-          "   vai para http://localhost:3333.",
+          "   vai para http://localhost:3333 (se essa porta estiver ocupada por outro",
+          "   programa, o FinFlow usa a próxima livre e mostra o endereço na janela).",
+          "   Não rode o finflow.exe de dentro do .zip: extraia antes.",
           '   Se o Windows mostrar "O Windows protegeu o computador", clique em',
           '   "Mais informações" > "Executar assim mesmo" (o binário não é assinado).',
         ]
@@ -103,6 +105,15 @@ function readme(os) {
     `     ${dataDir[os]}`,
     "Para fazer backup, copie esse arquivo com o FinFlow fechado.",
     "Outro local: defina a variável FINFLOW_DB_PATH (caminho do arquivo .db).",
+    "",
+    "SE NÃO ABRIR",
+    "Se der erro ao iniciar, o FinFlow mostra uma mensagem e grava os detalhes em",
+    os === "windows"
+      ? "     %AppData%\finflow\finflow-desktop.log"
+      : os === "darwin"
+        ? "     ~/Library/Application Support/finflow/finflow-desktop.log"
+        : "     ~/.config/finflow/finflow-desktop.log",
+    "Prefere não instalar nada? Use no navegador: https://finflow-landing-umber.vercel.app/app/",
     "",
     "COMO PARAR",
     os === "windows"

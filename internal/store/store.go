@@ -143,6 +143,28 @@ func (s *Store) CountAccounts(ctx context.Context) (int, error) {
 	return n, err
 }
 
+// userDataTables são as tabelas preenchidas pelo usuário (categorias e settings vêm do Bootstrap).
+var userDataTables = []string{
+	"accounts", "credit_cards", "transactions", "budgets", "goals", "recurring", "category_rules",
+	"wishlist", "investments", "loans", "tags", "members",
+}
+
+// HasUserData indica se o banco já tem algum dado do usuário (o seed de demonstração só roda num
+// banco vazio).
+func (s *Store) HasUserData(ctx context.Context) (bool, error) {
+	for _, table := range userDataTables {
+		var found bool
+		err := s.DB.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM `+table+`)`).Scan(&found)
+		if err != nil {
+			return false, err
+		}
+		if found {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (s *Store) CreateAccount(ctx context.Context, in domain.CreateAccountInput) (*AccountRow, error) {
 	id := uuid.NewString()
 	now := nowStr()

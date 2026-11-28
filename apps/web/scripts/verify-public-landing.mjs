@@ -7,6 +7,8 @@ import { chromium, webkit } from "@playwright/test";
 
 const url = process.argv[2];
 if (!url) throw new Error("Pass the local or production landing URL");
+// FinFlow in the browser is published with the landing (docs/browser-runtime-contract.md §5).
+const appUrl = new URL("/app/", url).href;
 const artifacts = join(
   dirname(fileURLToPath(import.meta.url)),
   "../test-results/public-verification",
@@ -79,10 +81,21 @@ for (const [engine, browserType] of [
         }
       }
     }
-    // The public page has no accounts: the header action is the download path, never a login.
+    // The public page has no accounts: the header action opens FinFlow in the browser, never a
+    // login. The hero offers the browser app first and the desktop download second.
     assert.equal(await page.getByText("Acessar minha conta").count(), 0);
     assert.equal(await page.getByRole("dialog").count(), 0);
-    await page.locator(".ff-nav-actions").getByRole("link", { name: "Baixar grátis" }).click();
+    const nav = page.locator(".ff-nav-actions");
+    assert.equal(
+      await nav.getByRole("link", { name: "Usar no navegador" }).getAttribute("href"),
+      "/app/",
+    );
+    const hero = page.locator(".ff-hero-actions");
+    assert.equal(
+      await hero.getByRole("link", { name: "Usar no navegador" }).getAttribute("href"),
+      "/app/",
+    );
+    await hero.getByRole("link", { name: "Baixar para o computador" }).click();
     await page.waitForURL(/#baixar$/);
     const primary = page.locator("#baixar .ff-download-primary");
     assert.match(
@@ -142,6 +155,8 @@ for (const [engine, browserType] of [
       "Preciso pagar pela IA?",
       "Funciona no celular?",
       "Meus dados vão para a nuvem?",
+      "Onde ficam meus dados na versão do navegador?",
+      "Posso levar meus dados para o app instalado?",
     ]) {
       const item = page.locator("#duvidas details", { hasText: question });
       await item.locator("summary").click();
@@ -168,6 +183,79 @@ for (const [engine, browserType] of [
         widths: [320, 375, 390, 430, 768, 1024, 1536],
         themes: 2,
         apiRequests: api.length,
+      }),
+    );
+  } finally {
+    await browser.close();
+  }
+}
+
+// FinFlow in the browser at /app/: the runtime starts, demo data can be created, and the only
+// requests are the site's own files (the assistant is never contacted here). Chromium is the
+// reference engine; WebKit is reported but may lack the OPFS sync access the runtime needs.
+for (const [engine, browserType] of [
+  ["chromium", chromium],
+  ["webkit", webkit],
+]) {
+  const browser = await browserType.launch();
+  try {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await context.newPage();
+    const origin = new URL(url).origin;
+    const foreign = [];
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    context.on("request", (request) => {
+      const requested = request.url();
+      if (/^(data|blob):/.test(requested)) return;
+      if (new URL(requested).origin !== origin) foreign.push(requested);
+    });
+    const response = await page.goto(appUrl);
+    assert.equal(response.status(), 200, `${engine}: /app/ status`);
+    await page
+      .locator('[data-testid="first-run"], [data-testid="runtime-error"]')
+      .first()
+      .waitFor({ timeout: 90_000 });
+    const outcome = (await page.getByTestId("runtime-error").count()) > 0 ? "error" : "first-run";
+    if (outcome === "error") {
+      const message = await page.getByTestId("runtime-error").innerText();
+      assert.notEqual(engine, "chromium", `chromium: runtime failed to start: ${message}`);
+      console.log(JSON.stringify({ engine, url: appUrl, status: "runtime-unsupported", message }));
+      continue;
+    }
+    await page.getByRole("button", { name: /Explorar com dados de exemplo/ }).click();
+    const balance = page.getByTestId("hero-balance");
+    await balance.waitFor({ timeout: 60_000 });
+    assert.match(await balance.innerText(), /R\$/, `${engine}: dashboard numbers`);
+    assert.deepEqual(errors, [], `${engine}: app page errors`);
+    assert.deepEqual(foreign, [], `${engine}: app requests outside the site`);
+
+    // Hosting contract: SPA fallback, no-cache shell and service worker, wasm MIME type.
+    const route = await page.request.get(new URL("/app/configuracoes", url).href);
+    assert.equal(route.status(), 200, "SPA fallback for /app/*");
+    assert.match(route.headers()["content-type"], /text\/html/);
+    const sw = await page.request.get(new URL("/app/sw.js", url).href);
+    assert.equal(sw.status(), 200, "/app/sw.js");
+    const swSource = await sw.text();
+    const precache = JSON.parse(/const PRECACHE = (\[[^\n]*\]);/.exec(swSource)?.[1] ?? "[]");
+    const wasm = precache.find((file) => file.endsWith(".wasm"));
+    assert.ok(wasm, "a .wasm file is precached");
+    const wasmResponse = await page.request.get(new URL(`/app/${wasm}`, url).href);
+    assert.equal(wasmResponse.status(), 200, wasm);
+    assert.equal(wasmResponse.headers()["content-type"], "application/wasm");
+    const manifest = await page.request.get(new URL("/app/manifest.webmanifest", url).href);
+    const appManifest = await manifest.json();
+    assert.equal(appManifest.start_url, "/app/");
+    assert.equal(appManifest.scope, "/app/");
+    console.log(
+      JSON.stringify({
+        engine,
+        url: appUrl,
+        status: "passed",
+        precached: precache.length,
+        foreignRequests: foreign.length,
+        swCacheControl: sw.headers()["cache-control"] ?? null,
+        indexCacheControl: route.headers()["cache-control"] ?? null,
       }),
     );
   } finally {
