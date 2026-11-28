@@ -117,7 +117,11 @@ for (const [engine, browserType] of [
       "git clone https://github.com/danielharrisonlf/finflow && cd finflow && pnpm install && pnpm start",
     );
     await tabs.nth(2).click();
-    assert.match(await page.locator("#baixar").innerText(), /docker compose --profile ai up -d/);
+    assert.match(
+      await page.locator("#baixar").innerText(),
+      /ANTHROPIC_API_KEY=sk-ant-\.\.\. docker compose up -d/,
+    );
+    assert.doesNotMatch(await page.locator("body").innerText(), /modelo local|agente local/i);
     await tabs.nth(0).click();
     await dashboard.locator(".ff-preview-details > summary").click();
     assert.equal(await dashboard.locator(".balance strong").innerText(), "R$ 24.586,50");
@@ -139,8 +143,11 @@ for (const [engine, browserType] of [
       (await ai.getByRole("heading", { level: 2 }).innerText()).trim(),
       "Pergunte ao FinFlow.",
     );
-    assert.match(await ai.innerText(), /modelo local \(Ollama ou LM Studio\)/);
-    assert.match(await ai.innerText(), /sua própria chave da API do Claude/);
+    assert.match(await ai.innerText(), /coloque a sua chave da API do Claude/);
+    assert.match(
+      await ai.innerText(),
+      /Sem chave, o recurso fica desligado e todo o resto funciona/,
+    );
     const questions = ai.getByRole("group", { name: "Perguntas de exemplo" }).getByRole("button");
     assert.deepEqual(await questions.allInnerTexts(), [
       "Posso jantar fora esse mês?",

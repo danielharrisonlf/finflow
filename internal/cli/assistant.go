@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -19,6 +20,10 @@ import (
 )
 
 // ───────────────────────── perguntar (Assistente) ─────────────────────────
+
+// errAssistantDisabled: sem chave da API do Claude o Assistente fica desativado (local ou remoto).
+var errAssistantDisabled = errors.New("o Assistente está desativado: não há chave da API do Claude configurada. " +
+	"Para ativar, defina ANTHROPIC_API_KEY ou salve a sua chave em Configurações → Assistente (IA)")
 
 // proposalApplier grava as propostas confirmadas (modo local pelo serviço, remoto pela API).
 type proposalApplier interface {
@@ -105,7 +110,7 @@ func cmdPerguntar(opts *rootOpts) *cobra.Command {
 	var confirmar bool
 	cmd := &cobra.Command{
 		Use:   "perguntar <pergunta...>",
-		Short: "Pergunta ao Assistente (modelo local ou Claude); propostas só são gravadas com --confirmar ou s/N",
+		Short: "Pergunta ao Assistente (API do Claude com a sua chave); propostas só são gravadas com --confirmar ou s/N",
 		Example: `  finflow perguntar "Posso comprar um celular de R$ 2.000 em 10x?"
   finflow perguntar "Lança 45,90 de mercado hoje no Nubank" --confirmar`,
 		Args: cobra.MinimumNArgs(1),
@@ -137,8 +142,9 @@ func cmdPerguntar(opts *rootOpts) *cobra.Command {
 	return cmd
 }
 
-// askAssistant roda a pergunta no modo local (mesmo agente do servidor, banco local e configuração do
-// assistente em settings/FINFLOW_AI_*) ou, com --api/FINFLOW_API_URL, pelo SSE da API remota.
+// askAssistant roda a pergunta no modo local (mesmo agente do servidor, banco local e chave do Claude em
+// ANTHROPIC_API_KEY ou em settings) ou, com --api/FINFLOW_API_URL, pelo SSE da API remota. Sem chave →
+// errAssistantDisabled.
 func askAssistant(ctx context.Context, opts *rootOpts, question string, printer *askPrinter) (applier proposalApplier, cleanup func(), err error) {
 	remote := strings.TrimSpace(opts.apiURL)
 	if remote == "" {
@@ -148,13 +154,17 @@ func askAssistant(ctx context.Context, opts *rootOpts, question string, printer 
 	if remote != "" {
 		hc := client.NewHTTPClient(remote, opts.token).WithSpace(slug)
 		err := hc.AIChat(ctx, []client.AIChatMessage{{Role: "user", Content: question}}, printer.event)
+		var apiErr *client.APIError
+		if errors.As(err, &apiErr) && apiErr.Status == http.StatusPreconditionFailed {
+			err = errAssistantDisabled
+		}
 		return hc, func() {}, err
 	}
 	local, err := openLocal(ctx, nil, "")
 	if err != nil {
 		return nil, nil, err
 	}
-	// A configuração do assistente fica no espaço pessoal; as ferramentas e as propostas usam o espaço.
+	// A chave do Claude fica no espaço pessoal; as ferramentas e as propostas usam o espaço.
 	personal, err := local.services(ctx, "")
 	if err != nil {
 		local.close()
@@ -166,6 +176,14 @@ func askAssistant(ctx context.Context, opts *rootOpts, question string, printer 
 		return nil, nil, err
 	}
 	svc := ai.NewService(personal, ai.Config{}).ForSpace(data)
+	st, err := svc.Status(ctx)
+	if err == nil && !st.Configured {
+		err = errAssistantDisabled
+	}
+	if err != nil {
+		local.close()
+		return nil, nil, err
+	}
 	if err := svc.Chat(ctx, ai.ChatInput{Messages: []ai.ChatMessage{{Role: "user", Content: question}}}, printer.emit); err != nil {
 		local.close()
 		return nil, nil, err

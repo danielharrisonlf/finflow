@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { clearAuthToken } from "../../lib/api";
 import { cn } from "../../lib/cn";
-import { useAuthStatus } from "../../lib/queries";
+import { useAiEnabled, useAuthStatus } from "../../lib/queries";
 import { useActiveSpaceSlug } from "../../lib/space";
 import { useActiveSpace, useSpaceGuard } from "../../lib/use-active-space";
 import { LoginPage } from "../../pages/login";
@@ -63,7 +63,8 @@ function AppShellView() {
   const auth = useAuthStatus();
   const queryClient = useQueryClient();
   const { kind } = useActiveSpace();
-  const navGroups = navGroupsFor(kind);
+  const aiEnabled = useAiEnabled();
+  const navGroups = navGroupsFor(kind, aiEnabled);
   useSpaceGuard();
 
   useEffect(() => {

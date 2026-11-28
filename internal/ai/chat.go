@@ -8,11 +8,17 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/anthropics/anthropic-sdk-go/v2"
+
 	"finflow/internal/domain"
 	"finflow/internal/service"
 )
 
 const (
+	// chatMaxTokens: streaming, então não há risco de timeout HTTP; respostas são curtas pelo prompt.
+	chatMaxTokens = 32000
+	// maxToolRounds limita as idas e voltas de ferramentas numa mesma pergunta.
+	maxToolRounds = 10
 	// Limites da conversa enviada pelo cliente (histórico vive no localStorage).
 	maxChatMessages     = 60
 	maxChatMessageRunes = 20000
@@ -70,62 +76,133 @@ func itoa(i int) string {
 	return string(b)
 }
 
-// chatHistory normaliza o histórico do cliente para qualquer provedor: textos sem espaços nas pontas,
-// respostas vazias do assistente (ex.: após um erro) descartadas e a conversa sempre começando por um
-// turno do usuário.
-func chatHistory(in ChatInput) []ChatMessage {
-	out := make([]ChatMessage, 0, len(in.Messages))
+// buildMessages converte o histórico do cliente. A data de hoje vai no primeiro turno do usuário (depois do
+// ponto de cache do system); respostas vazias do assistente (ex.: após um erro) são descartadas e a
+// conversa sempre começa por um turno do usuário.
+func buildMessages(in ChatInput, now time.Time) []anthropic.BetaMessageParam {
+	out := make([]anthropic.BetaMessageParam, 0, len(in.Messages))
+	first := true
 	for _, m := range in.Messages {
 		content := strings.TrimSpace(m.Content)
 		if content == "" {
 			continue
 		}
-		if m.Role == "assistant" && len(out) == 0 {
+		if m.Role == "assistant" {
+			if first {
+				continue
+			}
+			out = append(out, anthropic.BetaMessageParam{OfAssistant: &anthropic.BetaAssistantMessageParam{
+				Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock(content)},
+			}})
 			continue
 		}
-		out = append(out, ChatMessage{Role: m.Role, Content: content})
+		blocks := []anthropic.BetaContentBlockParamUnion{}
+		if first {
+			blocks = append(blocks, anthropic.NewBetaTextBlock(todayContext(now)))
+			first = false
+		}
+		blocks = append(blocks, anthropic.NewBetaTextBlock(content))
+		out = append(out, anthropic.NewBetaUserMessage(blocks...))
 	}
 	return out
 }
 
-// Provider é o cliente de um modelo. O loop do agente, as ferramentas, as propostas, o contrato SSE e
-// o system prompt são compartilhados (Service.Chat e Service.ExtractReceipt); cada provedor só sabe
-// conversar com o próprio modelo.
-type Provider interface {
-	// ID é o identificador do provedor (ollama, openai_compatible, claude).
-	ID() string
-	// newSession abre uma conversa com o histórico normalizado (começa por um turno do usuário).
-	newSession(ctx context.Context, history []ChatMessage, now time.Time) chatSession
-	// maxToolRounds limita as rodadas de ferramentas numa mesma pergunta.
-	maxToolRounds() int
-	// extractReceipt lê um comprovante e devolve os campos crus (antes de normalizeReceipt).
-	extractReceipt(ctx context.Context, req receiptRequest) (receiptRaw, error)
+// chatParams monta a requisição. Ordem de cache: tools (determinísticas) → system (congelado, com
+// breakpoint explícito) → mensagens (breakpoint automático no fim, que acompanha a conversa crescendo).
+func chatParams(messages []anthropic.BetaMessageParam) anthropic.BetaMessageNewParams {
+	return anthropic.BetaMessageNewParams{
+		Model:     Model,
+		MaxTokens: chatMaxTokens,
+		System: []anthropic.BetaTextBlockParam{{
+			Text:         chatSystemPrompt,
+			CacheControl: anthropic.NewBetaCacheControlEphemeralParam(),
+		}},
+		CacheControl: anthropic.NewBetaCacheControlEphemeralParam(),
+		Tools:        toolParams(),
+		// Pensamento adaptativo: `thinking` omitido de propósito (Opus 5.5 roda adaptativo por padrão).
+		OutputConfig: anthropic.BetaOutputConfigParam{Effort: anthropic.BetaOutputConfigEffortMedium},
+		Betas:        []anthropic.AnthropicBeta{fallbackBeta},
+		Fallbacks:    anthropic.BetaFallbacksParamOfDefault(),
+		Messages:     messages,
+	}
 }
 
-// chatSession guarda a conversa no formato do provedor entre os turnos do loop.
-type chatSession interface {
-	// turn faz uma requisição em streaming, emitindo `text` e `tool`, e diz como o turno terminou.
-	// Erros já vêm traduzidos para mensagens em pt-BR (service.AppError).
-	turn(ctx context.Context, emit Emitter) (turnResult, error)
-	// addToolResults acrescenta os resultados das chamadas do último turno, na mesma ordem.
-	addToolResults(results []toolResult)
+// Chat roda o loop de ferramentas emitindo eventos. Erros antes do primeiro evento (ex.: sem chave) são
+// devolvidos para o handler responder em JSON; depois disso o handler emite `error`.
+func (s *Service) Chat(ctx context.Context, in ChatInput, emit Emitter) error {
+	if issues := ValidateChatInput(in); len(issues) > 0 {
+		return service.ValidationFailed(issues)
+	}
+	client, err := s.client(ctx)
+	if err != nil {
+		return err
+	}
+	messages := buildMessages(in, domain.Now())
+	if len(messages) == 0 {
+		return service.ValidationFailed([]domain.ValidationIssue{{Path: "messages", Message: "conversa vazia"}})
+	}
+
+	for round := 0; round < maxToolRounds; round++ {
+		msg, err := s.streamTurn(ctx, client, messages, emit)
+		if err != nil {
+			return upstreamError(err)
+		}
+		switch msg.StopReason {
+		case anthropic.BetaStopReasonRefusal:
+			// Toda a cadeia (modelo + fallback) recusou: a resposta parcial deve ser descartada pela UI.
+			emit("error", map[string]string{"message": refusalMessage})
+			emit("done", map[string]string{"stopReason": string(msg.StopReason)})
+			return nil
+		case anthropic.BetaStopReasonMaxTokens:
+			// Nunca executa ferramentas de um turno truncado (a entrada pode estar incompleta).
+			emit("error", map[string]string{"message": maxTokensMessage})
+			emit("done", map[string]string{"stopReason": string(msg.StopReason)})
+			return nil
+		case anthropic.BetaStopReasonToolUse:
+			echo, calls := echoContent(msg)
+			if len(calls) == 0 {
+				emit("done", map[string]string{"stopReason": string(msg.StopReason)})
+				return nil
+			}
+			messages = append(messages, echo)
+			results := s.runToolCalls(ctx, calls, emit)
+			messages = append(messages, anthropic.NewBetaUserMessage(results...))
+		case anthropic.BetaStopReasonPauseTurn:
+			echo, _ := echoContent(msg)
+			messages = append(messages, echo)
+		default:
+			emit("done", map[string]string{"stopReason": string(msg.StopReason)})
+			return nil
+		}
+	}
+	emit("error", map[string]string{"message": maxRoundsMessage})
+	emit("done", map[string]string{"stopReason": "max_rounds"})
+	return nil
 }
 
-type turnKind int
-
-const (
-	turnEnd turnKind = iota
-	turnTools
-	turnPause
-	turnRefusal
-	turnMaxTokens
-)
-
-type turnResult struct {
-	kind turnKind
-	// stopReason vai no evento `done` (end_turn, tool_use, max_tokens, refusal…).
-	stopReason string
-	calls      []toolCall
+// streamTurn faz uma requisição em streaming, repassando texto e início de ferramentas, e devolve a
+// mensagem acumulada.
+func (s *Service) streamTurn(ctx context.Context, client anthropic.Client, messages []anthropic.BetaMessageParam, emit Emitter) (anthropic.BetaMessage, error) {
+	stream := client.Beta.Messages.NewStreaming(ctx, chatParams(messages))
+	defer stream.Close()
+	msg := anthropic.BetaMessage{}
+	for stream.Next() {
+		event := stream.Current()
+		if err := msg.Accumulate(event); err != nil {
+			return msg, err
+		}
+		switch ev := event.AsAny().(type) {
+		case anthropic.BetaRawContentBlockStartEvent:
+			if ev.ContentBlock.Type == "tool_use" {
+				emit("tool", map[string]string{"name": ev.ContentBlock.Name, "label": toolLabel(ev.ContentBlock.Name)})
+			}
+		case anthropic.BetaRawContentBlockDeltaEvent:
+			if ev.Delta.Type == "text_delta" && ev.Delta.Text != "" {
+				emit("text", map[string]string{"delta": ev.Delta.Text})
+			}
+		}
+	}
+	return msg, stream.Err()
 }
 
 type toolCall struct {
@@ -134,75 +211,44 @@ type toolCall struct {
 	input json.RawMessage
 }
 
-type toolResult struct {
-	call    toolCall
-	content string
-	isError bool
-}
-
-// Chat roda o loop de ferramentas emitindo eventos. Erros antes do primeiro evento (ex.: sem
-// configuração, servidor local fora do ar) são devolvidos para o handler responder em JSON; depois
-// disso o handler emite `error`.
-func (s *Service) Chat(ctx context.Context, in ChatInput, emit Emitter) error {
-	if issues := ValidateChatInput(in); len(issues) > 0 {
-		return service.ValidationFailed(issues)
-	}
-	p, _, err := s.provider(ctx)
-	if err != nil {
-		return err
-	}
-	history := chatHistory(in)
-	if len(history) == 0 {
-		return service.ValidationFailed([]domain.ValidationIssue{{Path: "messages", Message: "conversa vazia"}})
-	}
-	session := p.newSession(ctx, history, domain.Now())
-
-	limit := p.maxToolRounds()
-	for rounds := 0; ; {
-		res, err := session.turn(ctx, emit)
-		if err != nil {
-			return err
-		}
-		switch res.kind {
-		case turnRefusal:
-			// Toda a cadeia (modelo + fallback) recusou: a resposta parcial deve ser descartada pela UI.
-			emit("error", map[string]string{"message": refusalMessage})
-			emit("done", map[string]string{"stopReason": res.stopReason})
-			return nil
-		case turnMaxTokens:
-			// Nunca executa ferramentas de um turno truncado (a entrada pode estar incompleta).
-			emit("error", map[string]string{"message": maxTokensMessage})
-			emit("done", map[string]string{"stopReason": res.stopReason})
-			return nil
-		case turnTools, turnPause:
-			if rounds >= limit {
-				emit("error", map[string]string{"message": maxRoundsMessage})
-				emit("done", map[string]string{"stopReason": "max_rounds"})
-				return nil
-			}
-			rounds++
-			if res.kind == turnTools {
-				session.addToolResults(s.runToolCalls(ctx, res.calls, emit))
-			}
-		default:
-			emit("done", map[string]string{"stopReason": res.stopReason})
-			return nil
+// echoContent prepara o turno do assistente para reenviar e lista as chamadas a executar. Depois de um
+// fallback no meio da saída, blocos thinking/tool_use anteriores ao último bloco `fallback` são omitidos
+// (o bloco fallback fica na posição original) e só as chamadas posteriores a ele são executadas.
+func echoContent(msg anthropic.BetaMessage) (anthropic.BetaMessageParam, []toolCall) {
+	lastFallback := -1
+	for i, block := range msg.Content {
+		if block.Type == "fallback" {
+			lastFallback = i
 		}
 	}
+	params := make([]anthropic.BetaContentBlockParamUnion, 0, len(msg.Content))
+	var calls []toolCall
+	for i, block := range msg.Content {
+		if i < lastFallback {
+			switch block.Type {
+			case "thinking", "redacted_thinking", "tool_use", "server_tool_use":
+				continue
+			}
+		}
+		params = append(params, block.ToParam())
+		if block.Type == "tool_use" {
+			calls = append(calls, toolCall{id: block.ID, name: block.Name, input: append(json.RawMessage(nil), block.Input...)})
+		}
+	}
+	return anthropic.BetaMessageParam{OfAssistant: &anthropic.BetaAssistantMessageParam{Content: params}}, calls
 }
 
-// runToolCalls executa as chamadas em paralelo e devolve os resultados na ordem original (um único
-// turno de resultados). Erros de validação ou execução voltam como resultado de erro para o modelo
-// corrigir.
-func (s *Service) runToolCalls(ctx context.Context, calls []toolCall, emit Emitter) []toolResult {
-	results := make([]toolResult, len(calls))
+// runToolCalls executa as chamadas em paralelo e devolve todos os tool_result na ordem original (um único
+// turno do usuário).
+func (s *Service) runToolCalls(ctx context.Context, calls []toolCall, emit Emitter) []anthropic.BetaContentBlockParamUnion {
+	results := make([]anthropic.BetaContentBlockParamUnion, len(calls))
 	var wg sync.WaitGroup
 	for i, call := range calls {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			content, isError := s.runTool(ctx, call.name, call.input, emit)
-			results[i] = toolResult{call: call, content: content, isError: isError}
+			results[i] = anthropic.NewBetaToolResultBlock(call.id, content, isError)
 		}()
 	}
 	wg.Wait()

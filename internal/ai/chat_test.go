@@ -24,11 +24,7 @@ func newTestService(t *testing.T, api *fakeAPI, withKey bool) (*Service, *servic
 	t.Helper()
 	svcs := service.New(store.New(testutil.Open(t, db.DialectSQLite)), nil)
 	zero := 0
-	cfg := Config{
-		EnvCredentials: func() bool { return false }, MaxRetries: &zero,
-		// Sem FINFLOW_AI_* herdado e sem procurar um Ollama de verdade em localhost:11434.
-		Getenv: func(string) string { return "" }, DefaultOllamaURL: closedURL(t),
-	}
+	cfg := Config{EnvCredentials: func() bool { return false }, MaxRetries: &zero}
 	if api != nil {
 		cfg.BaseURL = api.server.URL
 	}
@@ -306,7 +302,7 @@ func TestStatusAndSaveKey(t *testing.T) {
 	ctx := context.Background()
 	svc, _ := newTestService(t, nil, false)
 	st, err := svc.Status(ctx)
-	if err != nil || st.Configured || st.Source != nil || st.Model != nil || st.Provider != nil {
+	if err != nil || st.Configured || st.Source != nil || st.Model != nil || st.ReceiptSupported {
 		t.Fatalf("status inicial: %+v %v", st, err)
 	}
 	bad := "curta"
@@ -315,14 +311,14 @@ func TestStatusAndSaveKey(t *testing.T) {
 	}
 	key := "  " + testKey + "  "
 	st, err = svc.SaveKey(ctx, &key)
-	if err != nil || !st.Configured || *st.Source != SourceSettings {
+	if err != nil || !st.Configured || *st.Source != SourceSettings || st.Model == nil || *st.Model != Model || !st.ReceiptSupported {
 		t.Fatalf("após salvar: %+v %v", st, err)
 	}
 	if saved, _ := svc.savedKey(ctx); saved != testKey {
 		t.Fatalf("chave salva sem trim: %q", saved)
 	}
 	st, err = svc.SaveKey(ctx, nil)
-	if err != nil || st.Configured {
+	if err != nil || st.Configured || st.Source != nil || st.Model != nil || st.ReceiptSupported {
 		t.Fatalf("após limpar: %+v %v", st, err)
 	}
 	svc.cfg.EnvCredentials = func() bool { return true }

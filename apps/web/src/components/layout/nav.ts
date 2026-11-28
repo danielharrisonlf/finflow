@@ -31,6 +31,8 @@ export interface NavItem {
   kinds?: readonly SpaceKind[];
   /** Rótulo alternativo por tipo de espaço. */
   labelFor?: Partial<Record<SpaceKind, string>>;
+  /** Só aparece com o Assistente ativo (chave da API do Claude configurada). */
+  requiresAi?: boolean;
 }
 
 export interface NavGroup {
@@ -117,7 +119,14 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       PROJECTION,
       { to: "/planilhas", label: "Planilhas", short: "Planilhas", icon: FileSpreadsheet },
-      { to: "/assistente", label: "Assistente", short: "Assistente", icon: Sparkles },
+      {
+        to: "/assistente",
+        label: "Assistente",
+        short: "Assistente",
+        icon: Sparkles,
+        // sem chave o recurso fica desativado e não é anunciado (ativa-se em Configurações)
+        requiresAi: true,
+      },
       { to: "/calculadoras", label: "Calculadoras", short: "Calculadoras", icon: Calculator },
     ],
   },
@@ -132,18 +141,22 @@ export const MOBILE_PRIMARY: NavItem[] = [DASHBOARD, TRANSACTIONS, COMMITMENTS, 
 
 export const ALL_NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((g) => g.items);
 
-/** Grupos com só as páginas relevantes para o tipo do espaço ativo (v3 fase 2 §6). */
-export function navGroupsFor(kind: SpaceKind): NavGroup[] {
+/**
+ * Grupos com só as páginas relevantes para o tipo do espaço ativo (v3 fase 2 §6); o Assistente só
+ * entra com `aiEnabled`.
+ */
+export function navGroupsFor(kind: SpaceKind, aiEnabled = false): NavGroup[] {
   return NAV_GROUPS.map((group) => ({
     ...group,
     items: group.items
       .filter((item) => !item.kinds || item.kinds.includes(kind))
+      .filter((item) => aiEnabled || !item.requiresAi)
       .map((item) => ({ ...item, label: item.labelFor?.[kind] ?? item.label })),
   })).filter((group) => group.items.length > 0);
 }
 
-export function navItemsFor(kind: SpaceKind): NavItem[] {
-  return navGroupsFor(kind).flatMap((g) => g.items);
+export function navItemsFor(kind: SpaceKind, aiEnabled = false): NavItem[] {
+  return navGroupsFor(kind, aiEnabled).flatMap((g) => g.items);
 }
 
 export function isActivePath(pathname: string, to: string): boolean {

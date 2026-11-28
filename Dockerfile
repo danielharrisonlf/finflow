@@ -2,7 +2,7 @@
 #
 #   docker build -t finflow .
 #   docker compose up -d                   # http://localhost:3333, banco no volume finflow_data
-#   docker compose --profile ai up -d      # + Ollama local para o assistente
+#   ANTHROPIC_API_KEY=sk-ant-... docker compose up -d   # com o assistente (opcional, API do Claude)
 #
 # Estágios: web (Node + pnpm via Corepack) → binário Go com o web embutido (CGO_ENABLED=0, SQLite
 # pure Go) → imagem mínima (Alpine, usuário não-root). O Alpine traz o `wget` do BusyBox, usado no

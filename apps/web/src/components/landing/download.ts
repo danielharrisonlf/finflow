@@ -77,7 +77,8 @@ export const sourceCommands = {
   clone: `git clone ${repoUrl} && cd finflow && pnpm install && pnpm start`,
   seed: "pnpm start -- --seed",
   docker: `git clone ${repoUrl} && cd finflow && docker compose up -d`,
-  dockerAi: "docker compose --profile ai up -d",
+  // Assistente opcional: a chave da API do Claude passa pelo ambiente (sem chave, fica desligado).
+  dockerAssistant: "ANTHROPIC_API_KEY=sk-ant-... docker compose up -d",
 };
 
 export function platformById(id: PlatformId): Platform {

@@ -4,6 +4,23 @@ Todas as mudanças relevantes do FinFlow. O formato segue o [Keep a Changelog](h
 
 ## [Não lançado]
 
+Por decisão de produto, o assistente passa a usar **só a API do Claude com a chave do próprio usuário**; sem chave, o recurso fica desativado ([docs/local-agent-contract.md](docs/local-agent-contract.md)).
+
+### Removido
+
+- **Provedores locais do assistente**: Ollama e servidores compatíveis com a API da OpenAI (LM Studio, llama.cpp, vLLM, LocalAI), a detecção automática (`AUTO`) de um Ollama local e a leitura de comprovante com modelo de visão local.
+- `PUT /api/ai/config` e `GET /api/ai/models`; os campos `provider`, `visionModel`, `baseUrl` e `reachable` e a fonte `AUTO` de `GET /api/ai/status`, que passa a devolver `{ configured, source: "ENV" | "SETTINGS" | null, model, receiptSupported }`.
+- Variáveis `FINFLOW_AI_PROVIDER`, `FINFLOW_AI_BASE_URL`, `FINFLOW_AI_MODEL`, `FINFLOW_AI_VISION_MODEL`, `FINFLOW_AI_API_KEY` e `FINFLOW_OLLAMA_URL`.
+- Docker: o profile `ai` (serviços `ollama` e `ollama-pull`) e o volume `finflow_ollama`. `ANTHROPIC_API_KEY` continua repassada ao contêiner.
+- Configurações → escolha de provedor, URL, modelo e teste de conexão.
+
+### Alterado
+
+- **Sem chave, o assistente fica desativado e não é anunciado**: o item "Assistente" some da barra lateral, da barra inferior/"Mais" e da paleta de comandos, e não há anexo de comprovante nem atalhos para ele. Quem abrir `/assistente` vê um aviso curto apontando para Configurações; o "Posso comprar?" continua em Projeção e Desejos.
+- **Configurações → Assistente (IA)** é o único lugar para ativar: explicação curta, campo da chave, **Salvar**, **Remover chave**, status **Ativo**/**Desativado**, aviso quando a chave vem de `ANTHROPIC_API_KEY` e link para criar a chave em console.anthropic.com. A seção **API e IA** passa a se chamar **API e MCP** (**Sistema** no navegador).
+- `finflow perguntar` usa só o Claude; sem chave, avisa em português que o assistente está desativado e como ativar, e sai com código diferente de 0.
+- Landing e README: o assistente aparece como opcional ("coloque a sua chave da API do Claude; sem chave, o recurso fica desligado e todo o resto funciona"); a aba Docker mostra como passar a chave.
+
 ## [0.5.0] — 2026-11-28
 
 Open source e local de ponta a ponta: banco próprio (SQLite) e agente próprio (modelo local), rodando pelo executável, pelo código-fonte ou pelo Docker ([docs/local-agent-contract.md](docs/local-agent-contract.md)).

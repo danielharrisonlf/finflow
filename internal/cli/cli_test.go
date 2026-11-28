@@ -26,12 +26,14 @@ func isolateEnv(t *testing.T) {
 	for _, k := range []string{
 		"FINFLOW_API_URL", "DATABASE_URL", "FINFLOW_DB_PATH",
 		"FINFLOW_TOKEN", "FINFLOW_API_TOKEN", "FINFLOW_PASSWORD", "FINFLOW_AUTH_SECRET",
-		"TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TELEGRAM_WEBHOOK_SECRET", "FINFLOW_OLLAMA_URL",
-		"FINFLOW_AI_PROVIDER", "FINFLOW_AI_BASE_URL", "FINFLOW_AI_MODEL", "FINFLOW_AI_VISION_MODEL", "FINFLOW_AI_API_KEY",
+		"TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TELEGRAM_WEBHOOK_SECRET",
+		"ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_PROFILE", "ANTHROPIC_FEDERATION_RULE_ID", "ANTHROPIC_BASE_URL",
 	} {
 		t.Setenv(k, "")
 		_ = os.Unsetenv(k)
 	}
+	// Sem o perfil do `ant auth login` desta máquina: o Assistente só vê a chave que o teste definir.
+	t.Setenv("ANTHROPIC_CONFIG_DIR", t.TempDir())
 }
 
 // setupLocal aponta a CLI para um SQLite novo em arquivo temporário e devolve o caminho.

@@ -107,10 +107,10 @@ curl -s http://127.0.0.1:3411/api/system/info
 docker build --build-arg FINFLOW_VERSION=v0.5.0 -t finflow:local .
 FINFLOW_PORT=3412 docker compose -p finflow-check up -d app && docker compose -p finflow-check ps
 docker compose -p finflow-check down -v
-docker compose --profile ai config -q      # valida o profile do Ollama sem baixar o modelo
+docker compose --profile postgres --profile test config -q   # valida os profiles opcionais
 ```
 
-A imagem não é publicada em registry; quem usa Docker constrói a partir do repositório. As tags das imagens base (`node`, `golang`, `alpine`, `ollama/ollama`) ficam fixas no `Dockerfile` e no `docker-compose.yaml`: atualize-as de propósito, junto com o `go.mod` e o `engines` do `package.json`.
+A imagem não é publicada em registry; quem usa Docker constrói a partir do repositório. As tags das imagens base (`node`, `golang`, `alpine`, `postgres`) ficam fixas no `Dockerfile` e no `docker-compose.yaml`: atualize-as de propósito, junto com o `go.mod` e o `engines` do `package.json`.
 
 ## Avisos para quem baixa
 

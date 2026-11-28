@@ -1,67 +1,16 @@
-import type {
-  AiConfigInput,
-  AiModel,
-  AiModelsResponse,
-  AiProvider,
-  AiStatus,
-} from "@finflow/contracts";
+import type { AiStatus } from "@finflow/contracts";
 import { ApiError, api, apiFetch, clearAuthToken, getAuthToken, handleUnknownSpace } from "./api";
 import { getActiveSpace, spaceHeaders } from "./space";
 
-// Cliente do Assistente (v3 §15 e docs/local-agent-contract.md). O chat usa SSE sobre fetch +
-// ReadableStream (EventSource não envia o header Authorization nem faz POST). No modo navegador,
-// `apiFetch` usa o runtime local, que também devolve o corpo em stream.
+// Cliente do Assistente (v3 §15): a API do Claude com a chave do próprio usuário; sem chave o recurso
+// fica desativado e some da navegação. O chat usa SSE sobre fetch + ReadableStream (EventSource não
+// envia o header Authorization nem faz POST). No modo navegador, `apiFetch` usa o runtime local, que
+// também devolve o corpo em stream.
 
-export type { AiConfigInput, AiModel, AiProvider, AiStatus };
+export type { AiStatus };
 
-/** Rótulos dos provedores (Configurações → Assistente). */
-export const AI_PROVIDER_LABEL: Record<AiProvider, string> = {
-  ollama: "Local (Ollama)",
-  openai_compatible: "Servidor compatível (LM Studio, llama.cpp…)",
-  claude: "Claude (API)",
-};
-
-/** Nome curto do provedor ativo (cabeçalho do Assistente). */
-export const AI_PROVIDER_SHORT: Record<AiProvider, string> = {
-  ollama: "Ollama (local)",
-  openai_compatible: "Servidor local",
-  claude: "Claude (API)",
-};
-
-/** Padrões sugeridos (os mesmos do servidor). */
-export const AI_DEFAULTS = {
-  ollamaUrl: "http://localhost:11434",
-  openaiUrl: "http://localhost:1234/v1",
-  model: "qwen2.5:7b",
-  altModel: "llama3.1:8b",
-  visionModel: "qwen2.5vl:7b",
-} as const;
-
-export function defaultBaseUrl(provider: AiProvider): string {
-  if (provider === "ollama") return AI_DEFAULTS.ollamaUrl;
-  if (provider === "openai_compatible") return AI_DEFAULTS.openaiUrl;
-  return "";
-}
-
-export function isLocalProvider(provider: AiProvider | null | undefined): boolean {
-  return provider === "ollama" || provider === "openai_compatible";
-}
-
-/** Provedor efetivo do status; servidores antigos (sem `provider`) só tinham o Claude. */
-export function statusProvider(status: AiStatus | undefined): AiProvider | null {
-  if (!status) return null;
-  if (status.provider) return status.provider;
-  return status.configured || status.source ? "claude" : null;
-}
-
-/** Provedor e modelo ativos, ex.: "Ollama (local) · qwen2.5:7b" ou "Detectado automaticamente: Ollama · qwen2.5:7b". */
-export function describeActiveAi(status: AiStatus | undefined): string | null {
-  const provider = statusProvider(status);
-  if (!status?.configured || !provider) return null;
-  const model = status.model ? ` · ${status.model}` : "";
-  if (status.source === "AUTO") return `Detectado automaticamente: Ollama${model}`;
-  return `${AI_PROVIDER_SHORT[provider]}${model}`;
-}
+/** Onde criar a chave da API do Claude. */
+export const ANTHROPIC_CONSOLE_URL = "https://console.anthropic.com/";
 
 export type AiRole = "user" | "assistant";
 
@@ -206,41 +155,6 @@ export async function saveAiKey(apiKey: string | null): Promise<AiStatus> {
   });
   if (!response.ok) throw await toApiError(response, "/ai/key");
   return (await response.json()) as AiStatus;
-}
-
-/** PUT /api/ai/config — escolhe o provedor. `apiKey` omitido mantém a chave salva. */
-export async function saveAiConfig(input: AiConfigInput): Promise<AiStatus> {
-  const response = await apiFetch("/ai/config", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify(input),
-  });
-  if (!response.ok) throw await toApiError(response, "/ai/config");
-  return (await response.json()) as AiStatus;
-}
-
-/** GET /api/ai/models — também serve como "Testar conexão" com o servidor local. */
-export async function listAiModels(provider: AiProvider, baseUrl?: string): Promise<AiModel[]> {
-  const query = new URLSearchParams({ provider });
-  if (baseUrl?.trim()) query.set("baseUrl", baseUrl.trim());
-  const res = await api.get<AiModelsResponse>(`/ai/models?${query.toString()}`);
-  return Array.isArray(res?.models) ? res.models : [];
-}
-
-/** Escolhe o modelo para "Usar o Ollama deste computador": o sugerido se instalado, senão o primeiro com ferramentas. */
-export function pickChatModel(models: AiModel[]): string {
-  const ids = models.map((m) => m.id);
-  for (const preferred of [
-    AI_DEFAULTS.model,
-    `${AI_DEFAULTS.model}-instruct`,
-    AI_DEFAULTS.altModel,
-  ]) {
-    if (ids.includes(preferred)) return preferred;
-  }
-  return (
-    (models.find((m) => m.tools === true) ?? models.find((m) => m.tools !== false))?.id ??
-    AI_DEFAULTS.model
-  );
 }
 
 /** POST /api/ai/receipt (multipart, campo `file`). */

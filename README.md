@@ -1,6 +1,6 @@
 # FinFlow
 
-Controle financeiro pessoal **gratuito, de código aberto (MIT) e local**: contas, cartões com faturas e parcelas, projeção do saldo dia a dia, compromissos, limite mensal, metas e reserva de emergência, desejos, investimentos, dívidas, patrimônio e importação/exportação de planilhas. Roda no seu computador, com **os seus dados num arquivo SQLite seu** e um **assistente opcional que pode rodar num modelo local** (Ollama, LM Studio) ou usar a sua chave da API do Claude. Sem conta e sem nuvem.
+Controle financeiro pessoal **gratuito, de código aberto (MIT) e local**: contas, cartões com faturas e parcelas, projeção do saldo dia a dia, compromissos, limite mensal, metas e reserva de emergência, desejos, investimentos, dívidas, patrimônio e importação/exportação de planilhas. Roda no seu computador, com **os seus dados num arquivo SQLite seu** e um **assistente opcional** que usa a sua chave da API do Claude (sem chave, ele fica desligado e todo o resto funciona). Sem conta e sem nuvem.
 
 ## Rodar no seu computador
 
@@ -10,7 +10,7 @@ Três caminhos, o mesmo FinFlow (API, interface web, CLI e MCP num binário só)
 | --- | --- | --- |
 | [Executável](#executável) | quem quer só usar | nada: baixe e abra |
 | [Código-fonte](#código-fonte-pnpm-start) | quem quer ler, mudar ou compilar | Go 1.26+, Node 22.12+ e pnpm (Corepack) |
-| [Docker](#docker) | quem já usa Docker ou quer o assistente local pronto | Docker com Compose |
+| [Docker](#docker) | quem já usa Docker | Docker com Compose |
 
 ### Executável
 
@@ -77,7 +77,7 @@ O `pnpm start` ([`scripts/start.mjs`](scripts/start.mjs)) confere os requisitos 
 | `pnpm start -- --port 4000 --lan` | outras flags vão para `finflow serve` (sem escolher porta nem abrir o navegador) |
 | `pnpm start -- resumo` | um comando vira `finflow resumo` (qualquer comando da [CLI](#cli)) |
 
-Variáveis úteis: `FINFLOW_DB_PATH` (arquivo do banco; por padrão o mesmo do executável), `API_PORT`, `FINFLOW_NO_BROWSER=1`, `FINFLOW_REBUILD=1` (recompila tudo) e as `FINFLOW_AI_*` do assistente. O `.env` é opcional (`cp .env.example .env`). Para desenvolver com hot-reload, veja [Desenvolvimento](#desenvolvimento) e o [CONTRIBUTING.md](CONTRIBUTING.md); `pnpm build` só compila (web + binário) e `pnpm release` gera os pacotes das 6 plataformas ([docs/release.md](docs/release.md)).
+Variáveis úteis: `FINFLOW_DB_PATH` (arquivo do banco; por padrão o mesmo do executável), `API_PORT`, `FINFLOW_NO_BROWSER=1`, `FINFLOW_REBUILD=1` (recompila tudo) e `ANTHROPIC_API_KEY` (assistente opcional). O `.env` é opcional (`cp .env.example .env`). Para desenvolver com hot-reload, veja [Desenvolvimento](#desenvolvimento) e o [CONTRIBUTING.md](CONTRIBUTING.md); `pnpm build` só compila (web + binário) e `pnpm release` gera os pacotes das 6 plataformas ([docs/release.md](docs/release.md)).
 
 ### Docker
 
@@ -87,12 +87,11 @@ Sem Go nem Node na máquina, com o [`Dockerfile`](Dockerfile) multi-stage (Node 
 git clone https://github.com/danielharrisonlf/finflow
 cd finflow
 docker compose up -d                  # FinFlow em http://localhost:3333
-docker compose --profile ai up -d     # + Ollama local para o assistente
 ```
 
 - **Dados**: o banco fica em `/data/finflow.db`, no volume `finflow_data`. `docker compose down` preserva o volume (`down -v` apaga). Backup: `docker compose cp app:/data/finflow.db ./finflow-backup.db` (com o app parado ou num momento sem uso).
 - **Porta e rede**: publicada só em `127.0.0.1:3333`. Mude com `FINFLOW_PORT=4000`; para abrir na rede de casa use `FINFLOW_BIND=0.0.0.0` **e** defina `FINFLOW_PASSWORD` (passa a exigir login).
-- **Assistente local** (`--profile ai`): sobe o `ollama` (sem porta publicada, só o FinFlow o acessa) e o `ollama-pull`, que baixa `FINFLOW_AI_MODEL` (padrão `qwen2.5:7b`, alguns GB) no primeiro uso; o modelo fica no volume `finflow_ollama`. O FinFlow detecta esse Ollama sozinho (`FINFLOW_OLLAMA_URL=http://ollama:11434`) e usa o modelo baixado, sem travar a escolha: **Configurações → Assistente** continua valendo. Para forçar outro provedor no Docker, defina `FINFLOW_AI_PROVIDER` e `FINFLOW_AI_BASE_URL` num `.env` ao lado do `docker-compose.yaml`.
+- **Assistente** (opcional): passe a chave da API do Claude no ambiente (`ANTHROPIC_API_KEY=sk-ant-... docker compose up -d` ou num `.env` ao lado do `docker-compose.yaml`) ou salve-a em **Configurações → Assistente (IA)**. Sem chave, o recurso fica desativado.
 - **Saúde**: healthcheck em `/api/health` (`docker compose ps` mostra `healthy`).
 - **PostgreSQL** continua opcional: `docker compose --profile postgres up -d db`.
 
@@ -143,7 +142,7 @@ Abra **https://finflow-landing-umber.vercel.app/app/** no computador ou no celul
 - **Planilhas**: importa a planilha diária (Entrada · Saída · Diário · Saldo), Excel/CSV e extrato OFX; exporta uma pasta `.xlsx` anual com fórmulas vivas, saldo diário colorido e aba Economia.
 - **Busca e privacidade**: paleta de comandos (Ctrl+K / ⌘K) e modo que oculta os valores na tela.
 - **No celular, sem nuvem**: modo rede local e app instalável (PWA). Veja [No celular](#no-celular-rede-local--app).
-- **Assistente “Pergunte ao FinFlow”** num modelo local (Ollama, LM Studio, llama.cpp), sem chave e sem enviar nada para fora, ou com a sua chave da API do Claude; lê foto de comprovante com um modelo de visão. Também no terminal: `finflow perguntar`. Veja [Assistente](#assistente-pergunte-ao-finflow).
+- **Assistente “Pergunte ao FinFlow”** (opcional) com a sua chave da API do Claude; lê foto ou PDF de comprovante. Sem chave, fica desligado e fora do menu. Também no terminal: `finflow perguntar`. Veja [Assistente](#assistente-pergunte-ao-finflow).
 - **CLI, servidor MCP** (stdio e HTTP), **API pessoal** e **bot do Telegram**, no mesmo binário.
 
 ### No celular (rede local + app)
@@ -157,63 +156,23 @@ O FinFlow continua rodando no computador; o celular só acessa pela rede de casa
    ```
 
    No Windows (PowerShell): `$env:FINFLOW_PASSWORD = 'uma senha forte'; finflow serve --lan`. Sem `FINFLOW_PASSWORD`, o `--lan` se recusa a iniciar.
-2. O terminal e **Configurações → API e IA** mostram os endereços da rede (`http://192.168.x.x:3333`) e um QR code. Abra no celular conectado ao mesmo Wi-Fi e entre com a senha.
+2. O terminal e **Configurações → API e MCP** mostram os endereços da rede (`http://192.168.x.x:3333`) e um QR code. Abra no celular conectado ao mesmo Wi-Fi e entre com a senha.
 3. Instale como app: no Android (Chrome), menu **⋮ → Instalar app**; no iPhone (Safari), **Compartilhar → Adicionar à Tela de Início**. O app guarda só a interface; os dados continuam no computador, que precisa estar ligado com o FinFlow aberto.
 
 Sem `--lan`, o servidor escuta só em `127.0.0.1` (acessível apenas no próprio computador).
 
 ### Assistente (Pergunte ao FinFlow)
 
-O assistente responde perguntas como “Posso fazer uma viagem?” consultando sua projeção, limites, compromissos e metas, e lê a foto de um comprovante para preencher um lançamento. Ele pode rodar **num modelo no seu próprio computador** (sem serviço pago) ou na API do Claude com a sua chave. O loop, as ferramentas e as propostas são os mesmos nos três provedores.
+O assistente é **opcional**. Ele responde perguntas como “Posso fazer uma viagem?” consultando sua projeção, limites, compromissos e metas, e lê a foto (ou o PDF) de um comprovante para preencher um lançamento. Ele usa a API do Claude, da Anthropic, com **a sua própria chave**:
 
-| Provedor | Uso | Credencial |
-|---|---|---|
-| `ollama` (recomendado) | modelo local pelo [Ollama](https://ollama.com) em `http://localhost:11434` | nenhuma |
-| `openai_compatible` | servidor local compatível com `/v1/chat/completions`: LM Studio, llama.cpp (`llama-server`), vLLM, LocalAI | opcional |
-| `claude` | API do Claude, da Anthropic | `ANTHROPIC_API_KEY` ou chave salva |
+- defina `ANTHROPIC_API_KEY` antes de iniciar o FinFlow (`ANTHROPIC_API_KEY=sk-ant-... finflow serve`; também valem `ANTHROPIC_AUTH_TOKEN` e o perfil do `ant auth login`), ou
+- cole a chave em **Configurações → Assistente (IA)**. Ela fica no seu banco local e nunca é devolvida à interface. A chave do ambiente tem precedência e não pode ser removida pela interface.
 
-#### Assistente local
+Crie a chave em [console.anthropic.com](https://console.anthropic.com/).
 
-**Ollama**
+**Sem chave, o recurso fica desativado**: o item “Assistente” não aparece no menu nem na busca (⌘K/Ctrl K), não há anexo de comprovante, e todo o resto funciona, inclusive o simulador “Posso comprar?” (Projeção e Desejos) e as calculadoras. O único lugar para ativar é **Configurações → Assistente (IA)**.
 
-1. Instale o Ollama em [ollama.com/download](https://ollama.com/download) e deixe-o aberto.
-2. Baixe um modelo com suporte a ferramentas:
-
-   ```bash
-   ollama pull qwen2.5:7b        # padrão sugerido; alternativa: llama3.1:8b
-   ollama pull qwen2.5vl:7b      # opcional, para ler comprovantes (ou llava)
-   ```
-
-3. Abra o FinFlow. Sem nada configurado, ele procura o Ollama em `FINFLOW_OLLAMA_URL` (padrão `http://localhost:11434`) e, se houver modelo instalado, já usa esse Ollama (aparece como “Detectado automaticamente”). Para fixar a escolha, use **Configurações → Assistente** ou o botão “Usar o Ollama deste computador” na tela do Assistente.
-
-Modelos de 7–8B rodam em computadores com 8 GB de RAM livres; com GPU, as respostas ficam bem mais rápidas.
-
-**LM Studio e outros servidores compatíveis**: no LM Studio, baixe um modelo com suporte a ferramentas (ex.: Qwen2.5 7B Instruct) e clique em **Developer → Start server**; em **Configurações → Assistente**, escolha “Servidor compatível”, use `http://localhost:1234/v1` e selecione o modelo. Com o llama.cpp: `llama-server -m modelo.gguf --jinja --port 8080` e a URL `http://localhost:8080/v1`.
-
-**Variáveis de ambiente** (desktop e Docker). Têm precedência sobre o que estiver salvo em Configurações:
-
-```bash
-FINFLOW_AI_PROVIDER=ollama               # ollama | openai_compatible | claude
-FINFLOW_AI_BASE_URL=http://localhost:11434   # ou http://localhost:1234/v1 (LM Studio)
-FINFLOW_AI_MODEL=qwen2.5:7b              # modelo de chat com suporte a ferramentas
-FINFLOW_AI_VISION_MODEL=qwen2.5vl:7b     # opcional, para ler comprovantes
-FINFLOW_AI_API_KEY=                      # chave do servidor compatível (opcional)
-FINFLOW_OLLAMA_URL=http://localhost:11434    # onde procurar o Ollama sem nada configurado
-ANTHROPIC_API_KEY=                       # provedor claude
-```
-
-Ordem de decisão: `FINFLOW_AI_PROVIDER` → o que foi salvo em **Configurações → Assistente** → `ANTHROPIC_API_KEY` → detecção automática do Ollama. As chaves salvas nunca voltam para a interface.
-
-**No navegador** (`/app/`): as chamadas ao modelo saem da própria página, então o servidor local precisa permitir essa origem (CORS). No Ollama, defina `OLLAMA_ORIGINS` com o endereço da página (ex.: `OLLAMA_ORIGINS=https://finflow-landing-umber.vercel.app`) e reinicie-o; no LM Studio, ative “Enable CORS”. A interface mostra essa dica quando a conexão falha.
-
-**Limites dos modelos locais**: eles erram mais ao chamar ferramentas. O FinFlow valida os argumentos de cada chamada e devolve o erro ao modelo para que ele corrija, aceita chamadas escritas como JSON no texto da resposta e limita a 8 rodadas de ferramentas por pergunta. Comprovantes em PDF precisam do Claude; os modelos locais leem só imagens.
-
-#### API do Claude
-
-- defina `ANTHROPIC_API_KEY` antes de iniciar o FinFlow (`ANTHROPIC_API_KEY=sk-ant-... finflow serve`), ou
-- escolha “Claude (API)” em **Configurações → Assistente** e cole a chave. Ela fica no seu banco local e nunca é devolvida à interface.
-
-**Custo**: o FinFlow e os modelos locais são gratuitos; o uso da API do Claude é cobrado pela Anthropic na sua conta, conforme o volume de perguntas. Sem assistente configurado, todo o resto funciona, inclusive o simulador “Posso comprar?” e as calculadoras.
+**Custo**: o FinFlow é gratuito; o uso da API é cobrado pela Anthropic na sua conta, conforme o volume de perguntas.
 
 #### Pelo terminal
 
@@ -223,11 +182,11 @@ finflow perguntar "Lança 45,90 de mercado hoje no Nubank" --confirmar
 finflow --api http://192.168.0.10:3333 perguntar "Onde estou gastando mais?"
 ```
 
-A resposta chega em streaming, com as consultas do assistente em cinza. Propostas de escrita são listadas e só gravadas com `--confirmar` ou respondendo `s` à pergunta no terminal; em scripts (entrada que não é terminal), nada é gravado sem `--confirmar`.
+A resposta chega em streaming, com as consultas do assistente em cinza. Propostas de escrita são listadas e só gravadas com `--confirmar` ou respondendo `s` à pergunta no terminal; em scripts (entrada que não é terminal), nada é gravado sem `--confirmar`. Sem chave, o comando avisa que o assistente está desativado e como ativar, e sai com código diferente de 0.
 
-API: `GET /api/ai/status`, `PUT /api/ai/config`, `GET /api/ai/models?provider&baseUrl`, `PUT /api/ai/key` (legado), `POST /api/ai/chat` (SSE), `POST /api/ai/receipt`. Detalhes em [docs/local-agent-contract.md](docs/local-agent-contract.md).
+API: `GET /api/ai/status` (`{ configured, source: "ENV" | "SETTINGS" | null, model, receiptSupported }`), `PUT /api/ai/key` (`{ apiKey }`; `null` remove), `POST /api/ai/chat` (SSE), `POST /api/ai/receipt`. Sem chave, o chat e a leitura de comprovantes respondem `412` com a instrução em português.
 
-**Privacidade**: com um provedor local (Ollama ou servidor compatível no seu computador), nada sai da sua máquina: perguntas, dados consultados e comprovantes ficam entre o FinFlow e o modelo local. Com a API do Claude, só as mensagens do assistente (com os dados que ele consultar para responder) e os comprovantes que você enviar vão para a Anthropic. Em qualquer provedor, toda escrita (registrar despesa, criar compromisso, guardar numa meta, adicionar desejo) vira uma proposta que só é salva depois que você confirma. O histórico da conversa fica no seu navegador.
+**Privacidade**: só as mensagens do assistente (com os dados que ele consultar para responder) e os comprovantes que você enviar vão para a API do Claude. Qualquer escrita (registrar despesa, criar compromisso, guardar numa meta, adicionar desejo) vira uma proposta que só é salva depois que você confirma na tela. O histórico da conversa fica no seu navegador.
 
 ---
 
@@ -344,7 +303,7 @@ Além de contas, cartões, faturas, transações, categorias, orçamentos e meta
 | Investimentos | `GET/POST /api/investments`, `PATCH/DELETE /api/investments/{id}`, `POST .../{id}/value\|contribution\|redeem`, `GET /api/investments/summary` |
 | Dívidas | `GET/POST /api/loans`, `PATCH/DELETE /api/loans/{id}`, `POST /api/loans/{id}/pay`, `GET /api/loans/strategy?extraCents=0` |
 | Patrimônio | `GET /api/insights/net-worth?months=12` |
-| Assistente | `GET /api/ai/status`, `PUT /api/ai/config`, `GET /api/ai/models`, `PUT /api/ai/key` (legado), `POST /api/ai/chat` (SSE), `POST /api/ai/receipt` |
+| Assistente | `GET /api/ai/status`, `PUT /api/ai/key`, `POST /api/ai/chat` (SSE), `POST /api/ai/receipt` |
 | MCP e sistema | `POST /api/mcp`, `GET /api/system/info` |
 | Espaços | `GET/POST /api/spaces`, `PATCH /api/spaces/{slug}`, `DELETE /api/spaces/{slug}?confirm=<slug>`, `GET /api/spaces/overview` |
 | Casa (divisão) | `GET/POST /api/members`, `PATCH/DELETE /api/members/{id}`, `GET /api/members/balances?month&year`, `POST /api/members/settle` |
@@ -387,7 +346,7 @@ finflow insights [--mes 11 --ano 2026]
 finflow assinaturas                        # assinaturas detectadas no histórico
 finflow alertas                            # alertas e dicas do momento
 finflow posso 2400 celular --parcelas 10 --cartao ultravioleta   # cabe na projeção?
-finflow perguntar "Onde estou gastando mais?"   # assistente no terminal (modelo local ou Claude)
+finflow perguntar "Onde estou gastando mais?"   # assistente no terminal (API do Claude, com a sua chave)
 finflow investimentos                      # posições, rentabilidade e alocação
 finflow dividas                            # dívidas e estratégia de quitação
 finflow patrimonio                         # evolução do patrimônio mês a mês
@@ -443,7 +402,7 @@ Com o `serve` rodando, as mesmas tools ficam em `POST /api/mcp` (Streamable HTTP
 claude mcp add --transport http finflow http://localhost:3333/api/mcp --header "Authorization: Bearer <token>"
 ```
 
-Para outro espaço, acrescente `--header "X-FinFlow-Space: <slug>"` (no stdio, `"args": ["mcp", "--espaco", "<slug>"]`). Outros clientes MCP com transporte HTTP usam a mesma URL e cabeçalho. **Configurações → API e IA** mostra os trechos prontos (stdio e HTTP) e a URL da API. O mesmo token dá acesso à **API pessoal** (`/api/*`, resumo abaixo) para scripts e automações.
+Para outro espaço, acrescente `--header "X-FinFlow-Space: <slug>"` (no stdio, `"args": ["mcp", "--espaco", "<slug>"]`). Outros clientes MCP com transporte HTTP usam a mesma URL e cabeçalho. **Configurações → API e MCP** mostra os trechos prontos (stdio e HTTP) e a URL da API. O mesmo token dá acesso à **API pessoal** (`/api/*`, resumo abaixo) para scripts e automações.
 
 ### Bot do Telegram
 
@@ -478,7 +437,7 @@ internal/
 apps/web/             interface React 19 + Vite 8 + Tailwind v4 (e a landing em /inicio)
 packages/contracts/   schemas Zod usados pelo frontend
 scripts/              start (rodar do código), build, release (6 plataformas) e instaladores install.sh / install.ps1
-Dockerfile            imagem multi-stage (Node → Go → Alpine); docker-compose.yaml com app, ollama (profile ai) e postgres
+Dockerfile            imagem multi-stage (Node → Go → Alpine); docker-compose.yaml com app e postgres (profiles opcionais)
 .github/workflows/    CI (inclui build da imagem Docker) e release por tag (v*)
 ```
 

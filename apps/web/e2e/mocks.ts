@@ -1088,20 +1088,8 @@ export const fixtures = {
     aiConfigured: false,
     mcpHttpPath: "/api/mcp",
   },
-  aiStatus: {
-    configured: false,
-    provider: null,
-    model: null,
-    visionModel: null,
-    baseUrl: null,
-    source: null,
-    reachable: false,
-    receiptSupported: false,
-  },
-  aiModels: [
-    { id: "qwen2.5:7b", label: "qwen2.5:7b · 7.6B", tools: true },
-    { id: "qwen2.5vl:7b", label: "qwen2.5vl:7b · 8.3B", tools: false },
-  ],
+  // Sem chave da API do Claude: o Assistente fica desativado e fora da navegação.
+  aiStatus: { configured: false, source: null, model: null, receiptSupported: false },
   importPreview: {
     format: "CSV",
     sheets: [],
@@ -1176,6 +1164,8 @@ export async function mockApi(
   let authenticated = !options.requireAuth;
   // catálogo de espaços desta página (POST /spaces acrescenta)
   const spaces = spaceFixtures.spaces.map((s) => ({ ...s }));
+  // status do Assistente desta página (PUT /ai/key salva ou remove a chave)
+  let aiStatus: object = { ...fixtures.aiStatus };
 
   const json = (route: Route, body: unknown, status = 200) =>
     route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
@@ -1264,8 +1254,7 @@ export async function mockApi(
       if (path === "/loans/strategy")
         return json(route, debtStrategy(Number(url.searchParams.get("extraCents") ?? 0)));
       if (path === "/system/info") return json(route, fixtures.systemInfo);
-      if (path === "/ai/status") return json(route, fixtures.aiStatus);
-      if (path === "/ai/models") return json(route, { models: fixtures.aiModels });
+      if (path === "/ai/status") return json(route, aiStatus);
     }
 
     // v3 fase 2: escritas
@@ -1354,27 +1343,12 @@ export async function mockApi(
     if (method === "POST" && path === "/recurring") return json(route, fixtures.recurring[0], 201);
     if (method === "PATCH" && /^\/recurring\/[^/]+$/.test(path))
       return json(route, fixtures.recurring[0]);
-    if (method === "PUT" && path === "/ai/config") {
-      const input = request.postDataJSON() as {
-        provider: string;
-        baseUrl?: string | null;
-        model?: string | null;
-        visionModel?: string | null;
-      };
-      const local = input.provider !== "claude";
-      return json(route, {
-        configured: true,
-        provider: input.provider,
-        model: local ? (input.model ?? "qwen2.5:7b") : "claude-opus-5-5",
-        visionModel: local ? (input.visionModel ?? null) : "claude-opus-5-5",
-        baseUrl: local
-          ? (input.baseUrl ??
-            (input.provider === "ollama" ? "http://localhost:11434" : "http://localhost:1234/v1"))
-          : null,
-        source: "SETTINGS",
-        reachable: local ? true : null,
-        receiptSupported: !local || Boolean(input.visionModel),
-      });
+    if (method === "PUT" && path === "/ai/key") {
+      const { apiKey } = request.postDataJSON() as { apiKey: string | null };
+      aiStatus = apiKey?.trim()
+        ? { configured: true, source: "SETTINGS", model: "claude-opus-5-5", receiptSupported: true }
+        : { ...fixtures.aiStatus };
+      return json(route, aiStatus);
     }
     if (method === "PATCH" && path === "/settings") {
       return json(route, { ...fixtures.settings, ...(request.postDataJSON() as object) });
