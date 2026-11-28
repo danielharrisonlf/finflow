@@ -3,8 +3,8 @@ import {
   Check,
   CircleCheck,
   Code2,
-  Cpu,
   ImageIcon,
+  KeyRound,
   LockKeyhole,
   ShieldCheck,
   Sparkles,
@@ -151,9 +151,9 @@ export function AssistantSection() {
           </p>
           <ul className="ff-ai-benefits">
             <li>
-              <Cpu size={16} aria-hidden="true" />
-              Roda no seu computador com um modelo local (Ollama ou LM Studio), sem chave, ou usa a
-              sua própria chave da API do Claude. Sem assistente, todo o resto do FinFlow funciona.
+              <KeyRound size={16} aria-hidden="true" />
+              Opcional: coloque a sua chave da API do Claude. Sem chave, o recurso fica desligado e
+              todo o resto funciona.
             </li>
             <li>
               <ShieldCheck size={16} aria-hidden="true" />
@@ -166,8 +166,8 @@ export function AssistantSection() {
           </ul>
           <p className="ff-fineprint">
             Exemplo ilustrativo: as respostas desta página são escritas de antemão e rodam só no seu
-            navegador. No app, com o modelo local nada sai do computador; com o Claude, apenas as
-            perguntas que você fizer vão para a API dele.
+            navegador. No app, apenas as perguntas que você fizer ao assistente vão para a API do
+            Claude, com a sua chave.
           </p>
         </div>
 

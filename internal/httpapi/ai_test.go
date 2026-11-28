@@ -42,14 +42,6 @@ func fakeMessagesAPI(t *testing.T, responses ...string) (*httptest.Server, *atom
 	return srv, &calls
 }
 
-// closedServerURL devolve uma URL onde nada escuta (nenhum teste procura um Ollama de verdade).
-func closedServerURL(t *testing.T) string {
-	t.Helper()
-	srv := httptest.NewServer(http.NotFoundHandler())
-	srv.Close()
-	return srv.URL
-}
-
 func sse(name string, data any) string {
 	b, _ := json.Marshal(data)
 	return fmt.Sprintf("event: %s\ndata: %s\n\n", name, b)
@@ -68,20 +60,11 @@ func textTurnSSE(text string) string {
 
 func newAITestServer(t *testing.T, apiURL string) *Server {
 	t.Helper()
-	return newAITestServerWith(t, apiURL, closedServerURL(t), nil)
-}
-
-// newAITestServerWith permite apontar o Ollama "deste computador" para um falso e simular FINFLOW_AI_*.
-func newAITestServerWith(t *testing.T, apiURL, ollamaURL string, env map[string]string) *Server {
-	t.Helper()
 	t.Setenv("FINFLOW_PASSWORD", "")
 	prev := newAIService
 	zero := 0
 	newAIService = func(svcs *service.Services) *ai.Service {
-		return ai.NewService(svcs, ai.Config{
-			BaseURL: apiURL, EnvCredentials: func() bool { return false }, MaxRetries: &zero,
-			Getenv: func(k string) string { return env[k] }, DefaultOllamaURL: ollamaURL,
-		})
+		return ai.NewService(svcs, ai.Config{BaseURL: apiURL, EnvCredentials: func() bool { return false }, MaxRetries: &zero})
 	}
 	t.Cleanup(func() { newAIService = prev })
 	svcs := service.New(store.New(testutil.Open(t, db.DialectSQLite)), nil)
@@ -122,23 +105,35 @@ func multipartReq(t *testing.T, srv http.Handler, filename string, content []byt
 func TestAIStatusAndKey(t *testing.T) {
 	srv := newAITestServer(t, "http://127.0.0.1:1")
 	rr := aiReq(t, srv, http.MethodGet, "/api/ai/status", nil)
-	if rr.Code != 200 || !strings.Contains(rr.Body.String(), `"configured":false`) || !strings.Contains(rr.Body.String(), `"source":null`) {
+	if rr.Code != 200 || rr.Body.String() != `{"configured":false,"source":null,"model":null,"receiptSupported":false}`+"\n" {
 		t.Fatalf("status: %d %s", rr.Code, rr.Body.String())
+	}
+	if rr := aiReq(t, srv, http.MethodGet, "/api/system/info", nil); !strings.Contains(rr.Body.String(), `"aiConfigured":false`) {
+		t.Fatalf("system info sem chave: %s", rr.Body.String())
+	}
+	// Os provedores locais foram removidos (v0.6.0): as rotas de configuração e modelos não existem mais.
+	for _, c := range []struct{ method, path string }{{http.MethodPut, "/api/ai/config"}, {http.MethodGet, "/api/ai/models"}} {
+		if rr := aiReq(t, srv, c.method, c.path, map[string]any{"provider": "claude"}); rr.Code != http.StatusNotFound && rr.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("%s %s deveria não existir: %d %s", c.method, c.path, rr.Code, rr.Body.String())
+		}
 	}
 	if rr := aiReq(t, srv, http.MethodPut, "/api/ai/key", map[string]any{"apiKey": "curta"}); rr.Code != 400 {
 		t.Fatalf("chave inválida: %d %s", rr.Code, rr.Body.String())
 	}
 	key := "sk-ant-api03-abcdefghijklmnopqrstuvwxyz"
 	rr = aiReq(t, srv, http.MethodPut, "/api/ai/key", map[string]any{"apiKey": key})
-	if rr.Code != 200 || !strings.Contains(rr.Body.String(), `"source":"SETTINGS"`) || strings.Contains(rr.Body.String(), key) {
+	if rr.Code != 200 || rr.Body.String() != `{"configured":true,"source":"SETTINGS","model":"`+ai.Model+`","receiptSupported":true}`+"\n" {
 		t.Fatalf("salvar chave: %d %s", rr.Code, rr.Body.String())
+	}
+	if rr := aiReq(t, srv, http.MethodGet, "/api/system/info", nil); !strings.Contains(rr.Body.String(), `"aiConfigured":true`) {
+		t.Fatalf("system info com chave: %s", rr.Body.String())
 	}
 	// A chave nunca aparece em /api/settings.
 	if rr := aiReq(t, srv, http.MethodGet, "/api/settings", nil); strings.Contains(rr.Body.String(), key) {
 		t.Fatalf("chave vazou em /api/settings: %s", rr.Body.String())
 	}
 	rr = aiReq(t, srv, http.MethodPut, "/api/ai/key", map[string]any{"apiKey": nil})
-	if rr.Code != 200 || !strings.Contains(rr.Body.String(), `"configured":false`) {
+	if rr.Code != 200 || !strings.Contains(rr.Body.String(), `"configured":false`) || !strings.Contains(rr.Body.String(), `"model":null`) {
 		t.Fatalf("limpar chave: %d %s", rr.Code, rr.Body.String())
 	}
 }
@@ -229,118 +224,5 @@ func TestBodyLimitForReceipt(t *testing.T) {
 	}
 	if got := bodyLimitFor(httptest.NewRequest(http.MethodPost, "/api/ai/chat", nil)); got != MaxBodyBytes {
 		t.Fatalf("chat: %d", got)
-	}
-}
-
-// fakeOllama responde /api/version, /api/tags e, em ordem, os chunks NDJSON de /api/chat.
-func fakeOllama(t *testing.T, chats ...string) (*httptest.Server, *atomic.Int32) {
-	t.Helper()
-	var chatCalls atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = io.Copy(io.Discard, r.Body)
-		switch r.URL.Path {
-		case "/api/version":
-			_, _ = io.WriteString(w, `{"version":"0.12.0"}`)
-		case "/api/tags":
-			_, _ = io.WriteString(w, `{"models":[{"name":"qwen2.5:7b","details":{"parameter_size":"7.6B"}}]}`)
-		case "/api/show":
-			_, _ = io.WriteString(w, `{"capabilities":["completion","tools"]}`)
-		case "/api/chat":
-			i := int(chatCalls.Add(1)) - 1
-			if i >= len(chats) {
-				w.WriteHeader(http.StatusInternalServerError)
-				_, _ = io.WriteString(w, `{"error":"sem resposta roteirizada"}`)
-				return
-			}
-			w.Header().Set("Content-Type", "application/x-ndjson")
-			_, _ = io.WriteString(w, chats[i])
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	t.Cleanup(srv.Close)
-	return srv, &chatCalls
-}
-
-func TestAIConfigModelsAndLocalChat(t *testing.T) {
-	ollama, chatCalls := fakeOllama(t,
-		`{"message":{"role":"assistant","content":"Olá"},"done":false}`+"\n"+
-			`{"message":{"role":"assistant","content":", tudo certo."},"done":false}`+"\n"+
-			`{"message":{"role":"assistant","content":""},"done":true,"done_reason":"stop"}`+"\n",
-	)
-	srv := newAITestServerWith(t, "http://127.0.0.1:1", ollama.URL, nil)
-
-	// Nada configurado, mas há um Ollama com modelos "neste computador": configuração automática.
-	rr := aiReq(t, srv, http.MethodGet, "/api/ai/status", nil)
-	var st ai.Status
-	if err := json.Unmarshal(rr.Body.Bytes(), &st); err != nil || rr.Code != 200 || !st.Configured || st.Provider == nil ||
-		*st.Provider != "ollama" || *st.Source != "AUTO" || *st.Model != "qwen2.5:7b" || *st.BaseURL != ollama.URL ||
-		st.Reachable == nil || !*st.Reachable || st.ReceiptSupported {
-		t.Fatalf("status: %d %s", rr.Code, rr.Body.String())
-	}
-	if rr := aiReq(t, srv, http.MethodGet, "/api/system/info", nil); !strings.Contains(rr.Body.String(), `"aiConfigured":true`) {
-		t.Fatalf("system info com detecção automática: %s", rr.Body.String())
-	}
-
-	rr = aiReq(t, srv, http.MethodGet, "/api/ai/models?provider=ollama", nil)
-	if rr.Code != 200 || !strings.Contains(rr.Body.String(), `{"id":"qwen2.5:7b","label":"qwen2.5:7b · 7.6B","tools":true}`) {
-		t.Fatalf("models: %d %s", rr.Code, rr.Body.String())
-	}
-	if rr := aiReq(t, srv, http.MethodGet, "/api/ai/models?provider=ollama&baseUrl=javascript:alert(1)", nil); rr.Code != 400 {
-		t.Fatalf("baseUrl inválida: %d %s", rr.Code, rr.Body.String())
-	}
-	if rr := aiReq(t, srv, http.MethodPut, "/api/ai/config", map[string]any{"provider": "gpt"}); rr.Code != 400 {
-		t.Fatalf("provider inválido: %d", rr.Code)
-	}
-
-	rr = aiReq(t, srv, http.MethodPut, "/api/ai/config", map[string]any{"provider": "ollama", "model": "qwen2.5:7b"})
-	if rr.Code != 200 || !strings.Contains(rr.Body.String(), `"provider":"ollama"`) || !strings.Contains(rr.Body.String(), `"configured":true`) ||
-		!strings.Contains(rr.Body.String(), `"source":"SETTINGS"`) || !strings.Contains(rr.Body.String(), `"receiptSupported":false`) {
-		t.Fatalf("config: %d %s", rr.Code, rr.Body.String())
-	}
-
-	body := map[string]any{"messages": []map[string]string{{"role": "user", "content": "oi"}}}
-	rr = aiReq(t, srv, http.MethodPost, "/api/ai/chat", body)
-	out := rr.Body.String()
-	if rr.Code != 200 || !strings.Contains(out, "event: text\ndata: {\"delta\":\"Olá\"}\n\n") ||
-		!strings.Contains(out, "event: done\ndata: {\"stopReason\":\"end_turn\"}\n\n") || chatCalls.Load() != 1 {
-		t.Fatalf("chat local: %d %q", rr.Code, out)
-	}
-
-	// Comprovante sem modelo de visão: 412 com instrução em pt-BR.
-	png := []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00")
-	if rr := multipartReq(t, srv, "nota.png", png); rr.Code != http.StatusPreconditionFailed || !strings.Contains(rr.Body.String(), "modelo de visão") {
-		t.Fatalf("receipt sem visão: %d %s", rr.Code, rr.Body.String())
-	}
-
-	// Servidor local fora do ar antes do primeiro evento: JSON 502 (nunca 401).
-	ollama.Close()
-	if rr := aiReq(t, srv, http.MethodPost, "/api/ai/chat", body); rr.Code != http.StatusBadGateway || !strings.Contains(rr.Body.String(), "Ollama") {
-		t.Fatalf("Ollama fora do ar: %d %s", rr.Code, rr.Body.String())
-	}
-
-	// Legado continua funcionando e troca o provedor para o Claude.
-	rr = aiReq(t, srv, http.MethodPut, "/api/ai/key", map[string]any{"apiKey": "sk-ant-api03-abcdefghijklmnopqrstuvwxyz"})
-	if rr.Code != 200 || !strings.Contains(rr.Body.String(), `"provider":"claude"`) || !strings.Contains(rr.Body.String(), `"reachable":null`) {
-		t.Fatalf("legado: %d %s", rr.Code, rr.Body.String())
-	}
-}
-
-func TestAIConfigEnvPrecedence(t *testing.T) {
-	ollama, _ := fakeOllama(t)
-	srv := newAITestServerWith(t, "http://127.0.0.1:1", closedServerURL(t), map[string]string{
-		"FINFLOW_AI_PROVIDER": "ollama", "FINFLOW_AI_BASE_URL": ollama.URL, "FINFLOW_AI_MODEL": "llama3.1:8b",
-		"FINFLOW_AI_VISION_MODEL": "llava",
-	})
-	aiReq(t, srv, http.MethodPut, "/api/ai/key", map[string]any{"apiKey": "sk-ant-api03-abcdefghijklmnopqrstuvwxyz"})
-	rr := aiReq(t, srv, http.MethodGet, "/api/ai/status", nil)
-	var st ai.Status
-	_ = json.Unmarshal(rr.Body.Bytes(), &st)
-	if st.Provider == nil || *st.Provider != "ollama" || *st.Source != "ENV" || *st.Model != "llama3.1:8b" ||
-		*st.BaseURL != ollama.URL || !*st.Reachable || !st.ReceiptSupported {
-		t.Fatalf("env deve ganhar do que está salvo: %s", rr.Body.String())
-	}
-	if rr := aiReq(t, srv, http.MethodGet, "/api/system/info", nil); !strings.Contains(rr.Body.String(), `"aiConfigured":true`) {
-		t.Fatalf("system info: %s", rr.Body.String())
 	}
 }

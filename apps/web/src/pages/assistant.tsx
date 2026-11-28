@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowUp, Paperclip, RotateCcw, Sparkles, Square } from "lucide-react";
+import { ArrowUp, Paperclip, PowerOff, RotateCcw, Sparkles, Square } from "lucide-react";
 import {
   type ChangeEvent,
   type FormEvent,
@@ -8,10 +8,9 @@ import {
   useRef,
   useState,
 } from "react";
-import { useNavigate } from "react-router-dom";
-import { CanAffordForm } from "../components/assistant/can-afford-form";
+import { Link, useNavigate } from "react-router-dom";
+import { ASSISTANT_SETTINGS_ANCHOR } from "../components/assistant/assistant-settings";
 import { ChatMessage } from "../components/assistant/chat-message";
-import { AssistantSetupCard } from "../components/assistant/setup-card";
 import {
   type NewTransactionInitialValues,
   NewTransactionSheet,
@@ -22,9 +21,7 @@ import {
   type AiEvent,
   type AiReceipt,
   clearHistory,
-  describeActiveAi,
   extractReceipt,
-  isLocalProvider,
   isSpreadsheetFile,
   loadHistory,
   MAX_RECEIPT_BYTES,
@@ -33,7 +30,6 @@ import {
   type StoredProposal,
   saveAiKey,
   saveHistory,
-  statusProvider,
   streamChat,
   toChatPayload,
   type UiMessage,
@@ -261,10 +257,6 @@ export function AssistantPage() {
     }
   };
 
-  const provider = statusProvider(status.data);
-  const local = isLocalProvider(provider);
-  const activeAi = describeActiveAi(status.data);
-
   const header = (
     <header className="flex items-start justify-between gap-3">
       <div className="min-w-0">
@@ -272,12 +264,6 @@ export function AssistantPage() {
         <p className="text-sm text-app-muted">
           Pergunte sobre seus gastos, saldos e planos — as respostas usam os seus dados.
         </p>
-        {activeAi ? (
-          <p className="mt-1 truncate text-xs text-app-subtle" data-testid="ai-active-provider">
-            {activeAi}
-            {local && status.data?.reachable === false ? " · servidor sem resposta" : ""}
-          </p>
-        ) : null}
       </div>
       {status.data?.configured && messages.length > 0 ? (
         <Button
@@ -302,23 +288,34 @@ export function AssistantPage() {
     );
   }
 
+  // Sem chave o recurso fica desativado: nada de chat nem anexo, só o caminho para Configurações.
   if (!status.data?.configured) {
     return (
-      <div className="space-y-4">
+      <div className="mx-auto max-w-xl space-y-4">
         {header}
         {status.error ? (
           <p role="alert" className="text-sm text-expense">
             Não foi possível verificar o Assistente: {status.error.message}
           </p>
         ) : null}
-        <div className="grid gap-4 lg:grid-cols-2">
-          <AssistantSetupCard
-            status={status.data}
-            onRecheck={() => void status.refetch()}
-            rechecking={status.isFetching}
-          />
-          <CanAffordForm />
-        </div>
+        <Card className="flex items-start gap-3 p-5" data-testid="ai-disabled">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-app-soft text-app-muted">
+            <PowerOff size={18} aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-app-text">O Assistente está desativado</h2>
+            <p className="mt-1 text-sm text-app-muted">
+              Ele usa a API do Claude com a sua chave. Para ativar, coloque a chave em Configurações
+              → Assistente (IA). Todo o resto do FinFlow funciona sem ele.
+            </p>
+            <Link
+              to={`/configuracoes#${ASSISTANT_SETTINGS_ANCHOR}`}
+              className="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-income underline-offset-4 hover:underline"
+            >
+              Abrir Configurações
+            </Link>
+          </div>
+        </Card>
       </div>
     );
   }
@@ -425,8 +422,7 @@ export function AssistantPage() {
         <p className="mt-1.5 px-2 text-center text-[11px] text-app-subtle">
           Respostas geradas por IA a partir dos seus dados — confira antes de decidir. Não é
           recomendação de investimento.
-          {local ? " Modelo local: nada sai deste computador." : ""}
-          {provider === "claude" && status.data.source === "SETTINGS" ? (
+          {status.data.source === "SETTINGS" ? (
             <>
               {" "}
               <button

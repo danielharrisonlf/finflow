@@ -120,4 +120,4 @@ jobs:
       - name: logs
         if: always()
         run: docker logs finflow-ci || true
-      - run: docker compose --profile ai --profile postgres --profile test config -q
+      - run: docker compose --profile postgres --profile test config -q

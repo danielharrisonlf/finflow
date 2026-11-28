@@ -22,7 +22,7 @@ type AIChatMessage struct {
 
 // AIChat envia a conversa a POST /api/ai/chat e chama onEvent para cada evento SSE (text, tool,
 // proposal, done, error) com o JSON do campo data. Erros antes do stream (ex.: 412 sem assistente
-// configurado) voltam como *APIError. Sem timeout total: a resposta pode demorar em modelos locais.
+// configurado) voltam como *APIError. Sem timeout total: a resposta chega em streaming e pode demorar.
 func (c *HTTPClient) AIChat(ctx context.Context, messages []AIChatMessage, onEvent func(event string, data json.RawMessage)) error {
 	body, err := json.Marshal(map[string]any{"messages": messages})
 	if err != nil {

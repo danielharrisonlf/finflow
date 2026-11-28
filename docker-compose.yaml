@@ -1,17 +1,14 @@
 # FinFlow em contêiner (docs/local-agent-contract.md §4) — sem Go nem Node na máquina.
 #
 #   docker compose up -d                   # FinFlow em http://localhost:3333, banco no volume finflow_data
-#   docker compose --profile ai up -d      # + Ollama local para o assistente (baixa o modelo no 1º uso)
 #   docker compose down                    # para; os dados ficam no volume (down -v apaga)
 #
 # Variáveis (no ambiente ou num .env ao lado deste arquivo):
 #   FINFLOW_PORT=3333          porta publicada        FINFLOW_BIND=127.0.0.1   0.0.0.0 expõe na rede
 #   FINFLOW_PASSWORD (vazia por padrão): defina uma antes de expor na rede (FINFLOW_BIND=0.0.0.0);
 #   com ela, o FinFlow passa a exigir login
-#   FINFLOW_AI_MODEL=qwen2.5:7b                        FINFLOW_AI_VISION_MODEL=  (ex.: qwen2.5vl:7b)
-#   Com o profile `ai`, o FinFlow detecta sozinho o Ollama em FINFLOW_OLLAMA_URL (http://ollama:11434)
-#   e usa o modelo FINFLOW_AI_MODEL — sem travar a escolha: Configurações → Assistente continua
-#   valendo. Para forçar um provedor (Claude, LM Studio), defina FINFLOW_AI_PROVIDER e FINFLOW_AI_BASE_URL.
+#   ANTHROPIC_API_KEY (opcional): chave da API do Claude para o assistente; sem ela (nem chave salva em
+#   Configurações → Assistente (IA)), o recurso fica desativado e todo o resto funciona
 #
 # O PostgreSQL continua opcional: docker compose --profile postgres up -d db
 services:
@@ -30,13 +27,7 @@ services:
       API_PORT: "3333"
       FINFLOW_TZ: ${FINFLOW_TZ:-America/Sao_Paulo}
       FINFLOW_PASSWORD: ${FINFLOW_PASSWORD:-}
-      # Vazias = sem trava; o Ollama do profile `ai` é detectado por FINFLOW_OLLAMA_URL.
-      FINFLOW_AI_PROVIDER: ${FINFLOW_AI_PROVIDER:-}
-      FINFLOW_AI_BASE_URL: ${FINFLOW_AI_BASE_URL:-}
-      FINFLOW_OLLAMA_URL: ${FINFLOW_OLLAMA_URL:-http://ollama:11434}
-      FINFLOW_AI_MODEL: ${FINFLOW_AI_MODEL:-qwen2.5:7b}
-      FINFLOW_AI_VISION_MODEL: ${FINFLOW_AI_VISION_MODEL:-}
-      FINFLOW_AI_API_KEY: ${FINFLOW_AI_API_KEY:-}
+      # Assistente opcional: vazia = desativado (a chave também pode ser salva em Configurações).
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     ports:
       - "${FINFLOW_BIND:-127.0.0.1}:${FINFLOW_PORT:-3333}:3333"
@@ -49,35 +40,6 @@ services:
       timeout: 3s
       start_period: 10s
       retries: 3
-
-  # Assistente local (profile `ai`). Sem porta publicada: só o FinFlow (rede do compose) o acessa.
-  ollama:
-    image: ollama/ollama:0.30.0
-    container_name: finflow-ollama
-    profiles: ["ai"]
-    restart: unless-stopped
-    volumes:
-      - finflow_ollama:/root/.ollama
-    healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 10s
-      timeout: 5s
-      start_period: 10s
-      retries: 10
-
-  # Baixa o modelo uma vez (alguns GB no primeiro uso; depois fica no volume finflow_ollama).
-  ollama-pull:
-    image: ollama/ollama:0.30.0
-    container_name: finflow-ollama-pull
-    profiles: ["ai"]
-    restart: "no"
-    depends_on:
-      ollama:
-        condition: service_healthy
-    environment:
-      OLLAMA_HOST: http://ollama:11434
-    entrypoint: ["ollama"]
-    command: ["pull", "${FINFLOW_AI_MODEL:-qwen2.5:7b}"]
 
   db:
     image: postgres:16-alpine
@@ -116,5 +78,4 @@ services:
 
 volumes:
   finflow_data:
-  finflow_ollama:
   finflow_pgdata:

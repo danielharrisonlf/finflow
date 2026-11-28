@@ -1,6 +1,5 @@
 import type {
   Account,
-  AiProvider,
   AiStatus,
   Alert,
   ApplyRulesInput,
@@ -93,7 +92,6 @@ import type {
 } from "@finflow/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isBrowserRuntime } from "../runtime/client";
-import { listAiModels } from "./ai";
 import { api, setAuthToken } from "./api";
 
 export interface Period {
@@ -547,7 +545,7 @@ export const useSystemInfo = () =>
     staleTime: 60_000,
   });
 
-/** GET /api/ai/status (v3 §15 e docs/local-agent-contract.md §2); chaves nunca voltam para o frontend. */
+/** GET /api/ai/status (v3 §15); a chave em si nunca volta para o frontend. */
 export type AiStatusInfo = AiStatus;
 
 export const useAiStatus = () =>
@@ -557,15 +555,11 @@ export const useAiStatus = () =>
     retry: false,
   });
 
-/** GET /api/ai/models do provedor e URL informados (só provedores locais consultam a rede). */
-export const useAiModels = (provider: AiProvider | null, baseUrl: string, enabled = true) =>
-  useQuery({
-    queryKey: ["ai", "models", provider, baseUrl],
-    queryFn: () => listAiModels(provider ?? "ollama", baseUrl),
-    enabled: enabled && provider !== null && provider !== "claude",
-    retry: false,
-    staleTime: 30_000,
-  });
+/**
+ * O Assistente só aparece (navegação, paleta de comandos, atalhos) com uma chave da API do Claude
+ * configurada; enquanto o status carrega ou se falhar, fica escondido.
+ */
+export const useAiEnabled = (): boolean => useAiStatus().data?.configured === true;
 
 // ───────────────────────── v3: escritas ─────────────────────────
 

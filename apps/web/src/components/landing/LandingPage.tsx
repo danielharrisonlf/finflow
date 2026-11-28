@@ -265,7 +265,7 @@ function Hero({ appHref }: { appHref: string }) {
         <ul className="ff-hero-proof">
           <li>
             <Check size={15} />
-            Assistente local (Ollama) ou Claude
+            Assistente opcional com o Claude
           </li>
           <li>
             <Check size={15} />
@@ -1025,9 +1025,9 @@ function Privacy() {
           Seus dados. Suas escolhas.
         </h2>
         <p>
-          O FinFlow roda no seu computador. Sem conta, sem cadastro e sem nuvem. O assistente pode
-          rodar aqui também, com o Ollama; se você escolher o Claude, só as perguntas que fizer a
-          ele vão para a API da Anthropic.
+          O FinFlow roda no seu computador. Sem conta, sem cadastro e sem nuvem. O assistente é
+          opcional: com a sua chave da API do Claude, só as perguntas que você fizer a ele vão para
+          a API da Anthropic.
         </p>
         <a className="ff-text-link" href="#baixar">
           Baixar grátis
@@ -1074,7 +1074,7 @@ const questions = [
   },
   {
     q: "Preciso pagar pela IA?",
-    a: "Não. O assistente pode rodar no seu computador com um modelo local, pelo Ollama ou pelo LM Studio, sem chave e sem custo. Se preferir, use a sua própria chave da API do Claude, cobrada pela Anthropic conforme o uso. Todo o resto funciona sem assistente nenhum, inclusive o simulador “Posso comprar?” e as calculadoras.",
+    a: "Não para usar o FinFlow. O assistente é opcional: coloque a sua chave da API do Claude, cobrada pela Anthropic conforme o uso. Sem chave, o recurso fica desligado e todo o resto funciona, inclusive o simulador “Posso comprar?” e as calculadoras.",
   },
   {
     q: "Onde ficam meus dados na versão do navegador?",
@@ -1090,7 +1090,7 @@ const questions = [
   },
   {
     q: "Meus dados vão para a nuvem?",
-    a: "Não. Lançamentos, contas e planilhas ficam num arquivo no seu computador. Com o assistente local, nem as perguntas saem dele. Só se você escolher o Claude, as perguntas que fizer ao assistente são enviadas à API do Claude para gerar a resposta.",
+    a: "Não. Lançamentos, contas e planilhas ficam num arquivo no seu computador. Só se você ativar o assistente com a sua chave, as perguntas que fizer a ele são enviadas à API do Claude para gerar a resposta.",
   },
   {
     q: "Preciso instalar alguma coisa?",

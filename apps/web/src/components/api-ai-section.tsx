@@ -1,13 +1,10 @@
-import { Bot, Check, Copy, Plug, Smartphone } from "lucide-react";
+import { Check, Copy, Plug, Smartphone } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
-import { describeActiveAi } from "../lib/ai";
-import { useAiStatus, useSystemInfo } from "../lib/queries";
+import { useSystemInfo } from "../lib/queries";
 import { isBrowserRuntime } from "../runtime/client";
 import { Card } from "./ui/card";
 import { LoadingRows } from "./ui/empty";
 import { QrCode } from "./ui/qr-code";
-import { Badge } from "./ui/segmented";
 
 const MCP_STDIO_SNIPPET = JSON.stringify(
   { mcpServers: { finflow: { command: "/caminho/para/finflow", args: ["mcp"] } } },
@@ -81,10 +78,12 @@ function SubHeading({ icon: Icon, children }: { icon: typeof Plug; children: Rea
   );
 }
 
-/** Configurações → "API e IA" (v3 §13–15): dados do sistema, MCP, rede local e assistente. */
+/**
+ * Configurações → "API e MCP" (v3 §13–14): dados do sistema, MCP e rede local. O Assistente tem a
+ * seção própria (Assistente (IA)).
+ */
 export function ApiAiSection() {
   const system = useSystemInfo();
-  const ai = useAiStatus();
   const origin = typeof window === "undefined" ? "" : window.location.origin;
   const apiBase = `${origin}/api`;
   const info = system.data;
@@ -105,11 +104,11 @@ export function ApiAiSection() {
     >
       <div>
         <h2 className="text-sm font-semibold text-app-text">
-          {isBrowserRuntime ? "Sistema e IA" : "API e IA"}
+          {isBrowserRuntime ? "Sistema" : "API e MCP"}
         </h2>
         <p className="mt-1 text-sm text-app-muted">
           {isBrowserRuntime
-            ? "Versão do FinFlow e o assistente. As perguntas vão direto deste navegador para o modelo escolhido (local ou API do Claude)."
+            ? "Versão do FinFlow e onde ficam os seus dados."
             : "Use seus dados em assistentes compatíveis com MCP, acesse a API pessoal e abra o FinFlow no celular pela rede local."}
         </p>
       </div>
@@ -204,40 +203,6 @@ export function ApiAiSection() {
             </section>
           </>
         )}
-
-        <section className="flex min-w-0 flex-col gap-2" data-testid="ai-status">
-          <SubHeading icon={Bot}>Assistente</SubHeading>
-          {ai.isLoading ? (
-            <p className="text-sm text-app-muted">Verificando…</p>
-          ) : !ai.data ? (
-            <p className="text-sm text-app-muted">Status do assistente indisponível.</p>
-          ) : (
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge tone={ai.data.configured ? "income" : "warn"}>
-                {ai.data.configured ? "IA configurada" : "IA não configurada"}
-              </Badge>
-              <span className="text-sm text-app-muted">
-                {ai.data.configured
-                  ? `${describeActiveAi(ai.data) ?? "Assistente"}${
-                      ai.data.source === "ENV"
-                        ? " · via variável de ambiente"
-                        : ai.data.source === "SETTINGS"
-                          ? " · salvo nas configurações"
-                          : ""
-                    }`
-                  : ai.data.reachable
-                    ? "Ollama encontrado neste computador — escolha-o em Assistente, acima"
-                    : "escolha um modelo local ou a API do Claude em Assistente, acima"}
-              </span>
-            </div>
-          )}
-          <Link
-            to="/assistente"
-            className="inline-flex min-h-11 items-center self-start text-sm font-medium text-income underline-offset-4 hover:underline"
-          >
-            Abrir o Assistente
-          </Link>
-        </section>
       </div>
     </Card>
   );

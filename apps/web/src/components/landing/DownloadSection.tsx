@@ -236,13 +236,16 @@ export function DownloadSection({ appHref }: { appHref: string }) {
             <div className="ff-download-terminal">
               <h3>
                 <Sparkles size={17} aria-hidden="true" />
-                Com o assistente local
+                Com o assistente
               </h3>
               <p>
-                O profile <code>ai</code> sobe também um Ollama e baixa o modelo no primeiro uso.
-                Nada sai do seu computador.
+                Opcional: passe a sua chave da API do Claude ao subir. Sem chave, o recurso fica
+                desligado e todo o resto funciona.
               </p>
-              <InstallCommand label="Docker com Ollama" command={sourceCommands.dockerAi} />
+              <InstallCommand
+                label="Docker com o assistente"
+                command={sourceCommands.dockerAssistant}
+              />
             </div>
           </div>
         </Tabs.Content>

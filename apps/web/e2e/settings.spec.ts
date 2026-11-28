@@ -39,62 +39,49 @@ test("plano que não soma 100% bloqueia o envio", async ({ page }) => {
   expect(captured.some((r) => r.method === "PATCH")).toBe(false);
 });
 
-test("Assistente: servidor compatível com teste de conexão, modelo e chave", async ({ page }) => {
+test("Assistente (IA): explica o recurso, pede a chave e linka o console da Anthropic", async ({
+  page,
+}) => {
   const captured = await mockApi(page);
-  const modelQueries: string[] = [];
-  await page.route("**/api/ai/models**", (route) => {
-    const url = new URL(route.request().url());
-    modelQueries.push(url.search);
-    if (url.searchParams.get("provider") === "openai_compatible") {
-      return route.fulfill({
-        json: {
-          models: [{ id: "qwen2.5-7b-instruct", label: "qwen2.5-7b-instruct", tools: null }],
-        },
-      });
-    }
-    return route.fulfill({
-      status: 502,
-      json: { message: "Não foi possível conectar ao Ollama em http://localhost:11434." },
-    });
-  });
   await page.goto("/configuracoes");
 
   const section = page.getByTestId("ai-settings");
-  await expect(section.getByRole("heading", { name: "Assistente" })).toBeVisible();
-  // Padrão: Ollama local, com instruções de instalação e sem campo de chave.
-  await expect(section.getByLabel("Local (Ollama)")).toBeChecked();
-  await expect(section.getByTestId("ai-help")).toContainText("ollama pull qwen2.5:7b");
-  await expect(section.getByLabel("Chave da API (opcional)")).toHaveCount(0);
-  await section.getByRole("button", { name: "Testar conexão" }).click();
-  await expect(section.getByTestId("ai-test-result")).toContainText(
-    "Não foi possível conectar ao Ollama",
+  await expect(section.getByRole("heading", { name: "Assistente (IA)" })).toBeVisible();
+  await expect(section).toContainText("usa a API do Claude com a sua chave");
+  await expect(section).toContainText("cobrado pela Anthropic");
+  await expect(section).toContainText("Todo o resto do FinFlow funciona sem ele.");
+  await expect(section.getByTestId("ai-settings-status")).toContainText("Desativado");
+  await expect(section.getByLabel("Chave da API do Claude")).toHaveAttribute("type", "password");
+  await expect(section.getByRole("button", { name: "Remover chave" })).toHaveCount(0);
+  await expect(section.getByRole("link", { name: /console\.anthropic\.com/ })).toHaveAttribute(
+    "href",
+    "https://console.anthropic.com/",
   );
 
-  await section.getByLabel("Servidor compatível (LM Studio, llama.cpp…)").check();
-  await expect(section.getByTestId("ai-help")).toContainText("Start server");
-  await section.getByLabel("URL do servidor").fill("http://localhost:1234/v1");
-  await section.getByRole("button", { name: "Testar conexão" }).click();
-  await expect(section.getByTestId("ai-test-result")).toHaveText("Conectado: 1 modelo encontrado.");
-  await section.getByRole("combobox").first().selectOption("qwen2.5-7b-instruct");
-  await section.getByLabel("Chave da API (opcional)").fill("lm-studio");
-  await section.getByRole("button", { name: "Salvar assistente" }).click();
-  await expect(section.getByText("Assistente salvo")).toBeVisible();
+  // Sem chave digitada: aviso, nenhuma requisição.
+  await section.getByRole("button", { name: "Salvar" }).click();
+  await expect(section.getByText("Cole a chave da API do Claude")).toBeVisible();
+  expect(captured.some((r) => r.url.endsWith("/api/ai/key"))).toBe(false);
+});
 
-  const put = captured.find((r) => r.method === "PUT" && r.url.endsWith("/api/ai/config"));
-  expect(put?.body).toEqual({
-    provider: "openai_compatible",
-    baseUrl: "http://localhost:1234/v1",
-    model: "qwen2.5-7b-instruct",
-    visionModel: null,
-    apiKey: "lm-studio",
-  });
-  expect(modelQueries.some((q) => q.includes("baseUrl=http%3A%2F%2Flocalhost%3A1234%2Fv1"))).toBe(
-    true,
+test("Assistente (IA): chave da variável de ambiente não pode ser removida pela interface", async ({
+  page,
+}) => {
+  await mockApi(page);
+  await page.route("**/api/ai/status", (route) =>
+    route.fulfill({
+      json: { configured: true, source: "ENV", model: "claude-opus-5-5", receiptSupported: true },
+    }),
   );
+  await page.goto("/configuracoes");
 
-  // Claude: só a chave, sem URL nem modelo.
-  await section.getByLabel("Claude (API)").check();
-  await expect(section.getByLabel("URL do servidor")).toHaveCount(0);
-  await expect(section.getByLabel("Chave da API do Claude")).toBeVisible();
-  await expect(section.getByTestId("ai-help")).toContainText("console.anthropic.com");
+  const section = page.getByTestId("ai-settings");
+  await expect(section.getByTestId("ai-settings-status")).toContainText("Ativo");
+  await expect(section.getByTestId("ai-settings-status")).toContainText(
+    "chave da variável de ambiente",
+  );
+  await expect(section.getByTestId("ai-env-note")).toContainText("ANTHROPIC_API_KEY");
+  await expect(section.getByTestId("ai-env-note")).toContainText("não pode ser removida por aqui");
+  await expect(section.getByLabel("Chave da API do Claude")).toHaveCount(0);
+  await expect(section.getByRole("button", { name: "Remover chave" })).toHaveCount(0);
 });

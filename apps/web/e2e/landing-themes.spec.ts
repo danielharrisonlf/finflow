@@ -150,7 +150,9 @@ test("/inicio is public, isolated from APIs, and links into the existing auth ga
   await expect(page.locator(".ff-hero-copy > p")).toHaveText(
     "Contas, cartões, metas e planilhas num programa que roda no seu computador. Sem conta e sem nuvem: seus dados ficam num arquivo SQLite seu.",
   );
-  await expect(page.locator(".ff-hero-proof")).toContainText("Assistente local (Ollama) ou Claude");
+  await expect(page.locator(".ff-hero-proof")).toContainText("Assistente opcional com o Claude");
+  // Local model providers were removed in v0.6.0: the assistant is Claude-key-only.
+  await expect(page.getByText(/modelo local|agente local/i)).toHaveCount(0);
   const heroActions = page.locator(".ff-hero-actions");
   // Primary CTA: the download (docs/local-agent-contract.md §4). Secondary: the source code.
   // Third, as a text link: try it in the browser.
@@ -267,9 +269,11 @@ test("download section offers the right release asset, other systems, and instal
   await expect(tabs.nth(2)).toHaveAttribute("aria-selected", "true");
   await expect(download.locator(".ff-install-command code")).toHaveText([
     "git clone https://github.com/danielharrisonlf/finflow && cd finflow && docker compose up -d",
-    "docker compose --profile ai up -d",
+    "ANTHROPIC_API_KEY=sk-ant-... docker compose up -d",
   ]);
-  await expect(download.getByRole("tabpanel")).toContainText("Ollama");
+  await expect(download.getByRole("tabpanel")).toContainText(
+    "Sem chave, o recurso fica desligado e todo o resto funciona.",
+  );
   await tabs.first().click();
   await expect(download.locator(".ff-download-primary")).toHaveText("Baixar para Windows");
 
@@ -377,8 +381,9 @@ test("assistant example answers locally and always asks before writing", async (
   const ai = page.locator("#assistente");
   await expect(ai.getByRole("heading", { level: 2 })).toHaveText("Pergunte ao FinFlow.");
   await expect(ai.locator(".ff-assistant-badge")).toHaveText("Exemplo");
-  await expect(ai).toContainText("modelo local (Ollama ou LM Studio)");
-  await expect(ai).toContainText("sua própria chave da API do Claude");
+  await expect(ai).toContainText(
+    "Opcional: coloque a sua chave da API do Claude. Sem chave, o recurso fica desligado e todo o resto funciona.",
+  );
   await expect(ai).toContainText("depois que você confirma");
   await expect(ai).toContainText("foto do comprovante");
 
@@ -469,13 +474,10 @@ test("planning, mobile and FAQ sections describe v3 features", async ({ page }) 
   for (const [question, answer] of [
     [
       "Preciso pagar pela IA?",
-      /^Não\. [\s\S]*modelo local, pelo Ollama ou pelo LM Studio, sem chave e sem custo[\s\S]*sua própria chave da API do Claude, cobrada pela Anthropic/,
+      /^Não para usar o FinFlow\. O assistente é opcional: coloque a sua chave da API do Claude, cobrada pela Anthropic[\s\S]*Sem chave, o recurso fica desligado e todo o resto funciona/,
     ],
     ["Funciona no celular?", /navegador do celular[\s\S]*instale como app[\s\S]*rede de casa/],
-    [
-      "Meus dados vão para a nuvem?",
-      /assistente local, nem as perguntas saem dele[\s\S]*escolher o Claude[\s\S]*API do Claude/,
-    ],
+    ["Meus dados vão para a nuvem?", /ativar o assistente com a sua chave[\s\S]*API do Claude/],
     [
       "Onde ficam meus dados na versão do navegador?",
       /No próprio navegador[\s\S]*Dados neste navegador[\s\S]*apaga o FinFlow/,

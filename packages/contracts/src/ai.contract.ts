@@ -1,44 +1,21 @@
 import { z } from "zod";
 
-/** Provedores do Assistente (docs/local-agent-contract.md §1). */
-export const aiProviderSchema = z.enum(["ollama", "openai_compatible", "claude"]);
-export type AiProvider = z.infer<typeof aiProviderSchema>;
-
 /**
- * GET /api/ai/status (§2). Os campos novos são opcionais: servidores anteriores ao assistente local
- * devolvem só `configured`, `source` e `model`. Chaves de API nunca vêm na resposta.
+ * GET /api/ai/status (v3 §15). O Assistente usa só a API do Claude com a chave do próprio usuário
+ * (ANTHROPIC_API_KEY ou a chave salva em Configurações); sem chave, o recurso fica desativado.
+ * Os campos além de `configured` são tolerantes (servidores anteriores devolviam `model` sempre
+ * preenchido e não tinham `receiptSupported`). A chave nunca vem na resposta.
  */
 export const aiStatusSchema = z.object({
   configured: z.boolean(),
-  provider: aiProviderSchema.nullish(),
+  source: z.enum(["ENV", "SETTINGS"]).nullish(),
   model: z.string().nullish(),
-  visionModel: z.string().nullish(),
-  baseUrl: z.string().nullish(),
-  /** AUTO: nada no ambiente nem salvo, e um Ollama com modelos respondeu em FINFLOW_OLLAMA_URL. */
-  source: z.enum(["ENV", "SETTINGS", "AUTO"]).nullish(),
-  /** Ping do servidor local; com nada configurado, do Ollama em http://localhost:11434. */
-  reachable: z.boolean().nullish(),
   receiptSupported: z.boolean().nullish(),
 });
 export type AiStatus = z.infer<typeof aiStatusSchema>;
 
-/** PUT /api/ai/config. `apiKey` omitido mantém a chave salva; `null` ou "" apaga. */
-export const aiConfigInputSchema = z.object({
-  provider: aiProviderSchema,
-  baseUrl: z.string().max(512).nullish(),
-  model: z.string().max(200).nullish(),
-  visionModel: z.string().max(200).nullish(),
-  apiKey: z.string().max(512).nullish(),
+/** PUT /api/ai/key. `null` ou "" remove a chave salva. */
+export const aiKeyInputSchema = z.object({
+  apiKey: z.string().max(512).nullable(),
 });
-export type AiConfigInput = z.infer<typeof aiConfigInputSchema>;
-
-/** Item de GET /api/ai/models; `tools` é null quando o servidor não informa capacidades. */
-export const aiModelSchema = z.object({
-  id: z.string(),
-  label: z.string(),
-  tools: z.boolean().nullish(),
-});
-export type AiModel = z.infer<typeof aiModelSchema>;
-
-export const aiModelsResponseSchema = z.object({ models: z.array(aiModelSchema) });
-export type AiModelsResponse = z.infer<typeof aiModelsResponseSchema>;
+export type AiKeyInput = z.infer<typeof aiKeyInputSchema>;

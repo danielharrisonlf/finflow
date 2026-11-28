@@ -1,20 +1,14 @@
 import { expect, type Page, test } from "@playwright/test";
 import { ids, mockApi } from "./mocks";
 
-// Assistente (v3 §15 e assistente local): nenhum modelo é chamado — /api/ai/* é interceptado com SSE
-// roteirizado.
+// Assistente (v3 §15): só a API do Claude com a chave do usuário; sem chave o recurso fica desativado
+// e fora da navegação. Nenhum modelo é chamado — /api/ai/* é interceptado com SSE roteirizado.
 
-const configured = { configured: true, source: "SETTINGS", model: "claude-opus-5-5" };
-
-const localConfigured = {
+const configured = {
   configured: true,
-  provider: "ollama",
-  model: "qwen2.5:7b",
-  visionModel: null,
-  baseUrl: "http://localhost:11434",
   source: "SETTINGS",
-  reachable: true,
-  receiptSupported: false,
+  model: "claude-opus-5-5",
+  receiptSupported: true,
 };
 
 function sse(events: [string, unknown][]): string {
@@ -24,11 +18,10 @@ function sse(events: [string, unknown][]): string {
 /** Registrado depois do mockApi, tem precedência sobre ele. */
 async function mockAi(
   page: Page,
-  opts: { status?: unknown; chat?: string; receipt?: unknown; models?: unknown[] } = {},
-): Promise<{ chatBodies: unknown[]; keyBodies: unknown[]; configBodies: unknown[] }> {
+  opts: { status?: unknown; chat?: string; receipt?: unknown } = {},
+): Promise<{ chatBodies: unknown[]; keyBodies: unknown[] }> {
   const chatBodies: unknown[] = [];
   const keyBodies: unknown[] = [];
-  const configBodies: unknown[] = [];
   await page.route("**/api/ai/**", (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -50,17 +43,20 @@ async function mockAi(
       keyBodies.push(request.postDataJSON());
       return route.fulfill({ json: configured });
     }
-    if (path.endsWith("/ai/models")) {
-      return route.fulfill({ json: { models: opts.models ?? [] } });
-    }
-    if (path.endsWith("/ai/config")) {
-      const body = request.postDataJSON() as { provider: string; model?: string };
-      configBodies.push(body);
-      return route.fulfill({ json: { ...localConfigured, model: body.model ?? "qwen2.5:7b" } });
-    }
     return route.fulfill({ status: 404, json: { message: "rota" } });
   });
-  return { chatBodies, keyBodies, configBodies };
+  return { chatBodies, keyBodies };
+}
+
+const isMobile = (page: Page) => (page.viewportSize()?.width ?? 1280) < 768;
+
+/** Links de navegação visíveis: barra lateral (desktop) ou sheet "Mais" (mobile). */
+async function openNav(page: Page) {
+  if (isMobile(page)) {
+    await page.getByTestId("mobile-more").click();
+    return page.getByRole("dialog", { name: "Todas as seções" });
+  }
+  return page.getByRole("navigation", { name: "Principal" }).first();
 }
 
 test.beforeEach(async ({ page }) => {
@@ -71,31 +67,78 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test("sem chave: mostra configuração e o simulador Posso comprar?", async ({ page }) => {
+test("sem chave: Assistente fora da navegação e da paleta; /assistente aponta para Configurações", async ({
+  page,
+}) => {
   const captured = await mockApi(page);
-  const { keyBodies } = await mockAi(page, {
-    status: { configured: false, source: null, model: "claude-opus-5-5" },
-  });
+  await page.goto("/");
+  await expect(page.getByTestId("hero-balance")).toBeVisible();
+
+  const nav = await openNav(page);
+  await expect(nav.getByRole("link", { name: "Projeção" })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Assistente" })).toHaveCount(0);
+  if (isMobile(page)) await page.keyboard.press("Escape");
+  // Nenhuma promoção do Assistente nas páginas.
+  await expect(page.getByRole("link", { name: /Assistente/ })).toHaveCount(0);
+
+  await page.keyboard.press("Control+k");
+  const palette = page.getByTestId("command-palette");
+  await palette.getByRole("combobox").fill("assist");
+  await expect(palette.getByRole("option", { name: "Assistente" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
   await page.goto("/assistente");
+  const disabled = page.getByTestId("ai-disabled");
+  await expect(
+    disabled.getByRole("heading", { name: "O Assistente está desativado" }),
+  ).toBeVisible();
+  await expect(disabled).toContainText("Configurações → Assistente (IA)");
+  // Sem chat, sem anexo de comprovante e sem o "Posso comprar?" (que fica em Projeção/Desejos).
+  await expect(page.getByLabel("Pergunta para o assistente")).toHaveCount(0);
+  await expect(page.getByTestId("ai-attach-input")).toHaveCount(0);
+  await expect(page.getByTestId("can-afford")).toHaveCount(0);
 
-  const setup = page.getByTestId("ai-setup");
-  await expect(setup.getByRole("heading", { name: "Ative o Assistente" })).toBeVisible();
-  await expect(setup.getByRole("link", { name: /console\.anthropic\.com/ })).toHaveAttribute(
-    "href",
-    "https://console.anthropic.com/",
-  );
+  await disabled.getByRole("link", { name: "Abrir Configurações" }).click();
+  await expect(page).toHaveURL(/\/configuracoes#assistente$/);
+  await expect(page.getByTestId("ai-settings")).toBeInViewport();
+  expect(captured.some((r) => r.url.includes("/api/ai/"))).toBe(false);
+});
 
-  const simulator = page.getByTestId("can-afford");
-  await simulator.getByLabel("Valor total").fill("6.000,00");
-  await simulator.getByRole("button", { name: "Simular" }).click();
-  await expect(page.getByTestId("can-afford-result")).toContainText("Não cabe agora");
-  const afford = captured.find((r) => r.url.includes("/insights/can-afford"));
-  expect(afford?.body).toMatchObject({ amountCents: 600_000, installments: 1 });
+test("salvar a chave em Configurações ativa o Assistente; remover desativa de novo", async ({
+  page,
+}) => {
+  const captured = await mockApi(page);
+  await page.goto("/configuracoes");
 
-  await setup.getByLabel("Chave da API do Claude").fill("sk-ant-api03-chave-de-teste-0000");
-  await setup.getByRole("button", { name: "Salvar chave" }).click();
+  const section = page.getByTestId("ai-settings");
+  await expect(section.getByRole("heading", { name: "Assistente (IA)" })).toBeVisible();
+  await expect(section.getByTestId("ai-settings-status")).toContainText("Desativado");
+  let nav = await openNav(page);
+  await expect(nav.getByRole("link", { name: "Assistente" })).toHaveCount(0);
+  if (isMobile(page)) await page.keyboard.press("Escape");
+
+  await section.getByLabel("Chave da API do Claude").fill("sk-ant-api03-chave-de-teste-0000");
+  await section.getByRole("button", { name: "Salvar" }).click();
+  await expect(section.getByTestId("ai-settings-status")).toContainText("Ativo");
+  await expect(section.getByText("Chave salva. O Assistente está ativo.")).toBeVisible();
+  await expect(section.getByLabel("Chave da API do Claude")).toHaveValue("");
+  const put = captured.find((r) => r.method === "PUT" && r.url.endsWith("/api/ai/key"));
+  expect(put?.body).toEqual({ apiKey: "sk-ant-api03-chave-de-teste-0000" });
+
+  nav = await openNav(page);
+  await nav.getByRole("link", { name: "Assistente" }).click();
+  await expect(page).toHaveURL(/\/assistente$/);
   await expect(page.getByText("Pergunte sobre o seu dinheiro")).toBeVisible();
-  expect(keyBodies).toEqual([{ apiKey: "sk-ant-api03-chave-de-teste-0000" }]);
+  await expect(page.getByTestId("ai-attach-input")).toHaveCount(1);
+
+  await page.goto("/configuracoes");
+  await section.getByRole("button", { name: "Remover chave" }).click();
+  await expect(section.getByTestId("ai-settings-status")).toContainText("Desativado");
+  await expect(section.getByText("Chave removida. O Assistente foi desativado.")).toBeVisible();
+  const removed = captured.filter((r) => r.method === "PUT" && r.url.endsWith("/api/ai/key"));
+  expect(removed.at(-1)?.body).toEqual({ apiKey: null });
+  nav = await openNav(page);
+  await expect(nav.getByRole("link", { name: "Assistente" })).toHaveCount(0);
 });
 
 test("chat: ferramentas, resposta em markdown seguro e proposta confirmada", async ({ page }) => {
@@ -218,78 +261,4 @@ test("comprovante abre o lançamento preenchido; planilha vai para /planilhas", 
     buffer: Buffer.from("OFXHEADER:100"),
   });
   await expect(page).toHaveURL(/\/planilhas$/);
-});
-
-const notConfigured = (reachable: boolean) => ({
-  configured: false,
-  provider: null,
-  model: null,
-  visionModel: null,
-  baseUrl: null,
-  source: null,
-  reachable,
-  receiptSupported: false,
-});
-
-test("modo local primeiro: usa o Ollama deste computador em um clique", async ({ page }) => {
-  await mockApi(page);
-  const { configBodies, chatBodies } = await mockAi(page, {
-    status: notConfigured(true),
-    models: [
-      { id: "llama3.1:8b", label: "llama3.1:8b · 8.0B", tools: true },
-      { id: "qwen2.5:7b", label: "qwen2.5:7b · 7.6B", tools: true },
-    ],
-    chat: sse([
-      ["tool", { name: "get_summary", label: "Consultando seu resumo do mês" }],
-      ["text", { delta: "Seu saldo está positivo." }],
-      ["done", { stopReason: "end_turn" }],
-    ]),
-  });
-  await page.goto("/assistente");
-
-  const local = page.getByTestId("ai-setup-local");
-  await expect(local).toContainText("Encontramos o Ollama rodando neste computador");
-  await expect(local).toContainText("llama3.1:8b, qwen2.5:7b");
-  // A API do Claude continua disponível como alternativa, abaixo do modo local.
-  await expect(page.getByTestId("ai-setup").getByLabel("Chave da API do Claude")).toBeVisible();
-  await expect(page.getByTestId("can-afford")).toBeVisible();
-
-  await local.getByRole("button", { name: "Usar o Ollama deste computador" }).click();
-  await expect(page.getByText("Pergunte sobre o seu dinheiro")).toBeVisible();
-  expect(configBodies).toEqual([{ provider: "ollama", model: "qwen2.5:7b" }]);
-  await expect(page.getByTestId("ai-active-provider")).toHaveText("Ollama (local) · qwen2.5:7b");
-  await expect(page.getByText("Modelo local: nada sai deste computador.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Remover chave" })).toHaveCount(0);
-
-  await page.getByLabel("Pergunta para o assistente").fill("Como estou?");
-  await page.getByRole("button", { name: "Enviar" }).click();
-  await expect(page.getByTestId("ai-answer")).toContainText("Seu saldo está positivo.");
-  expect(chatBodies).toHaveLength(1);
-});
-
-test("sem Ollama: mostra como instalar e verificar de novo", async ({ page }) => {
-  await mockApi(page);
-  await mockAi(page, { status: notConfigured(false) });
-  await page.goto("/assistente");
-  const local = page.getByTestId("ai-setup-local");
-  await expect(local).toContainText("ollama pull qwen2.5:7b");
-  await expect(local.getByRole("link", { name: "ollama.com" })).toHaveAttribute(
-    "href",
-    "https://ollama.com/download",
-  );
-  await expect(local.getByRole("button", { name: "Verificar de novo" })).toBeVisible();
-  await expect(local.getByRole("link", { name: "Configurações → Assistente" })).toHaveAttribute(
-    "href",
-    "/configuracoes",
-  );
-});
-
-test("detecção automática: mostra o Ollama encontrado no cabeçalho", async ({ page }) => {
-  await mockApi(page);
-  await mockAi(page, { status: { ...localConfigured, source: "AUTO" } });
-  await page.goto("/assistente");
-  await expect(page.getByTestId("ai-active-provider")).toHaveText(
-    "Detectado automaticamente: Ollama · qwen2.5:7b",
-  );
-  await expect(page.getByText("Pergunte sobre o seu dinheiro")).toBeVisible();
 });

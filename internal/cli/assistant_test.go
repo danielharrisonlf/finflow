@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -21,29 +22,61 @@ import (
 	"finflow/internal/testutil"
 )
 
-// fakeOllamaAporte emula o Ollama (nenhum modelo de verdade é chamado): a cada pergunta, o primeiro
-// turno pede propose_goal_contribution e o segundo responde em texto.
-func fakeOllamaAporte(t *testing.T, goalID func() string) *httptest.Server {
+// testAnthropicKey é uma chave falsa: as requisições vão para o fakeClaudeAporte, nunca para a API real.
+const testAnthropicKey = "sk-ant-api03-teste-abcdefghijklmnopqrstuvwxyz"
+
+func sseEvent(name string, data any) string {
+	b, _ := json.Marshal(data)
+	return fmt.Sprintf("event: %s\ndata: %s\n\n", name, b)
+}
+
+// claudeTurn monta um turno em streaming da Messages API com os blocos informados.
+func claudeTurn(stopReason string, blocks ...map[string]any) string {
+	var b strings.Builder
+	b.WriteString(sseEvent("message_start", map[string]any{"type": "message_start", "message": map[string]any{
+		"id": "msg_test", "type": "message", "role": "assistant", "model": "claude-opus-5-5", "content": []any{},
+		"stop_reason": nil, "usage": map[string]any{"input_tokens": 10, "output_tokens": 1}}}))
+	for i, block := range blocks {
+		start := map[string]any{"type": block["type"], "text": ""}
+		var delta map[string]any
+		if block["type"] == "tool_use" {
+			start = map[string]any{"type": "tool_use", "id": "toolu_1", "name": block["name"], "input": map[string]any{}}
+			delta = map[string]any{"type": "input_json_delta", "partial_json": block["input"]}
+		} else {
+			delta = map[string]any{"type": "text_delta", "text": block["text"]}
+		}
+		b.WriteString(sseEvent("content_block_start", map[string]any{"type": "content_block_start", "index": i, "content_block": start}))
+		b.WriteString(sseEvent("content_block_delta", map[string]any{"type": "content_block_delta", "index": i, "delta": delta}))
+		b.WriteString(sseEvent("content_block_stop", map[string]any{"type": "content_block_stop", "index": i}))
+	}
+	b.WriteString(sseEvent("message_delta", map[string]any{"type": "message_delta",
+		"delta": map[string]any{"stop_reason": stopReason, "stop_sequence": nil}, "usage": map[string]any{"output_tokens": 20}}))
+	b.WriteString(sseEvent("message_stop", map[string]any{"type": "message_stop"}))
+	return b.String()
+}
+
+// fakeClaudeAporte emula a API do Claude (nenhum modelo de verdade é chamado): a cada pergunta, o
+// primeiro turno pede propose_goal_contribution e o segundo responde em texto. Aponta o SDK para si
+// via ANTHROPIC_BASE_URL.
+func fakeClaudeAporte(t *testing.T, goalID func() string) *httptest.Server {
 	t.Helper()
 	var calls atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.Copy(io.Discard, r.Body)
-		if r.URL.Path != "/api/chat" {
-			_, _ = io.WriteString(w, `{"version":"0.12.0"}`)
+		if r.Header.Get("X-Api-Key") != testAnthropicKey && r.Header.Get("Authorization") != "Bearer "+testAnthropicKey {
+			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		w.Header().Set("Content-Type", "application/x-ndjson")
+		w.Header().Set("Content-Type", "text/event-stream")
 		if calls.Add(1)%2 == 1 {
 			args, _ := json.Marshal(map[string]any{"goalId": goalID(), "amountCents": 10000})
-			_, _ = io.WriteString(w, `{"message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"propose_goal_contribution","arguments":`+string(args)+`}}]},"done":false}`+"\n"+
-				`{"message":{"role":"assistant","content":""},"done":true,"done_reason":"stop"}`+"\n")
+			_, _ = io.WriteString(w, claudeTurn("tool_use", map[string]any{"type": "tool_use", "name": "propose_goal_contribution", "input": string(args)}))
 			return
 		}
-		_, _ = io.WriteString(w, `{"message":{"role":"assistant","content":"Preparei um aporte de "},"done":false}`+"\n"+
-			`{"message":{"role":"assistant","content":"**R$ 100,00**; confirme para gravar."},"done":false}`+"\n"+
-			`{"message":{"role":"assistant","content":""},"done":true,"done_reason":"stop"}`+"\n")
+		_, _ = io.WriteString(w, claudeTurn("end_turn", map[string]any{"type": "text", "text": "Preparei um aporte de **R$ 100,00**; confirme para gravar."}))
 	}))
 	t.Cleanup(srv.Close)
+	t.Setenv("ANTHROPIC_BASE_URL", srv.URL)
 	return srv
 }
 
@@ -86,9 +119,8 @@ func TestPerguntarLocal(t *testing.T) {
 	mustRun(t, "seed")
 	b := localBackend(t, path)
 	id := goalID(t, b, "MacBook Pro")
-	ollama := fakeOllamaAporte(t, func() string { return id })
-	t.Setenv("FINFLOW_AI_PROVIDER", "ollama")
-	t.Setenv("FINFLOW_AI_BASE_URL", ollama.URL)
+	fakeClaudeAporte(t, func() string { return id })
+	t.Setenv("ANTHROPIC_API_KEY", testAnthropicKey)
 	before := goalSaved(t, b, "MacBook Pro")
 
 	// Entrada não interativa: mostra a proposta e não grava.
@@ -128,17 +160,26 @@ func TestPerguntarLocal(t *testing.T) {
 	}
 }
 
-func TestPerguntarErrors(t *testing.T) {
+func TestPerguntarDisabledWithoutKey(t *testing.T) {
 	setupLocal(t)
-	// Servidor compatível sem modelo: 412 sem chamar rede nenhuma.
-	t.Setenv("FINFLOW_AI_PROVIDER", "openai_compatible")
-	mustFail(t, "Escolha o modelo do servidor compatível", "perguntar", "oi")
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("ANTHROPIC_BASE_URL", srv.URL)
 
-	t.Setenv("FINFLOW_AI_PROVIDER", "ollama")
-	srv := httptest.NewServer(http.NotFoundHandler())
-	srv.Close()
-	t.Setenv("FINFLOW_AI_BASE_URL", srv.URL)
-	mustFail(t, "Não foi possível conectar ao Ollama", "perguntar", "oi")
+	// Sem chave: mensagem em pt-BR dizendo como ativar, código diferente de 0 e nenhuma requisição.
+	mustFail(t, "o Assistente está desativado", "perguntar", "oi")
+	mustFail(t, "ANTHROPIC_API_KEY ou salve a sua chave em Configurações → Assistente (IA)", "perguntar", "oi")
+	if calls.Load() != 0 {
+		t.Fatalf("sem chave não chama a API: %d chamadas", calls.Load())
+	}
+
+	// Chave recusada pela API: erro legível (nunca o texto cru do SDK).
+	t.Setenv("ANTHROPIC_API_KEY", "sk-ant-api03-chave-recusada-abcdefghijkl")
+	mustFail(t, "A chave da API do Claude foi recusada", "perguntar", "oi")
 }
 
 func TestPerguntarRemote(t *testing.T) {
@@ -151,10 +192,9 @@ func TestPerguntarRemote(t *testing.T) {
 	svcs := service.New(st, nil)
 	b := &client.LocalBackend{Svcs: svcs}
 	id := goalID(t, b, "MacBook Pro")
-	ollama := fakeOllamaAporte(t, func() string { return id })
-	// O servidor remoto lê a configuração do assistente do próprio ambiente.
-	t.Setenv("FINFLOW_AI_PROVIDER", "ollama")
-	t.Setenv("FINFLOW_AI_BASE_URL", ollama.URL)
+	fakeClaudeAporte(t, func() string { return id })
+	// O servidor remoto lê a chave do Claude do próprio ambiente.
+	t.Setenv("ANTHROPIC_API_KEY", testAnthropicKey)
 	srv := httptest.NewServer(httpapi.NewServer(svcs, httpapi.ServerOptions{}))
 	t.Cleanup(srv.Close)
 	before := goalSaved(t, b, "MacBook Pro")
@@ -174,8 +214,7 @@ func TestPerguntarRemote(t *testing.T) {
 		t.Fatalf("--confirmar grava pela API: %d → %d", before, got)
 	}
 
-	// Erro antes do stream (412) chega legível.
-	t.Setenv("FINFLOW_AI_PROVIDER", "openai_compatible")
-	t.Setenv("FINFLOW_AI_BASE_URL", "")
-	mustFail(t, "Escolha o modelo do servidor compatível", "--api", srv.URL, "perguntar", "oi")
+	// Sem chave no servidor remoto (412 antes do stream): a mesma mensagem de recurso desativado.
+	t.Setenv("ANTHROPIC_API_KEY", "")
+	mustFail(t, "o Assistente está desativado", "--api", srv.URL, "perguntar", "oi")
 }

@@ -24,7 +24,7 @@ pnpm dev:web              # Vite em http://localhost:5273 (chama a API em :3333)
 
 - Landing pública: `http://localhost:5273/inicio` (fonte em `apps/web/src/components/landing/`).
 - App no navegador (WebAssembly): `pnpm build:browser` e `pnpm --filter @finflow/web preview:browser` (http://localhost:5274/app/).
-- Assistente local: com o [Ollama](https://ollama.com) rodando (`ollama pull qwen2.5:7b`), defina `FINFLOW_AI_PROVIDER=ollama` ou escolha em **Configurações → Assistente**.
+- Assistente (opcional): defina `ANTHROPIC_API_KEY` ou salve a chave da API do Claude em **Configurações → Assistente (IA)**. Sem chave, o recurso fica desativado e some da navegação. Os testes nunca chamam a API real (servidores falsos em `internal/ai`, `internal/httpapi` e `internal/cli`).
 
 ## Testes e verificações
 

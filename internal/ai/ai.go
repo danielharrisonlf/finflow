@@ -1,13 +1,13 @@
-// Package ai implementa o Assistente (§15 do contrato v3 e docs/local-agent-contract.md): chat com
-// ferramentas de leitura sobre os dados do FinFlow e leitura de comprovantes. O modelo pode ser local
-// (Ollama ou servidor compatível com a API da OpenAI, sem serviço pago) ou a API do Claude com a chave
-// do próprio usuário: só o cliente do modelo muda (interface Provider). O loop de ferramentas roda no
-// binário; escritas nunca acontecem pelo modelo — as ferramentas de escrita só geram propostas que o
-// usuário confirma na interface.
+// Package ai implementa o Assistente (§15 do contrato v3): chat com ferramentas de leitura sobre os
+// dados do FinFlow e leitura de comprovantes, usando a API do Claude com a chave do próprio usuário.
+// Sem chave o recurso fica desativado (docs/local-agent-contract.md). O loop de ferramentas roda no
+// binário (Messages API); escritas nunca acontecem pelo modelo — as ferramentas de escrita só geram
+// propostas que o usuário confirma na interface.
 package ai
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"os"
@@ -22,59 +22,46 @@ import (
 	"finflow/internal/service"
 )
 
-// Model é o modelo usado pelo provedor claude (decisão de produto do contrato v3 §15).
+// Model é o modelo usado pelo Assistente (decisão de produto do contrato v3 §15).
 const Model = "claude-opus-5-5"
 
-// SettingAPIKey é a chave da tabela settings onde a chave da API do Claude salva pela interface fica
-// (JSON string).
+// SettingAPIKey é a chave da tabela settings onde a chave da API salva pela interface fica (JSON string).
 const SettingAPIKey = "anthropicApiKey"
 
-// Fontes de configuração devolvidas em Status.Source.
+// Fontes de credencial devolvidas em Status.Source.
 const (
 	SourceEnv      = "ENV"
 	SourceSettings = "SETTINGS"
-	// SourceAuto: nada no ambiente nem em settings, e um Ollama com modelos respondeu em
-	// FINFLOW_OLLAMA_URL (configuração automática).
-	SourceAuto = "AUTO"
 )
 
 // fallbackBeta habilita `fallbacks: "default"`: se o modelo recusar por política, a API refaz a mesma
 // requisição no modelo de fallback dentro da mesma chamada.
 const fallbackBeta = anthropic.AnthropicBetaServerSideFallback2026_07_01
 
-// Config permite trocar dependências externas (usado nos testes, que nunca chamam modelos reais).
+// Config permite trocar dependências externas (usado nos testes, que nunca chamam a API real).
 type Config struct {
-	// BaseURL substitui a URL da API do Claude (ex.: servidor httptest nos testes).
+	// BaseURL substitui a URL da API (ex.: servidor httptest nos testes).
 	BaseURL string
-	// HTTPClient opcional para as chamadas aos modelos (Claude e provedores locais).
+	// HTTPClient opcional para as chamadas à API.
 	HTTPClient *http.Client
-	// EnvCredentials informa se há credenciais do Claude no ambiente (ANTHROPIC_API_KEY,
-	// ANTHROPIC_AUTH_TOKEN, perfil do `ant auth login`, federação). Padrão: DetectEnvCredentials.
+	// EnvCredentials informa se há credenciais no ambiente (ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN,
+	// perfil do `ant auth login`, federação). Padrão: DetectEnvCredentials.
 	EnvCredentials func() bool
-	// MaxRetries substitui as retentativas padrão do SDK do Claude (nil = padrão).
+	// MaxRetries substitui as retentativas padrão do SDK (nil = padrão).
 	MaxRetries *int
-	// Getenv lê as variáveis FINFLOW_AI_* (padrão: os.Getenv).
-	Getenv func(string) string
-	// DefaultOllamaURL é onde o Ollama é procurado quando nada está configurado e a URL padrão do
-	// provedor ollama (padrão: FINFLOW_OLLAMA_URL ou http://localhost:11434). Os testes fixam aqui.
-	DefaultOllamaURL string
 }
 
 // Service concentra o Assistente.
 type Service struct {
-	// svcs guarda a configuração (settings do espaço pessoal); data é o espaço consultado pelas
+	// svcs guarda a chave da API (settings do espaço pessoal); data é o espaço consultado pelas
 	// ferramentas e pela leitura de comprovantes (nil = o próprio svcs).
 	svcs *service.Services
 	data *service.Services
 	cfg  Config
-	// probes guarda o resultado dos pings aos servidores locais (compartilhado entre espaços);
-	// auto, o da detecção automática do Ollama.
-	probes *probeCache
-	auto   *autoCache
 }
 
-// ForSpace devolve o Assistente consultando os dados de outro espaço (v3 fase 2); a configuração do
-// provedor continua a do espaço pessoal.
+// ForSpace devolve o Assistente consultando os dados de outro espaço (v3 fase 2); a chave da API
+// continua a do espaço pessoal.
 func (s *Service) ForSpace(data *service.Services) *Service {
 	c := *s
 	c.data = data
@@ -92,24 +79,23 @@ func NewService(svcs *service.Services, cfg Config) *Service {
 	if cfg.EnvCredentials == nil {
 		cfg.EnvCredentials = DetectEnvCredentials
 	}
-	if cfg.Getenv == nil {
-		cfg.Getenv = os.Getenv
-	}
-	return &Service{svcs: svcs, cfg: cfg, probes: newProbeCache(), auto: &autoCache{}}
+	return &Service{svcs: svcs, cfg: cfg}
 }
 
-// Status é a resposta de GET /api/ai/status (chaves nunca são devolvidas).
+// Status é a resposta de GET /api/ai/status (a chave nunca é devolvida). Sem chave, Source e Model
+// vêm null e o recurso fica desativado na interface.
 type Status struct {
-	Configured  bool    `json:"configured"`
-	Provider    *string `json:"provider"`
-	Model       *string `json:"model"`
-	VisionModel *string `json:"visionModel"`
-	BaseURL     *string `json:"baseUrl"`
-	Source      *string `json:"source"`
-	// Reachable é o ping do servidor local (com nada configurado, do Ollama em localhost:11434);
-	// null para o Claude.
-	Reachable        *bool `json:"reachable"`
-	ReceiptSupported bool  `json:"receiptSupported"`
+	Configured bool    `json:"configured"`
+	Source     *string `json:"source"`
+	Model      *string `json:"model"`
+	// ReceiptSupported: a leitura de comprovantes usa o mesmo modelo, então acompanha Configured.
+	ReceiptSupported bool `json:"receiptSupported"`
+}
+
+// ErrNotConfigured é devolvido quando não há credencial (HTTP 412).
+var ErrNotConfigured = &service.AppError{
+	Status:  http.StatusPreconditionFailed,
+	Message: "Assistente não configurado: defina ANTHROPIC_API_KEY ou salve uma chave da API do Claude em Configurações → Assistente (IA).",
 }
 
 // DetectEnvCredentials replica, sem fazer requisições, as fontes da cadeia padrão do SDK: variáveis
@@ -125,77 +111,51 @@ func DetectEnvCredentials() bool {
 	return err == nil
 }
 
-// savedKey devolve a chave do Claude salva em Configurações.
 func (s *Service) savedKey(ctx context.Context) (string, error) {
-	saved, err := s.savedStrings(ctx)
+	values, err := s.svcs.Store.SettingValues(ctx)
 	if err != nil {
 		return "", err
 	}
-	return saved[SettingAPIKey], nil
-}
-
-func strPtr(v string) *string {
-	if v == "" {
-		return nil
+	raw, ok := values[SettingAPIKey]
+	if !ok {
+		return "", nil
 	}
-	return &v
+	var key string
+	if err := json.Unmarshal([]byte(raw), &key); err != nil {
+		return "", nil
+	}
+	return strings.TrimSpace(key), nil
 }
 
-// Configured informa, sem acessar a rede, se há um provedor utilizável (usado em /api/system/info):
-// a configuração resolvida ou, sem ela, o último resultado da detecção automática.
-func (s *Service) Configured(ctx context.Context) (bool, error) {
-	r, err := s.resolve(ctx)
+// credential decide a fonte: ambiente primeiro (como as demais configurações do binário), depois a
+// chave salva em Configurações. Devolve a fonte e, para SETTINGS, a chave.
+func (s *Service) credential(ctx context.Context) (source, key string, err error) {
+	if s.cfg.EnvCredentials() {
+		return SourceEnv, "", nil
+	}
+	key, err = s.savedKey(ctx)
 	if err != nil {
-		return false, err
+		return "", "", err
 	}
-	if r.provider == "" {
-		auto, ok := s.auto.cached(s.ollamaURL(), s.autoPreferred())
-		return ok && auto.configured(), nil
+	if key != "" {
+		return SourceSettings, key, nil
 	}
-	return r.configured(), nil
+	return "", "", nil
 }
 
-// effective é a configuração usada pelo chat, comprovantes e status: a resolvida ou, sem nada no
-// ambiente nem em settings, a detecção automática do Ollama.
-func (s *Service) effective(ctx context.Context) (resolved, error) {
-	r, err := s.resolve(ctx)
-	if err != nil || r.provider != "" {
-		return r, err
-	}
-	if auto, ok := s.autoDetect(ctx); ok {
-		return auto, nil
-	}
-	return r, nil
-}
-
-// Status resolve a configuração e, para provedores locais, verifica se o servidor responde (com cache
-// curto). Sem nada configurado, procura um Ollama local para a interface oferecer.
 func (s *Service) Status(ctx context.Context) (Status, error) {
-	r, err := s.effective(ctx)
+	source, _, err := s.credential(ctx)
 	if err != nil {
 		return Status{}, err
 	}
-	st := Status{
-		Configured:       r.configured(),
-		Provider:         strPtr(r.provider),
-		Model:            strPtr(r.model),
-		VisionModel:      strPtr(r.visionModel),
-		BaseURL:          strPtr(r.baseURL),
-		Source:           strPtr(r.source),
-		ReceiptSupported: r.receiptSupported(),
+	if source == "" {
+		return Status{}, nil
 	}
-	switch {
-	case isLocalProvider(r.provider):
-		ok := s.reachable(ctx, r.provider, r.baseURL, r.apiKey)
-		st.Reachable = &ok
-	case r.provider == "":
-		ok := s.reachable(ctx, ProviderOllama, s.ollamaURL(), "")
-		st.Reachable = &ok
-	}
-	return st, nil
+	model := Model
+	return Status{Configured: true, Source: &source, Model: &model, ReceiptSupported: true}, nil
 }
 
-// ValidateAPIKey confere o formato mínimo de uma chave do Claude (sem espaços nem caracteres de controle).
+// ValidateAPIKey confere o formato mínimo de uma chave (sem espaços nem caracteres de controle).
 func ValidateAPIKey(key string) []domain.ValidationIssue {
 	if len(key) < 20 || len(key) > 512 {
 		return []domain.ValidationIssue{{Path: "apiKey", Message: "chave deve ter entre 20 e 512 caracteres"}}
@@ -208,14 +168,36 @@ func ValidateAPIKey(key string) []domain.ValidationIssue {
 	return nil
 }
 
-// claudeClient monta o cliente do SDK com a credencial resolvida; sem credencial → ErrNotConfigured.
-func (s *Service) claudeClient(r resolved) (anthropic.Client, error) {
+// SaveKey grava (ou, com nil/vazio, apaga) a chave salva em Configurações e devolve o status.
+func (s *Service) SaveKey(ctx context.Context, apiKey *string) (Status, error) {
+	value := ""
+	if apiKey != nil {
+		value = strings.TrimSpace(*apiKey)
+	}
+	if value != "" {
+		if issues := ValidateAPIKey(value); len(issues) > 0 {
+			return Status{}, service.ValidationFailed(issues)
+		}
+	}
+	encoded, _ := json.Marshal(value)
+	if err := s.svcs.Store.SaveSettingValues(ctx, map[string]string{SettingAPIKey: string(encoded)}); err != nil {
+		return Status{}, err
+	}
+	return s.Status(ctx)
+}
+
+// client monta o cliente do SDK com a credencial resolvida; sem credencial → ErrNotConfigured.
+func (s *Service) client(ctx context.Context) (anthropic.Client, error) {
+	source, key, err := s.credential(ctx)
+	if err != nil {
+		return anthropic.Client{}, err
+	}
 	opts := platformOptions()
-	switch {
-	case r.claudeEnv:
+	switch source {
+	case SourceEnv:
 		// Cadeia padrão do SDK (variáveis de ambiente ou perfil do `ant auth login`).
-	case r.apiKey != "":
-		opts = append(opts, option.WithAPIKey(r.apiKey))
+	case SourceSettings:
+		opts = append(opts, option.WithAPIKey(key))
 	default:
 		return anthropic.Client{}, ErrNotConfigured
 	}
@@ -229,32 +211,6 @@ func (s *Service) claudeClient(r resolved) (anthropic.Client, error) {
 		opts = append(opts, option.WithMaxRetries(*s.cfg.MaxRetries))
 	}
 	return anthropic.NewClient(opts...), nil
-}
-
-// provider monta o cliente do modelo configurado; sem configuração utilizável → 412.
-func (s *Service) provider(ctx context.Context) (Provider, resolved, error) {
-	r, err := s.effective(ctx)
-	if err != nil {
-		return nil, r, err
-	}
-	if !r.configured() {
-		if r.provider == ProviderOpenAICompatible {
-			return nil, r, errModelMissing
-		}
-		return nil, r, ErrNotConfigured
-	}
-	switch r.provider {
-	case ProviderClaude:
-		client, err := s.claudeClient(r)
-		if err != nil {
-			return nil, r, err
-		}
-		return &claudeProvider{client: client}, r, nil
-	case ProviderOllama:
-		return &ollamaProvider{local: s.localClient(r)}, r, nil
-	default:
-		return &openAIProvider{local: s.localClient(r)}, r, nil
-	}
 }
 
 // upstreamError traduz erros da API do Claude para mensagens em pt-BR. Nunca devolve 401 (o frontend

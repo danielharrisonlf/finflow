@@ -11,7 +11,7 @@
 // - o binário fica na raiz (./finflow ou finflow.exe), igual ao `pnpm build`.
 //
 // Variáveis úteis: FINFLOW_DB_PATH (arquivo do banco), API_PORT (porta inicial), FINFLOW_NO_BROWSER=1,
-// FINFLOW_AI_* (assistente local). Força recompilar tudo com FINFLOW_REBUILD=1.
+// ANTHROPIC_API_KEY (assistente opcional). Força recompilar tudo com FINFLOW_REBUILD=1.
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";

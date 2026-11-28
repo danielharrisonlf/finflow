@@ -42,3 +42,6 @@ pnpm-debug.log*
 # OS
 .DS_Store
 Thumbs.db
+
+# configuração local do Claude Code (as skills do projeto em .claude/skills são versionadas)
+.claude/settings.local.json

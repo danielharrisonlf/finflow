@@ -1,14 +1,33 @@
 # Changelog
 
-Todas as mudanças relevantes do FinFlow. O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e as versões seguem o [SemVer](https://semver.org/lang/pt-BR/). Os pacotes de cada versão ficam em [Releases](https://github.com/danielharrisonlf/finflow/releases).
+Todas as mudanças relevantes do FinFlow. O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e as versões seguem o [SemVer](https://semver.org/lang/pt-BR/) com a convenção pré-1.0 descrita em [.claude/skills/finflow-release](.claude/skills/finflow-release/SKILL.md): antes da 1.0.0, quebra sobe o MINOR e funcionalidade compatível sobe o PATCH. Os pacotes de cada versão ficam em [Releases](https://github.com/danielharrisonlf/finflow/releases).
 
 ## [Não lançado]
+
+## [0.6.0] — 2026-11-28
+
+**Versão incompatível com a 0.5.0 no assistente** (MINOR pré-1.0). Por decisão de produto, o assistente passa a usar **só a API do Claude com a chave do próprio usuário**; sem chave, o recurso fica desativado ([docs/local-agent-contract.md](docs/local-agent-contract.md)).
+
+### Removido
+
+- **Provedores locais do assistente**: Ollama e servidores compatíveis com a API da OpenAI (LM Studio, llama.cpp, vLLM, LocalAI), a detecção automática (`AUTO`) de um Ollama local e a leitura de comprovante com modelo de visão local.
+- `PUT /api/ai/config` e `GET /api/ai/models`; os campos `provider`, `visionModel`, `baseUrl` e `reachable` e a fonte `AUTO` de `GET /api/ai/status`, que passa a devolver `{ configured, source: "ENV" | "SETTINGS" | null, model, receiptSupported }`.
+- Variáveis `FINFLOW_AI_PROVIDER`, `FINFLOW_AI_BASE_URL`, `FINFLOW_AI_MODEL`, `FINFLOW_AI_VISION_MODEL`, `FINFLOW_AI_API_KEY` e `FINFLOW_OLLAMA_URL`.
+- Docker: o profile `ai` (serviços `ollama` e `ollama-pull`) e o volume `finflow_ollama`. `ANTHROPIC_API_KEY` continua repassada ao contêiner.
+- Configurações → escolha de provedor, URL, modelo e teste de conexão.
+
+### Alterações
+
+- **Sem chave, o assistente fica desativado e não é anunciado**: o item "Assistente" some da barra lateral, da barra inferior/"Mais" e da paleta de comandos, e não há anexo de comprovante nem atalhos para ele. Quem abrir `/assistente` vê um aviso curto apontando para Configurações; o "Posso comprar?" continua em Projeção e Desejos.
+- **Configurações → Assistente (IA)** é o único lugar para ativar: explicação curta, campo da chave, **Salvar**, **Remover chave**, status **Ativo**/**Desativado**, aviso quando a chave vem de `ANTHROPIC_API_KEY` e link para criar a chave em console.anthropic.com. A seção **API e IA** passa a se chamar **API e MCP** (**Sistema** no navegador).
+- `finflow perguntar` usa só o Claude; sem chave, avisa em português que o assistente está desativado e como ativar, e sai com código diferente de 0.
+- Landing e README: o assistente aparece como opcional ("coloque a sua chave da API do Claude; sem chave, o recurso fica desligado e todo o resto funciona"); a aba Docker mostra como passar a chave.
 
 ## [0.5.0] — 2026-11-28
 
 Open source e local de ponta a ponta: banco próprio (SQLite) e agente próprio (modelo local), rodando pelo executável, pelo código-fonte ou pelo Docker ([docs/local-agent-contract.md](docs/local-agent-contract.md)).
 
-### Adicionado
+### Novidades
 
 - **Assistente local**: o "Pergunte ao FinFlow" roda num modelo no seu computador via **Ollama** ou qualquer servidor compatível com a API da OpenAI (**LM Studio**, llama.cpp, vLLM, LocalAI), sem chave e sem enviar nada para fora; o Claude continua como opção. Mesmas ferramentas, propostas confirmadas pelo usuário e leitura de comprovante com um modelo de visão. Sem configuração, um Ollama em `FINFLOW_OLLAMA_URL` (padrão `http://localhost:11434`) é detectado e usado automaticamente. Configurações → **Assistente** escolhe provedor, URL e modelo (lista os modelos instalados) e testa a conexão; `GET /api/ai/models`, `PUT /api/ai/config` e variáveis `FINFLOW_AI_*`.
 - **`finflow perguntar "…"`**: o assistente no terminal, local ou via `--api`; escritas só com `--confirmar` ou confirmação `s`.
@@ -16,14 +35,14 @@ Open source e local de ponta a ponta: banco próprio (SQLite) e agente próprio 
 - **Docker**: `Dockerfile` multi-stage (Node → Go com `CGO_ENABLED=0` → Alpine, usuário não-root, ~50 MB) e serviço `app` no `docker-compose.yaml` (`docker compose up -d`), com o banco no volume `finflow_data`, porta publicada só em `127.0.0.1:3333` e healthcheck em `/api/health`. `docker compose --profile ai up -d` sobe também um Ollama local, baixa o modelo (`FINFLOW_AI_MODEL`, padrão `qwen2.5:7b`) e o assistente detecta esse Ollama sozinho, sem travar a escolha em Configurações. O CI constrói a imagem e faz um smoke test (sem push).
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) com como rodar, testar e as convenções do projeto.
 
-### Alterado
+### Alterações
 
 - Landing: **Baixar grátis** volta a ser o botão principal, **Código no GitHub** o secundário e **Experimentar no navegador** um link de texto; o topo destaca código aberto (MIT), dados num arquivo SQLite seu e assistente local (Ollama) ou Claude. A seção de download ganha as abas **Executável**, **Código-fonte** e **Docker**, e o FAQ apresenta primeiro o assistente local.
 - README reorganizado em **Rodar no seu computador** (executável, código-fonte com `pnpm start` e Docker) e **Experimentar no navegador**.
 
 ## [0.4.0] — 2026-11-28
 
-### Adicionado
+### Novidades
 
 - **FinFlow no navegador** em `/app/` do site público: o app completo sem instalar nada, no computador ou no celular, instalável como app (PWA) e com os dados guardados no próprio navegador ([docs/browser-runtime-contract.md](docs/browser-runtime-contract.md)). Tela de abertura com **Começar do zero**, **Explorar com dados de exemplo** e **Restaurar um backup (.db)**; aviso quando o FinFlow já está aberto em outra aba (**Usar aqui**); pedido de armazenamento persistente depois dos primeiros dados.
 - **Configurações → Dados neste navegador**: status do armazenamento, backup `.db` por espaço ou `.zip` com todos, restauração, **Trazer dados do app instalado** (o `finflow.db` do computador) e **Apagar todos os dados**.
@@ -31,11 +50,11 @@ Open source e local de ponta a ponta: banco próprio (SQLite) e agente próprio 
 - No programa instalado, Configurações aponta para o FinFlow no navegador.
 - `pnpm build:browser`, `pnpm test:e2e:browser` e `apps/web/scripts/serve-public-package.mjs` para gerar, testar e servir localmente o pacote público com o app.
 
-### Corrigido
+### Correções
 
 - **Duplo clique no executável**: se a porta 3333 estiver ocupada por outro programa, o FinFlow usa a próxima livre e mostra o endereço; identifica um FinFlow já aberto por `/api/system/info` (e não por qualquer servidor com `/api/health`); grava `finflow-desktop.log` na pasta de configuração e mostra uma caixa de erro no Windows quando não consegue iniciar.
 
-### Alterado
+### Alterações
 
 - Landing: o botão principal passa a ser **Usar no navegador**; **Baixar para o computador** fica como segunda opção, com novas perguntas no FAQ sobre onde ficam os dados no navegador e como levá-los para o app instalado.
 - O pacote público (Vercel) inclui o app em `/app/` com fallback de SPA, `application/wasm`, cache imutável para arquivos com hash e `no-cache` para `index.html` e `sw.js`.
@@ -44,7 +63,7 @@ Open source e local de ponta a ponta: banco próprio (SQLite) e agente próprio 
 
 Recursos de planejamento da v3, descritos em [docs/product-v3-contract.md](docs/product-v3-contract.md) e [docs/product-v3-spaces-contract.md](docs/product-v3-spaces-contract.md).
 
-### Adicionado
+### Novidades
 
 - **Quanto posso gastar hoje** no painel, com gráfico do ritmo do mês (gasto acumulado contra o mês anterior) e gasto projetado até o fim do mês.
 - **Posso comprar?**: simulador de compra à vista ou parcelada no cartão sobre a projeção de 365 dias, com veredito (cabe, com cuidado, melhor esperar), impacto no limite e data em que caberia.
@@ -66,7 +85,7 @@ Recursos de planejamento da v3, descritos em [docs/product-v3-contract.md](docs/
 - CLI: `assinaturas`, `alertas`, `posso`, `investimentos`, `dividas`, `patrimonio`, `espacos`, `divisao`, `empresa` e a flag global `--espaco` (ou `FINFLOW_SPACE`); `seed --espaco casa|empresa` cria espaços de demonstração.
 - Landing: seção “Pergunte ao FinFlow” com conversa de exemplo local, seção de patrimônio com estratégia de quitação e as 11 calculadoras, card “quanto dá para gastar hoje”, recursos atualizados, acesso pelo celular e novas perguntas frequentes.
 
-### Alterado
+### Alterações
 
 - Sem `--lan`, `finflow serve` passa a escutar só em `127.0.0.1`.
 
@@ -74,7 +93,7 @@ Recursos de planejamento da v3, descritos em [docs/product-v3-contract.md](docs/
 
 Primeira versão distribuída como binário único, gratuito e de código aberto (licença MIT).
 
-### Adicionado
+### Novidades
 
 - **Binário único em Go** (`cmd/finflow`) com API REST, interface web embutida, CLI e servidor MCP (stdio). SQLite embutido por padrão (pure Go, sem CGO nem Docker); PostgreSQL opcional via `DATABASE_URL`. Dois cliques iniciam o servidor e abrem o navegador; `finflow version`.
 - **Planejamento**: tipos de gasto Fixo / Cortável / Variável com taxonomia brasileira padrão, compromissos (contas e receitas recorrentes que viram lançamentos), limite mensal, faixas de saldo, reserva de emergência (6 ou 12 meses), desejos com a data em que cabem no saldo e regras de automação aplicadas a lançamentos, cartões, Telegram e importações.
@@ -85,11 +104,12 @@ Primeira versão distribuída como binário único, gratuito e de código aberto
 - **Distribuição**: `scripts/release.mjs` gera pacotes para 6 plataformas com `checksums.txt`, workflow de release por tag e instaladores `install.sh` / `install.ps1` com conferência de SHA-256.
 - **Landing**: download gratuito com detecção do sistema, comandos de instalação e seção de planilhas no lugar do diálogo de pré-lançamento.
 
-### Alterado
+### Alterações
 
 - API NestJS, CLI Node e servidor MCP em Node substituídos pelo binário Go.
 
-[Não lançado]: https://github.com/danielharrisonlf/finflow/compare/v0.5.0...HEAD
+[Não lançado]: https://github.com/danielharrisonlf/finflow/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/danielharrisonlf/finflow/releases/tag/v0.6.0
 [0.5.0]: https://github.com/danielharrisonlf/finflow/releases/tag/v0.5.0
 [0.4.0]: https://github.com/danielharrisonlf/finflow/releases/tag/v0.4.0
 [0.3.0]: https://github.com/danielharrisonlf/finflow/releases/tag/v0.3.0
