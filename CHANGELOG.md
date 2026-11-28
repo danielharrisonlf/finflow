@@ -4,6 +4,8 @@ Todas as mudanças relevantes do FinFlow. O formato segue o [Keep a Changelog](h
 
 ## [Não lançado]
 
+## [0.4.0] — 2026-11-28
+
 ### Adicionado
 
 - **FinFlow no navegador** em `/app/` do site público: o app completo sem instalar nada, no computador ou no celular, instalável como app (PWA) e com os dados guardados no próprio navegador ([docs/browser-runtime-contract.md](docs/browser-runtime-contract.md)). Tela de abertura com **Começar do zero**, **Explorar com dados de exemplo** e **Restaurar um backup (.db)**; aviso quando o FinFlow já está aberto em outra aba (**Usar aqui**); pedido de armazenamento persistente depois dos primeiros dados.
@@ -11,6 +13,10 @@ Todas as mudanças relevantes do FinFlow. O formato segue o [Keep a Changelog](h
 - Funciona offline depois do primeiro carregamento, com aviso **Nova versão disponível — Recarregar** quando sai uma versão nova.
 - No programa instalado, Configurações aponta para o FinFlow no navegador.
 - `pnpm build:browser`, `pnpm test:e2e:browser` e `apps/web/scripts/serve-public-package.mjs` para gerar, testar e servir localmente o pacote público com o app.
+
+### Corrigido
+
+- **Duplo clique no executável**: se a porta 3333 estiver ocupada por outro programa, o FinFlow usa a próxima livre e mostra o endereço; identifica um FinFlow já aberto por `/api/system/info` (e não por qualquer servidor com `/api/health`); grava `finflow-desktop.log` na pasta de configuração e mostra uma caixa de erro no Windows quando não consegue iniciar.
 
 ### Alterado
 
@@ -66,6 +72,7 @@ Primeira versão distribuída como binário único, gratuito e de código aberto
 
 - API NestJS, CLI Node e servidor MCP em Node substituídos pelo binário Go.
 
-[Não lançado]: https://github.com/danielharrisonlf/finflow/compare/v0.3.0...HEAD
+[Não lançado]: https://github.com/danielharrisonlf/finflow/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/danielharrisonlf/finflow/releases/tag/v0.4.0
 [0.3.0]: https://github.com/danielharrisonlf/finflow/releases/tag/v0.3.0
 [0.2.0]: https://github.com/danielharrisonlf/finflow/releases/tag/v0.2.0
