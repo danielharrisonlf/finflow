@@ -202,18 +202,7 @@ func (c *HTTPClient) doRaw(ctx context.Context, method, path, contentType string
 		return err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		apiErr := &APIError{Status: resp.StatusCode, Message: fmt.Sprintf("erro HTTP %d", resp.StatusCode)}
-		var payload struct {
-			Message string                   `json:"message"`
-			Issues  []domain.ValidationIssue `json:"issues"`
-		}
-		if json.Unmarshal(raw, &payload) == nil {
-			if payload.Message != "" {
-				apiErr.Message = payload.Message
-			}
-			apiErr.Issues = payload.Issues
-		}
-		return apiErr
+		return decodeAPIError(resp.StatusCode, raw)
 	}
 	if out == nil || resp.StatusCode == http.StatusNoContent {
 		return nil
@@ -223,6 +212,22 @@ func (c *HTTPClient) doRaw(ctx context.Context, method, path, contentType string
 		return nil
 	}
 	return json.Unmarshal(raw, out)
+}
+
+// decodeAPIError monta o erro a partir do corpo {message, issues} da API (ou só do status).
+func decodeAPIError(status int, raw []byte) *APIError {
+	apiErr := &APIError{Status: status, Message: fmt.Sprintf("erro HTTP %d", status)}
+	var payload struct {
+		Message string                   `json:"message"`
+		Issues  []domain.ValidationIssue `json:"issues"`
+	}
+	if json.Unmarshal(raw, &payload) == nil {
+		if payload.Message != "" {
+			apiErr.Message = payload.Message
+		}
+		apiErr.Issues = payload.Issues
+	}
+	return apiErr
 }
 
 func periodQS(q domain.PeriodQuery) string {

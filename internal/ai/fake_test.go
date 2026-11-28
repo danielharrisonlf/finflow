@@ -69,6 +69,14 @@ func (f *fakeAPI) handle(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// closedURL devolve uma URL onde nada escuta (conexão recusada na hora).
+func closedURL(t *testing.T) string {
+	t.Helper()
+	srv := httptest.NewServer(http.NotFoundHandler())
+	srv.Close()
+	return srv.URL
+}
+
 func (f *fakeAPI) calls() []recordedRequest {
 	f.mu.Lock()
 	defer f.mu.Unlock()

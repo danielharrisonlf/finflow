@@ -65,8 +65,14 @@ func Execute() {
 // Run executa a CLI com os argumentos e saídas informados e devolve o código de saída
 // (0 = sucesso, 1 = erro). Toda falha é impressa em stderr com uma mensagem legível.
 func Run(args []string, stdout, stderr io.Writer) int {
+	return RunWithInput(args, os.Stdin, stdout, stderr)
+}
+
+// RunWithInput é o Run com a entrada padrão informada (respostas s/N do `perguntar`).
+func RunWithInput(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	root := NewRootCmd()
 	root.SetArgs(args)
+	root.SetIn(stdin)
 	root.SetOut(stdout)
 	root.SetErr(stderr)
 	if err := root.Execute(); err != nil {
@@ -126,6 +132,7 @@ func NewRootCmd() *cobra.Command {
 		cmdAssinaturas(opts),
 		cmdAlertas(opts),
 		cmdPosso(opts),
+		cmdPerguntar(opts),
 		cmdStatus(opts),
 		cmdInvestimentos(opts),
 		cmdDividas(opts),

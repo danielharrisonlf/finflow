@@ -24,7 +24,11 @@ func newTestService(t *testing.T, api *fakeAPI, withKey bool) (*Service, *servic
 	t.Helper()
 	svcs := service.New(store.New(testutil.Open(t, db.DialectSQLite)), nil)
 	zero := 0
-	cfg := Config{EnvCredentials: func() bool { return false }, MaxRetries: &zero}
+	cfg := Config{
+		EnvCredentials: func() bool { return false }, MaxRetries: &zero,
+		// Sem FINFLOW_AI_* herdado e sem procurar um Ollama de verdade em localhost:11434.
+		Getenv: func(string) string { return "" }, DefaultOllamaURL: closedURL(t),
+	}
 	if api != nil {
 		cfg.BaseURL = api.server.URL
 	}
@@ -302,7 +306,7 @@ func TestStatusAndSaveKey(t *testing.T) {
 	ctx := context.Background()
 	svc, _ := newTestService(t, nil, false)
 	st, err := svc.Status(ctx)
-	if err != nil || st.Configured || st.Source != nil || st.Model != Model {
+	if err != nil || st.Configured || st.Source != nil || st.Model != nil || st.Provider != nil {
 		t.Fatalf("status inicial: %+v %v", st, err)
 	}
 	bad := "curta"
