@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ApiAiSection } from "../components/api-ai-section";
+import { AssistantSettingsSection } from "../components/assistant/assistant-settings";
 import { BrowserDataSection } from "../components/browser/browser-data-section";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
@@ -331,6 +332,7 @@ export function SettingsPage() {
 
       {/* fora do formulário: não interfere no envio das configurações */}
       {isBrowserRuntime ? <BrowserDataSection /> : null}
+      <AssistantSettingsSection />
       <ApiAiSection />
     </div>
   );

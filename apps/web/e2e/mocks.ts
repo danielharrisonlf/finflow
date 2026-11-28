@@ -1088,7 +1088,20 @@ export const fixtures = {
     aiConfigured: false,
     mcpHttpPath: "/api/mcp",
   },
-  aiStatus: { configured: false, source: null, model: "claude-opus-5-5" },
+  aiStatus: {
+    configured: false,
+    provider: null,
+    model: null,
+    visionModel: null,
+    baseUrl: null,
+    source: null,
+    reachable: false,
+    receiptSupported: false,
+  },
+  aiModels: [
+    { id: "qwen2.5:7b", label: "qwen2.5:7b · 7.6B", tools: true },
+    { id: "qwen2.5vl:7b", label: "qwen2.5vl:7b · 8.3B", tools: false },
+  ],
   importPreview: {
     format: "CSV",
     sheets: [],
@@ -1252,6 +1265,7 @@ export async function mockApi(
         return json(route, debtStrategy(Number(url.searchParams.get("extraCents") ?? 0)));
       if (path === "/system/info") return json(route, fixtures.systemInfo);
       if (path === "/ai/status") return json(route, fixtures.aiStatus);
+      if (path === "/ai/models") return json(route, { models: fixtures.aiModels });
     }
 
     // v3 fase 2: escritas
@@ -1340,6 +1354,28 @@ export async function mockApi(
     if (method === "POST" && path === "/recurring") return json(route, fixtures.recurring[0], 201);
     if (method === "PATCH" && /^\/recurring\/[^/]+$/.test(path))
       return json(route, fixtures.recurring[0]);
+    if (method === "PUT" && path === "/ai/config") {
+      const input = request.postDataJSON() as {
+        provider: string;
+        baseUrl?: string | null;
+        model?: string | null;
+        visionModel?: string | null;
+      };
+      const local = input.provider !== "claude";
+      return json(route, {
+        configured: true,
+        provider: input.provider,
+        model: local ? (input.model ?? "qwen2.5:7b") : "claude-opus-5-5",
+        visionModel: local ? (input.visionModel ?? null) : "claude-opus-5-5",
+        baseUrl: local
+          ? (input.baseUrl ??
+            (input.provider === "ollama" ? "http://localhost:11434" : "http://localhost:1234/v1"))
+          : null,
+        source: "SETTINGS",
+        reachable: local ? true : null,
+        receiptSupported: !local || Boolean(input.visionModel),
+      });
+    }
     if (method === "PATCH" && path === "/settings") {
       return json(route, { ...fixtures.settings, ...(request.postDataJSON() as object) });
     }

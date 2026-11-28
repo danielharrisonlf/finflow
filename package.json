@@ -9,6 +9,7 @@
     "node": ">=22.12"
   },
   "scripts": {
+    "start": "node scripts/start.mjs",
     "dev:api": "go run ./cmd/finflow serve",
     "dev:web": "pnpm --filter @finflow/web dev",
     "build:web": "pnpm --filter @finflow/contracts build && pnpm --filter @finflow/web build && node scripts/sync-webui.mjs",

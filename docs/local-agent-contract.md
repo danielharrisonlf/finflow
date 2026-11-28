@@ -31,14 +31,19 @@ FINFLOW_AI_MODEL=qwen2.5:7b                        # modelo de chat com suporte 
 FINFLOW_AI_VISION_MODEL=qwen2.5vl:7b               # opcional, para ler comprovantes
 FINFLOW_AI_API_KEY=                                # openai_compatible opcional
 ANTHROPIC_API_KEY=                                 # claude (já existe)
+FINFLOW_OLLAMA_URL=http://localhost:11434          # onde procurar um Ollama para a configuração automática
 ```
+
+Ordem de decisão: `FINFLOW_AI_PROVIDER` → provedor salvo em Configurações → credencial do Claude → **AUTO**
+(sem nada definido, um Ollama em `FINFLOW_OLLAMA_URL` com pelo menos um modelo é usado automaticamente:
+`FINFLOW_AI_MODEL` se instalado, senão o primeiro com ferramentas). Variáveis vazias contam como não definidas.
 
 API (substitui/estende `/api/ai/status` e `/api/ai/key`, mantendo compatibilidade):
 
 ```ts
 GET /api/ai/status → { configured: boolean; provider: "ollama" | "openai_compatible" | "claude" | null;
                        model: string | null; visionModel: string | null; baseUrl: string | null;
-                       source: "ENV" | "SETTINGS" | null; reachable: boolean | null;   // ping do servidor local
+                       source: "ENV" | "SETTINGS" | "AUTO" | null; reachable: boolean | null;   // ping do servidor local
                        receiptSupported: boolean }
 PUT /api/ai/config { provider, baseUrl?, model?, visionModel?, apiKey?: string | null } → status
 GET /api/ai/models?provider&baseUrl → { models: { id: string; label: string; tools: boolean | null }[] }

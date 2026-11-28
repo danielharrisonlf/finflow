@@ -1,4 +1,5 @@
 export * from "./account.contract";
+export * from "./ai.contract";
 export * from "./alert.contract";
 export * from "./auth.contract";
 export * from "./budget.contract";

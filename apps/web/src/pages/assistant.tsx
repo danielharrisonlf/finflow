@@ -22,7 +22,9 @@ import {
   type AiEvent,
   type AiReceipt,
   clearHistory,
+  describeActiveAi,
   extractReceipt,
+  isLocalProvider,
   isSpreadsheetFile,
   loadHistory,
   MAX_RECEIPT_BYTES,
@@ -31,6 +33,7 @@ import {
   type StoredProposal,
   saveAiKey,
   saveHistory,
+  statusProvider,
   streamChat,
   toChatPayload,
   type UiMessage,
@@ -258,13 +261,23 @@ export function AssistantPage() {
     }
   };
 
+  const provider = statusProvider(status.data);
+  const local = isLocalProvider(provider);
+  const activeAi = describeActiveAi(status.data);
+
   const header = (
     <header className="flex items-start justify-between gap-3">
-      <div>
+      <div className="min-w-0">
         <h1 className="text-xl font-semibold tracking-tight">Assistente</h1>
         <p className="text-sm text-app-muted">
           Pergunte sobre seus gastos, saldos e planos — as respostas usam os seus dados.
         </p>
+        {activeAi ? (
+          <p className="mt-1 truncate text-xs text-app-subtle" data-testid="ai-active-provider">
+            {activeAi}
+            {local && status.data?.reachable === false ? " · servidor sem resposta" : ""}
+          </p>
+        ) : null}
       </div>
       {status.data?.configured && messages.length > 0 ? (
         <Button
@@ -299,7 +312,11 @@ export function AssistantPage() {
           </p>
         ) : null}
         <div className="grid gap-4 lg:grid-cols-2">
-          <AssistantSetupCard />
+          <AssistantSetupCard
+            status={status.data}
+            onRecheck={() => void status.refetch()}
+            rechecking={status.isFetching}
+          />
           <CanAffordForm />
         </div>
       </div>
@@ -408,7 +425,8 @@ export function AssistantPage() {
         <p className="mt-1.5 px-2 text-center text-[11px] text-app-subtle">
           Respostas geradas por IA a partir dos seus dados — confira antes de decidir. Não é
           recomendação de investimento.
-          {status.data.source === "SETTINGS" ? (
+          {local ? " Modelo local: nada sai deste computador." : ""}
+          {provider === "claude" && status.data.source === "SETTINGS" ? (
             <>
               {" "}
               <button

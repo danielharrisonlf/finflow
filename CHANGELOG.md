@@ -4,6 +4,23 @@ Todas as mudanças relevantes do FinFlow. O formato segue o [Keep a Changelog](h
 
 ## [Não lançado]
 
+## [0.5.0] — 2026-11-28
+
+Open source e local de ponta a ponta: banco próprio (SQLite) e agente próprio (modelo local), rodando pelo executável, pelo código-fonte ou pelo Docker ([docs/local-agent-contract.md](docs/local-agent-contract.md)).
+
+### Adicionado
+
+- **Assistente local**: o "Pergunte ao FinFlow" roda num modelo no seu computador via **Ollama** ou qualquer servidor compatível com a API da OpenAI (**LM Studio**, llama.cpp, vLLM, LocalAI), sem chave e sem enviar nada para fora; o Claude continua como opção. Mesmas ferramentas, propostas confirmadas pelo usuário e leitura de comprovante com um modelo de visão. Sem configuração, um Ollama em `FINFLOW_OLLAMA_URL` (padrão `http://localhost:11434`) é detectado e usado automaticamente. Configurações → **Assistente** escolhe provedor, URL e modelo (lista os modelos instalados) e testa a conexão; `GET /api/ai/models`, `PUT /api/ai/config` e variáveis `FINFLOW_AI_*`.
+- **`finflow perguntar "…"`**: o assistente no terminal, local ou via `--api`; escritas só com `--confirmar` ou confirmação `s`.
+- **`pnpm start`** para rodar a partir do código: `git clone … && cd finflow && pnpm install && pnpm start` confere Go 1.26+, Node 22.12+ e pnpm (Corepack) com mensagens e links de instalação, compila o web e o binário só quando os fontes mudaram e abre o FinFlow como no duplo clique. `pnpm start -- --seed` cria dados de exemplo; outras flags vão para `finflow serve` e comandos viram `finflow <comando>`.
+- **Docker**: `Dockerfile` multi-stage (Node → Go com `CGO_ENABLED=0` → Alpine, usuário não-root, ~50 MB) e serviço `app` no `docker-compose.yaml` (`docker compose up -d`), com o banco no volume `finflow_data`, porta publicada só em `127.0.0.1:3333` e healthcheck em `/api/health`. `docker compose --profile ai up -d` sobe também um Ollama local, baixa o modelo (`FINFLOW_AI_MODEL`, padrão `qwen2.5:7b`) e o assistente detecta esse Ollama sozinho, sem travar a escolha em Configurações. O CI constrói a imagem e faz um smoke test (sem push).
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) com como rodar, testar e as convenções do projeto.
+
+### Alterado
+
+- Landing: **Baixar grátis** volta a ser o botão principal, **Código no GitHub** o secundário e **Experimentar no navegador** um link de texto; o topo destaca código aberto (MIT), dados num arquivo SQLite seu e assistente local (Ollama) ou Claude. A seção de download ganha as abas **Executável**, **Código-fonte** e **Docker**, e o FAQ apresenta primeiro o assistente local.
+- README reorganizado em **Rodar no seu computador** (executável, código-fonte com `pnpm start` e Docker) e **Experimentar no navegador**.
+
 ## [0.4.0] — 2026-11-28
 
 ### Adicionado
@@ -72,7 +89,8 @@ Primeira versão distribuída como binário único, gratuito e de código aberto
 
 - API NestJS, CLI Node e servidor MCP em Node substituídos pelo binário Go.
 
-[Não lançado]: https://github.com/danielharrisonlf/finflow/compare/v0.4.0...HEAD
+[Não lançado]: https://github.com/danielharrisonlf/finflow/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/danielharrisonlf/finflow/releases/tag/v0.5.0
 [0.4.0]: https://github.com/danielharrisonlf/finflow/releases/tag/v0.4.0
 [0.3.0]: https://github.com/danielharrisonlf/finflow/releases/tag/v0.3.0
 [0.2.0]: https://github.com/danielharrisonlf/finflow/releases/tag/v0.2.0
